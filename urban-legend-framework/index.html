@@ -1487,16 +1487,27 @@ loadMonsters();
 // Activate monsters on Return key
 window.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&monstersLoaded&&!monstersActive){
-    monstersActive=true;
-    for(const m of monsters){
-      m.model.visible=true;
-    }
-    console.log('[Monster] Activated! Monsters visible now.');
+    activateMonsters();
   }
 });
 
+function activateMonsters(){
+  if(monstersActive)return;
+  monstersActive=true;
+  for(const m of monsters){
+    m.model.visible=true;
+  }
+  console.log('[Monster] Activated! Monsters visible now.');
+}
+
+
 function updateMonsters(dt){
-  if(!monstersActive||!monstersLoaded)return;
+  if(!monstersLoaded)return;
+  // Auto-activate when player enters EXPLORE phase
+  if(!monstersActive&&phase===PHASE.EXPLORE){
+    activateMonsters();
+  }
+  if(!monstersActive)return;
 
   for(const m of monsters){
     m.mixer.update(dt);
