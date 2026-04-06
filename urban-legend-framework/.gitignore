@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.env.local
+*.fbx
+*.obj
+*.py
