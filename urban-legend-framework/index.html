@@ -2764,6 +2764,15 @@ document.getElementById('statement-overlay').addEventListener('click',()=>{
   document.getElementById('statement-overlay').classList.remove('show');
 });
 
+// ===== Skip to staircase (Shift+U) =====
+window.addEventListener('keydown',e=>{
+  if(e.shiftKey&&e.key==='U'&&charReady){
+    e.preventDefault();
+    resetToStart();
+    console.log('[Skip] Jumped to staircase via Shift+U');
+  }
+});
+
 // ===== Keyboard movement (WASD/arrows for desktop) =====
 const keysDown=new Set();
 let kbActive=false; // track if keyboard was driving movement
