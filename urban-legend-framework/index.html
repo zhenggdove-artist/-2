@@ -1620,70 +1620,54 @@ function updateMonsters(dt){
 }
 
 let monsterDeathActive=false;
-let monsterDeathTimer=0;
-const MONSTER_DEATH_DUR=2.5; // same as LAND phase duration
-let monsterDeathPos=new THREE.Vector3();
 
 function triggerPlayerHit(){
-  if(monsterDeathActive)return; // already dying
+  if(monsterDeathActive)return;
   monsterDeathActive=true;
-  monsterDeathTimer=0;
 
-  // Hide player, create explosion at player position
-  const deathPos=new THREE.Vector3(charRoot.position.x,0,charRoot.position.z);
-  monsterDeathPos.copy(deathPos);
+  // Hide player + explode particles at player position
   charRoot.visible=false;
   if(charModel)charModel.visible=false;
   showControls(false);
+  createBurst(new THREE.Vector3(charRoot.position.x,0,charRoot.position.z));
 
-  // Stop all player animations
-  actWalk?.stop();actRun?.stop();actJump?.stop();actFall?.stop();
+  // After 0.8s: fade to black
+  setTimeout(()=>{
+    const fadeEl=document.getElementById('fade');
+    fadeEl.classList.add('show');
 
-  // Create explosion (same as falling death)
-  createBurst(deathPos);
+    // After fade completes (0.6s transition): reset everything
+    setTimeout(()=>{
+      // Restore player materials
+      for(const cm of charMats){
+        if(cm.baseEmissive){
+          cm.mat.emissive.copy(cm.baseEmissive);
+          cm.mat.emissiveIntensity=cm.baseEmissiveIntensity;
+        }
+      }
+      if(charModel) charModel.position.set(0,baseModelY||0,0);
+
+      // Reset monsters to spawn
+      for(const m of monsters){
+        m.root.position.set(m.basePos.x,MONSTER_Y,m.basePos.z);
+        m.isChasing=false;
+        m.speed=m.normalSpeed;
+        if(m.chaseAction) m.chaseAction.stop();
+        if(m.walkAction) m.walkAction.reset().play();
+      }
+
+      // Respawn at staircase
+      resetToStart();
+      monsterDeathActive=false;
+
+      // Fade back in
+      setTimeout(()=>{fadeEl.classList.remove('show')},300);
+    },700);
+  },800);
 }
 
 function updatePlayerHitEffect(dt){
-  if(!monsterDeathActive)return;
-  monsterDeathTimer+=dt;
-
-  // Camera orbits around explosion
-  const orbitAngle=globalTime*0.5;
-  const orbitR=20;
-  camera.position.set(
-    monsterDeathPos.x+orbitR*Math.sin(orbitAngle),
-    8,
-    monsterDeathPos.z+orbitR*Math.cos(orbitAngle)
-  );
-  camera.lookAt(monsterDeathPos.x,2,monsterDeathPos.z);
-
-  if(monsterDeathTimer>=MONSTER_DEATH_DUR){
-    monsterDeathActive=false;
-    monsterDeathTimer=0;
-
-    // Restore emissive
-    for(const cm of charMats){
-      if(cm.baseEmissive){
-        cm.mat.emissive.copy(cm.baseEmissive);
-        cm.mat.emissiveIntensity=cm.baseEmissiveIntensity;
-      }
-    }
-    if(charModel){
-      charModel.position.set(0,baseModelY||0,0);
-    }
-
-    // Respawn at staircase (no plant)
-    resetToStart();
-
-    // Reset monsters back to spawn positions
-    for(const m of monsters){
-      m.root.position.set(m.basePos.x,MONSTER_Y,m.basePos.z);
-      m.isChasing=false;
-      m.speed=m.normalSpeed;
-      if(m.chaseAction){m.chaseAction.stop()}
-      if(m.walkAction){m.walkAction.reset().play()}
-    }
-  }
+  // no longer needed — handled by setTimeout chain
 }
 
 // ===== Mushroom Cloud Particle Burst (蕈狀雲) =====
@@ -3217,9 +3201,8 @@ function tick(){
     updateSky(0);
   }
 
-  // Camera: cinematic or orbit (skip during monster death explosion)
-  if(monsterDeathActive){/* camera handled by updatePlayerHitEffect */}
-  else if(!cinematicCam(dt)){
+  // Camera: cinematic or orbit
+  if(!cinematicCam(dt)){
     interTimer+=dt;
     if(interTimer>2)interacting=false;
     // No auto camera yaw/pitch/dist adjustments — fully manual orbit control
