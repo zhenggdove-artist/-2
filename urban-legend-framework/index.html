@@ -1378,6 +1378,7 @@ const MONSTER_ACCEL_DIST=8.0; // distance to player at which monster accelerates
 const MONSTER_HIT_DIST=2.5;  // collision distance (larger model)
 const MONSTER_HIT_COOLDOWN=1.5; // seconds between hits
 const MONSTER_SCALE=30000; // 30x larger than 1000
+const MONSTER_Y=0; // ← 手動調整怪物高度：正數往上，負數往下
 // Per-monster speed & behavior profiles (speeds halved)
 const MONSTER_PROFILES=[
   {normalSpeed:1.25, chaseSpeed:4.5,  pattern:'direct',  spawnDist:40},
@@ -1412,41 +1413,40 @@ async function loadMonsters(){
     // Spawn positions — spread around at different angles
     const spawnAngles=[0, Math.PI*2/3, Math.PI*4/3];
 
+    // Clone materials from original so each clone gets its own copy
+    const origMats=[];
+    gltf.scene.traverse(o=>{
+      if(o.isMesh&&o.material) origMats.push(o.material);
+    });
+
     for(let i=0;i<MONSTER_COUNT;i++){
       const prof=MONSTER_PROFILES[i];
       const model=SkeletonUtils.clone(gltf.scene);
       model.scale.setScalar(MONSTER_SCALE);
 
-      // Setup meshes
+      // Fix materials — clone from original to restore textures
+      let matIdx=0;
       model.traverse(o=>{
         if(o.isMesh){
           o.frustumCulled=false;
-          o.castShadow=true;
-          if(o.material){
-            const mats=Array.isArray(o.material)?o.material:[o.material];
-            for(const m of mats){
-              m.side=THREE.DoubleSide;
-              m.needsUpdate=true;
-            }
+          if(origMats[matIdx]){
+            o.material=origMats[matIdx].clone();
+            o.material.side=THREE.DoubleSide;
+            o.material.needsUpdate=true;
           }
+          matIdx++;
         }
       });
 
-      // Use a wrapper group (like charRoot) so root.position.y=0 = ground
       const root=new THREE.Group();
-      model.updateMatrixWorld(true);
-      const box=new THREE.Box3().setFromObject(model);
-      // Offset model inside group so feet touch y=0
-      model.position.y=-box.min.y;
-
+      model.position.y=0;
       root.add(model);
-      root.position.y=0; // sits on ground
+      root.position.y=MONSTER_Y;
 
       const ang=spawnAngles[i];
-      const pos=new THREE.Vector3(Math.cos(ang)*prof.spawnDist,0,Math.sin(ang)*prof.spawnDist);
-      root.position.x=pos.x;
-      root.position.z=pos.z;
-      root.visible=true; // auto-visible, no activation needed
+      root.position.x=Math.cos(ang)*prof.spawnDist;
+      root.position.z=Math.sin(ang)*prof.spawnDist;
+      root.visible=true;
       scene.add(root);
 
       // Create animation mixer
