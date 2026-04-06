@@ -1508,15 +1508,41 @@ function updateMonsters(dt){
   }
   if(!monstersActive)return;
 
+  // Only chase when player is on/near ground level
+  const playerOnGround=charRoot.position.y<3;
+
   for(const m of monsters){
     m.mixer.update(dt);
     if(m.hitCooldown>0) m.hitCooldown-=dt;
     m.patternTimer+=dt;
 
-    // Direction toward player (use root position = ground level group)
+    // Always lock monster to ground
+    m.root.position.y=MONSTER_Y;
+
+    // Only chase player XZ when player is on ground
     const dx=charRoot.position.x-m.root.position.x;
     const dz=charRoot.position.z-m.root.position.z;
     const dist=Math.sqrt(dx*dx+dz*dz);
+
+    if(!playerOnGround){
+      // Player is up high — monsters just idle/patrol, don't chase
+      if(m.isChasing&&m.walkAction){
+        m.chaseAction?.fadeOut(0.3);
+        m.walkAction.reset().fadeIn(0.3).play();
+        m.isChasing=false;
+      }
+      m.speed=m.normalSpeed;
+      // Wander back toward spawn
+      const sdx=m.basePos.x-m.root.position.x;
+      const sdz=m.basePos.z-m.root.position.z;
+      const sDist=Math.sqrt(sdx*sdx+sdz*sdz);
+      if(sDist>2){
+        m.root.position.x+=sdx/sDist*m.speed*dt*0.5;
+        m.root.position.z+=sdz/sDist*m.speed*dt*0.5;
+        m.root.rotation.y=Math.atan2(sdx,sdz);
+      }
+      continue;
+    }
 
     // Decide speed: accelerate when close
     const wasChasing=m.isChasing;
@@ -1564,14 +1590,12 @@ function updateMonsters(dt){
       m.root.position.z+=mz*moveSpeed;
     }
 
-    // Face toward player (rotate the root group)
+    // Face toward player
     if(dist>0.1){
       m.root.rotation.y=Math.atan2(dx,dz);
     }
 
-    // root.position.y stays at 0 (ground), model offset inside handles feet placement
-
-    // Collision with player
+    // Collision — only when player is on ground
     if(dist<MONSTER_HIT_DIST&&m.hitCooldown<=0){
       m.hitCooldown=MONSTER_HIT_COOLDOWN;
       triggerPlayerHit();
