@@ -2012,8 +2012,8 @@ function animateChar(dt){
   if(!charReady||!mixer)return;
   mixer.update(dt);
 
-  // Safety: keep character visible during active phases
-  if(phase!==PHASE.DONE&&phase!==PHASE.LAND){
+  // Safety: keep character visible during active phases (skip during monster death)
+  if(phase!==PHASE.DONE&&phase!==PHASE.LAND&&!monsterDeathActive){
     if(!charRoot.visible)charRoot.visible=true;
     if(charModel&&!charModel.visible)charModel.visible=true;
   }
