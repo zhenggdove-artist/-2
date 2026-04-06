@@ -1391,40 +1391,27 @@ const PLAYER_HIT_DURATION=0.6;
 let playerShakeOffset=new THREE.Vector3();
 
 async function loadMonsters(){
+  console.log('[Monster] Starting load...');
   try{
     // Load monster GLB (same approach as character.glb)
-    let gltf=null;
-    try{
-      if('caches' in window){
-        const cache=await caches.open('ul-assets-v1');
-        let resp=await cache.match('monster.glb');
-        if(!resp){
-          resp=await fetch('monster.glb',{cache:'force-cache'});
-          if(resp&&resp.ok)cache.put('monster.glb',resp.clone());
-        }
-        if(resp&&resp.ok){
-          const buf=await resp.arrayBuffer();
-          gltf=await new Promise((res,rej)=>loader.parse(buf,'',res,rej));
-        }
-      }
-    }catch{}
-    if(!gltf)gltf=await loader.loadAsync('monster.glb');
+    const gltf=await loader.loadAsync('monster.glb');
+    console.log('[Monster] GLB loaded, scene children:',gltf.scene.children.length,'animations:',gltf.animations.length);
 
     // Find animations by name
     for(const clip of gltf.animations){
       const n=clip.name.toLowerCase();
+      console.log('[Monster] Found animation:',clip.name);
       if(n.includes('walk'))monsterWalkClip=clip;
       if(n.includes('chase'))monsterChaseClip=clip;
     }
-    console.log('Monster animations:',gltf.animations.map(c=>c.name),'walk:',!!monsterWalkClip,'chase:',!!monsterChaseClip);
 
-    // Spawn positions
+    // Spawn positions (close to origin so they're visible near player)
     const spawnPositions=[
-      new THREE.Vector3(25,0,15),
-      new THREE.Vector3(-20,0,30),
-      new THREE.Vector3(35,0,-10),
-      new THREE.Vector3(-30,0,-20),
-      new THREE.Vector3(10,0,-35),
+      new THREE.Vector3(15,0,10),
+      new THREE.Vector3(-12,0,18),
+      new THREE.Vector3(20,0,-8),
+      new THREE.Vector3(-18,0,-12),
+      new THREE.Vector3(8,0,-20),
     ];
 
     for(let i=0;i<MONSTER_COUNT;i++){
@@ -1432,16 +1419,26 @@ async function loadMonsters(){
       model.scale.setScalar(MONSTER_SCALE);
 
       // Setup meshes
+      let meshCount=0;
       model.traverse(o=>{
         if(o.isMesh){
+          meshCount++;
           o.frustumCulled=false;
-          if(o.material) o.material.side=THREE.DoubleSide;
+          o.castShadow=true;
+          if(o.material){
+            const mats=Array.isArray(o.material)?o.material:[o.material];
+            for(const m of mats){
+              m.side=THREE.DoubleSide;
+              m.needsUpdate=true;
+            }
+          }
         }
       });
 
       // Auto-adjust so feet sit on ground
       model.updateMatrixWorld(true);
       const box=new THREE.Box3().setFromObject(model);
+      const monsterHeight=box.max.y-box.min.y;
       const baseY=-box.min.y;
       model.position.y=baseY;
 
@@ -1450,6 +1447,8 @@ async function loadMonsters(){
       model.position.z=pos.z;
       model.visible=false; // hidden until Return is pressed
       scene.add(model);
+
+      if(i===0) console.log('[Monster] #0 meshes:',meshCount,'height:',monsterHeight.toFixed(2),'baseY:',baseY.toFixed(2),'pos:',model.position.x,model.position.y,model.position.z);
 
       // Create animation mixer
       const mMixer=new THREE.AnimationMixer(model);
@@ -1478,9 +1477,9 @@ async function loadMonsters(){
       });
     }
     monstersLoaded=true;
-    console.log('Monsters loaded:',MONSTER_COUNT);
+    console.log('[Monster] All loaded! Count:',MONSTER_COUNT,'walkClip:',!!monsterWalkClip,'chaseClip:',!!monsterChaseClip);
   }catch(e){
-    console.error('Monster load err:',e);
+    console.error('[Monster] Load error:',e);
   }
 }
 loadMonsters();
@@ -1492,7 +1491,7 @@ window.addEventListener('keydown',e=>{
     for(const m of monsters){
       m.model.visible=true;
     }
-    console.log('Monsters activated!');
+    console.log('[Monster] Activated! Monsters visible now.');
   }
 });
 
