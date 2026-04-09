@@ -1093,13 +1093,13 @@ const VHSShader={
 
       // === 暗角（畫面邊緣變暗） ===
       // 1.1=暗角範圍（越大邊緣越暗）  0.3=暗角強度（0=關閉）
-      float vig=1.0-dot((vUv-0.5)*1.1,(vUv-0.5)*1.1);
+      float vig=1.0-dot((vUv-0.5)*1.1,(vUv-0.5)*0);
       col*=mix(1.0,vig,0.3*intensity);
 
       // === 去飽和（褪色感） ===
       // 0.85=彩色保留比例（1.0=全彩  0.0=全黑白）
       float lum=dot(col,vec3(0.299,0.587,0.114));
-      col=mix(vec3(lum),col,0.85);
+      col=mix(vec3(lum),col,1.0);
 
       gl_FragColor=vec4(col,1.0);
     }
