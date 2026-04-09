@@ -6,6 +6,7 @@
   <title>URBANLEGEND</title>
   <link rel="preload" as="fetch" href="character.glb" crossorigin>
   <link rel="preload" as="fetch" href="monster.glb" crossorigin>
+  <link rel="preload" as="fetch" href="coin.glb" crossorigin>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     @font-face{
@@ -130,6 +131,10 @@
     #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;
       transition:opacity 0.6s ease;z-index:20}
     #fade.show{opacity:1}
+    #coin-counter{position:fixed;top:16px;left:16px;z-index:15;
+      color:#FFD700;font-size:22px;font-weight:bold;font-family:sans-serif;
+      text-shadow:0 0 6px rgba(255,215,0,0.6),1px 1px 2px rgba(0,0,0,0.8);
+      pointer-events:none;display:none}
     /* ===== TITLE STYLE =====
        手動微調標題位置：修改 left 值（目前 50%）
        修改 top 值調整垂直位置 */
@@ -325,6 +330,7 @@ you will plummet, transforming into a beautiful plant.
     <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
     <button id="jump-btn"></button>
   </div>
+  <div id="coin-counter"></div>
   <div id="fade"></div>
   <audio id="bgm" loop preload="auto" playsinline></audio>
 
@@ -1288,6 +1294,120 @@ const qBlockGroup=new THREE.Group();
   qBlockGroup.userData.flashT=-1;
   qBlockGroup.userData.pendingStatement=false;
   scene.add(qBlockGroup);
+}
+
+// ===== Coin System (金幣收集) =====
+const COIN_SCALE=40; // ← 金幣大小
+const COIN_FLOAT_HEIGHT=PLAT_Y+DISC_LIFT+4.5; // 圓盤平台上方可跳到的高度
+const COIN_HIT_RADIUS=2.5; // 碰撞半徑
+const COIN_RESPAWN_TIME=10; // 秒後重生
+let coinCount=0;
+let coinModel=null;
+let coinLoaded=false;
+const coins=[];
+const coinCounterEl=document.getElementById('coin-counter');
+
+function updateCoinUI(){
+  coinCounterEl.textContent='\u{1FA99} x '+coinCount;
+  coinCounterEl.style.display='block';
+}
+
+async function loadCoins(){
+  try{
+    const gltf=await loader.loadAsync('coin.glb');
+    coinModel=gltf.scene;
+    coinModel.scale.setScalar(COIN_SCALE);
+    coinModel.traverse(o=>{
+      if(o.isMesh){
+        o.frustumCulled=false;
+        if(o.material) o.material.side=THREE.DoubleSide;
+      }
+    });
+
+    // Spawn coin above the flying disc platform (center)
+    const c=coinModel.clone();
+    const coinGroup=new THREE.Group();
+    coinGroup.add(c);
+    coinGroup.position.set(0,COIN_FLOAT_HEIGHT,0);
+    coinGroup.userData.baseY=COIN_FLOAT_HEIGHT;
+    coinGroup.userData.collected=false;
+    coinGroup.userData.respawnTimer=0;
+    coinGroup.userData.floatAway=false;
+    coinGroup.userData.floatAwayY=0;
+    coinGroup.userData.floatAwayAlpha=1;
+    scene.add(coinGroup);
+    coins.push(coinGroup);
+
+    coinLoaded=true;
+    updateCoinUI();
+    console.log('[Coin] Loaded and placed above platform');
+  }catch(e){
+    console.error('[Coin] Load error:',e);
+  }
+}
+loadCoins();
+
+function updateCoins(dt){
+  if(!coinLoaded)return;
+  for(const c of coins){
+    if(c.userData.collected){
+      if(c.userData.floatAway){
+        // Float up and fade out
+        c.userData.floatAwayY+=dt*3;
+        c.userData.floatAwayAlpha-=dt*1.5;
+        c.position.y=c.userData.baseY+c.userData.floatAwayY;
+        c.traverse(o=>{
+          if(o.isMesh&&o.material){
+            o.material.transparent=true;
+            o.material.opacity=Math.max(0,c.userData.floatAwayAlpha);
+          }
+        });
+        if(c.userData.floatAwayAlpha<=0){
+          c.visible=false;
+          c.userData.floatAway=false;
+        }
+      }
+      // Respawn timer
+      c.userData.respawnTimer-=dt;
+      if(c.userData.respawnTimer<=0){
+        c.userData.collected=false;
+        c.userData.floatAway=false;
+        c.userData.floatAwayY=0;
+        c.userData.floatAwayAlpha=1;
+        c.position.y=c.userData.baseY;
+        c.visible=true;
+        // Reset opacity
+        c.traverse(o=>{
+          if(o.isMesh&&o.material){
+            o.material.opacity=1;
+            o.material.transparent=false;
+          }
+        });
+      }
+      continue;
+    }
+
+    // Idle: float up/down + rotate (like qBlock)
+    c.position.y=c.userData.baseY+Math.sin(globalTime*1.8)*0.5;
+    c.rotation.y=globalTime*2.0;
+
+    // Collision detection with player head (jumping up)
+    const dx=charRoot.position.x-c.position.x;
+    const dz=charRoot.position.z-c.position.z;
+    const dist2D=Math.sqrt(dx*dx+dz*dz);
+    const headY=charRoot.position.y+(baseModelY?Math.abs(baseModelY)*2:2.5);
+    if(dist2D<COIN_HIT_RADIUS&&Math.abs(headY-c.position.y)<2.5&&isJumping){
+      // Collected!
+      c.userData.collected=true;
+      c.userData.floatAway=true;
+      c.userData.floatAwayY=0;
+      c.userData.floatAwayAlpha=1;
+      c.userData.respawnTimer=COIN_RESPAWN_TIME;
+      coinCount++;
+      updateCoinUI();
+      console.log('[Coin] Collected! Total:',coinCount);
+    }
+  }
 }
 
 // Floating sky platforms — multiple routes to height 50, blue top platforms
@@ -3285,6 +3405,7 @@ function tick(){
   updateDrinkGlow(dt);
   updateMonsters(dt);
   updatePlayerHitEffect(dt);
+  updateCoins(dt);
   updateMouthText(dt);
   if(burst){
     setPlantsDim(Math.min(1,burst.fadePlants));
