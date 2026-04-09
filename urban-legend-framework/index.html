@@ -1058,36 +1058,46 @@ const VHSShader={
     void main(){
       vec2 uv=vUv;
 
-      // Wave distortion — horizontal wobble
+      // === 波浪扭曲（慢） ===
+      // 12.0=波浪密度（越大波紋越密）  2.5=晃動速度  0.003=扭曲幅度（越大越歪）
       float wave=sin(uv.y*12.0+time*2.5)*0.003*intensity;
+      // === 波浪扭曲（快） ===
+      // 35.0=高頻密度  4.0=速度  0.001=振幅（細微抖動）
       wave+=sin(uv.y*35.0+time*4.0)*0.001*intensity;
-      // Occasional big glitch band
+      // === 故障橫帶 ===
+      // 0.98=觸發門檻（越低越頻繁出現）  0.015=橫移量（越大偏移越大）
       float band=step(0.98,sin(time*0.7+uv.y*3.0))*0.015*intensity;
       uv.x+=wave+band;
 
-      // Vertical jitter (whole frame shifts slightly)
+      // === 垂直抖動（整個畫面上下微跳） ===
+      // 13.0=跳動速度  0.0008=跳動幅度
       uv.y+=sin(time*13.0)*0.0008*intensity;
 
-      // Color channel separation (chromatic aberration)
+      // === 色差分離（RGB頻道錯位） ===
+      // 0.002=偏移量（越大彩色邊緣越明顯，0=關閉）
       float shift=0.002*intensity;
       float r=texture2D(tDiffuse,vec2(uv.x+shift,uv.y)).r;
       float g=texture2D(tDiffuse,uv).g;
       float b=texture2D(tDiffuse,vec2(uv.x-shift,uv.y)).b;
       vec3 col=vec3(r,g,b);
 
-      // Scanlines
+      // === 掃描線（水平條紋） ===
+      // 1.2=線條密度  0.06=線條深度（越大越明顯，0=關閉）
       float scanline=sin(vUv.y*resolution.y*1.2)*0.06*intensity;
       col-=scanline;
 
-      // Static noise
+      // === 靜態雜訊（雪花點） ===
+      // 0.08=雜訊強度（越大雪花越多，0=關閉）
       float noise=rand(vUv*time)*0.08*intensity;
       col+=noise-0.04*intensity;
 
-      // Slight vignette
+      // === 暗角（畫面邊緣變暗） ===
+      // 1.1=暗角範圍（越大邊緣越暗）  0.3=暗角強度（0=關閉）
       float vig=1.0-dot((vUv-0.5)*1.1,(vUv-0.5)*1.1);
       col*=mix(1.0,vig,0.3*intensity);
 
-      // Desaturate slightly for VHS look
+      // === 去飽和（褪色感） ===
+      // 0.85=彩色保留比例（1.0=全彩  0.0=全黑白）
       float lum=dot(col,vec3(0.299,0.587,0.114));
       col=mix(vec3(lum),col,0.85);
 
