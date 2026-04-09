@@ -1066,7 +1066,7 @@ const VHSShader={
       wave+=sin(uv.y*35.0+time*4.0)*0.001*intensity;
       // === 故障橫帶 ===
       // 0.98=觸發門檻（越低越頻繁出現）  0.015=橫移量（越大偏移越大）
-      float band=step(0.98,sin(time*0.7+uv.y*3.0))*0.015*intensity;
+      float band=step(0.98,sin(time*0.7+uv.y*3.0))*0.00015*intensity;
       uv.x+=wave+band;
 
       // === 垂直抖動（整個畫面上下微跳） ===
@@ -1075,7 +1075,7 @@ const VHSShader={
 
       // === 色差分離（RGB頻道錯位） ===
       // 0.002=偏移量（越大彩色邊緣越明顯，0=關閉）
-      float shift=0.002*intensity;
+      float shift=0.00002*intensity;
       float r=texture2D(tDiffuse,vec2(uv.x+shift,uv.y)).r;
       float g=texture2D(tDiffuse,uv).g;
       float b=texture2D(tDiffuse,vec2(uv.x-shift,uv.y)).b;
