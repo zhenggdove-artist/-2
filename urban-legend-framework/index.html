@@ -334,6 +334,9 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
 
 const W=()=>window.innerWidth, H=()=>window.innerHeight;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -1030,6 +1033,83 @@ sun.position.set(8,18,5);scene.add(sun);
 scene.add(new THREE.AmbientLight('#ffffff',0.35));
 
 const camera=new THREE.PerspectiveCamera(55,W()/H(),0.1,1000);
+
+// ===== VHS Filter (Shift+V toggle) =====
+const VHSShader={
+  uniforms:{
+    tDiffuse:{value:null},
+    time:{value:0},
+    intensity:{value:1.0},
+    resolution:{value:new THREE.Vector2(W(),H())},
+  },
+  vertexShader:`
+    varying vec2 vUv;
+    void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}
+  `,
+  fragmentShader:`
+    uniform sampler2D tDiffuse;
+    uniform float time;
+    uniform float intensity;
+    uniform vec2 resolution;
+    varying vec2 vUv;
+
+    float rand(vec2 co){return fract(sin(dot(co,vec2(12.9898,78.233)))*43758.5453);}
+
+    void main(){
+      vec2 uv=vUv;
+
+      // Wave distortion — horizontal wobble
+      float wave=sin(uv.y*12.0+time*2.5)*0.003*intensity;
+      wave+=sin(uv.y*35.0+time*4.0)*0.001*intensity;
+      // Occasional big glitch band
+      float band=step(0.98,sin(time*0.7+uv.y*3.0))*0.015*intensity;
+      uv.x+=wave+band;
+
+      // Vertical jitter (whole frame shifts slightly)
+      uv.y+=sin(time*13.0)*0.0008*intensity;
+
+      // Color channel separation (chromatic aberration)
+      float shift=0.002*intensity;
+      float r=texture2D(tDiffuse,vec2(uv.x+shift,uv.y)).r;
+      float g=texture2D(tDiffuse,uv).g;
+      float b=texture2D(tDiffuse,vec2(uv.x-shift,uv.y)).b;
+      vec3 col=vec3(r,g,b);
+
+      // Scanlines
+      float scanline=sin(vUv.y*resolution.y*1.2)*0.06*intensity;
+      col-=scanline;
+
+      // Static noise
+      float noise=rand(vUv*time)*0.08*intensity;
+      col+=noise-0.04*intensity;
+
+      // Slight vignette
+      float vig=1.0-dot((vUv-0.5)*1.1,(vUv-0.5)*1.1);
+      col*=mix(1.0,vig,0.3*intensity);
+
+      // Desaturate slightly for VHS look
+      float lum=dot(col,vec3(0.299,0.587,0.114));
+      col=mix(vec3(lum),col,0.85);
+
+      gl_FragColor=vec4(col,1.0);
+    }
+  `
+};
+
+const composer=new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+const vhsPass=new ShaderPass(VHSShader);
+composer.addPass(vhsPass);
+
+let vhsEnabled=true; // default ON
+window.addEventListener('keydown',e=>{
+  if(e.shiftKey&&e.key==='V'){
+    e.preventDefault();
+    vhsEnabled=!vhsEnabled;
+    vhsPass.enabled=vhsEnabled;
+    console.log('[VHS]',vhsEnabled?'ON':'OFF');
+  }
+});
 
 // ===== Character (GLB) + Cinematic =====
 const PLAT_Y=200; // final floating platform height (above plants)
@@ -3270,7 +3350,9 @@ function tick(){
 
   updateBugs(globalTime);
 
-  renderer.render(scene,camera);
+  // Update VHS uniforms + render
+  vhsPass.uniforms.time.value=globalTime;
+  composer.render();
 }
 
 // ===== Flying Bugs — orbit around plants =====
@@ -3355,8 +3437,10 @@ init();
 
 window.addEventListener('resize',()=>{
   renderer.setSize(W(),H());
+  composer.setSize(W(),H());
   camera.aspect=W()/H();
   camera.updateProjectionMatrix();
+  vhsPass.uniforms.resolution.value.set(W(),H());
 });
 </script>
 </body>
