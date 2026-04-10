@@ -13,8 +13,8 @@ jobs:
       - name: Ping Supabase to prevent hibernation
         run: |
           # Read-only query — does NOT create entries, does NOT appear in plant pool
-          curl -sf "https://mmhoohddrmguxnmtvgwz.supabase.co/rest/v1/entries?select=id&limit=1" \
-            -H "apikey: sb_publishable_Aig1UQpR4iYyaeArWCG5IQ_XGhTXzsq" \
-            -H "Authorization: Bearer sb_publishable_Aig1UQpR4iYyaeArWCG5IQ_XGhTXzsq" \
+          curl -sf "https://ztpftxwfcppsqosilssq.supabase.co/rest/v1/entries?select=id&limit=1" \
+            -H "apikey: sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
+            -H "Authorization: Bearer sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
             -o /dev/null -w "HTTP %{http_code}\n"
           echo "Supabase keep-alive ping sent at $(date -u)"
