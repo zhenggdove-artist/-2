@@ -1361,13 +1361,29 @@ function getOrCreateGraffitiPlane(pillar,facingPlayerDir){
   const geo=new THREE.PlaneGeometry(planeW,planeH);
   const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:0.92,depthWrite:false,side:THREE.DoubleSide});
   const mesh=new THREE.Mesh(geo,mat);
-  // Place at mid-height of pillar, offset outward toward painter
-  const offset=(pillar.halfW||0.7)+0.03;
   const dir=facingPlayerDir.clone().setY(0).normalize();
-  mesh.position.copy(pillar.pos);
-  mesh.position.y=pillar.pos.y+pillar.topY*0.45;
-  mesh.position.addScaledVector(dir,offset);
-  mesh.lookAt(mesh.position.x+dir.x,mesh.position.y,mesh.position.z+dir.z);
+  const bb=new THREE.Box3().setFromObject(pillar.mesh||new THREE.Object3D());
+  if(Number.isFinite(bb.min.x) && Number.isFinite(bb.max.x)){
+    const center=new THREE.Vector3(); bb.getCenter(center);
+    const size=new THREE.Vector3(); bb.getSize(size);
+    mesh.position.copy(center);
+    mesh.position.y=bb.min.y+Math.min(size.y*0.6,planeH*0.55+size.y*0.15);
+    if(Math.abs(dir.x)>=Math.abs(dir.z)){
+      const sx=Math.sign(dir.x)||1;
+      mesh.position.x=(sx>0?bb.max.x:bb.min.x)+sx*0.015;
+      mesh.lookAt(mesh.position.x+sx,mesh.position.y,mesh.position.z);
+    }else{
+      const sz=Math.sign(dir.z)||1;
+      mesh.position.z=(sz>0?bb.max.z:bb.min.z)+sz*0.015;
+      mesh.lookAt(mesh.position.x,mesh.position.y,mesh.position.z+sz);
+    }
+  }else{
+    const offset=(pillar.halfW||0.7)+0.015;
+    mesh.position.copy(pillar.pos);
+    mesh.position.y=pillar.pos.y+pillar.topY*0.45;
+    mesh.position.addScaledVector(dir,offset);
+    mesh.lookAt(mesh.position.x+dir.x,mesh.position.y,mesh.position.z+dir.z);
+  }
   mesh.scale.y=0.05; // grow as paint progresses
   scene.add(mesh);
   pillar.graffiti=mesh;
@@ -1378,6 +1394,7 @@ function getOrCreateGraffitiPlane(pillar,facingPlayerDir){
 // ===== Character template + loader =====
 let charGLTF=null;
 let clipIdle=null,clipWalk=null,clipRun=null,clipJump=null,clipPaint=null,clipPanicRun=null;
+let extraCharacterClipsPromise=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
 
 function sanitizeClip(clip){
@@ -1419,14 +1436,27 @@ async function loadCharacterTemplate(){
       else if(n==='run'||n==='running')clipRun=clip;
       else if(n==='jump')clipJump=clip;
     }
+    clipPanicRun=clipRun;
+    clipPaint=clipIdle;
+    console.log('[char] loaded, anims:',gltf.animations.map(c=>c.name));
+  }catch(e){console.error('[char] failed',e)}
+}
+
+function loadExtraCharacterClips(){
+  if(extraCharacterClipsPromise) return extraCharacterClipsPromise;
+  extraCharacterClipsPromise=(async()=>{
     const [panicRunClip,paintClip]=await Promise.all([
       loadFBXClip('playermodel/主角/Running.fbx','panic-run').catch(()=>null),
       loadFBXClip('playermodel/主角/painting.fbx','paint').catch(()=>null),
     ]);
-    clipPanicRun=panicRunClip||clipRun;
-    clipPaint=paintClip||clipIdle;
-    console.log('[char] loaded, anims:',gltf.animations.map(c=>c.name));
-  }catch(e){console.error('[char] failed',e)}
+    if(panicRunClip) clipPanicRun=panicRunClip;
+    if(paintClip) clipPaint=paintClip;
+    console.log('[char] extra clips ready',{
+      panicRun:!!panicRunClip,
+      paint:!!paintClip
+    });
+  })();
+  return extraCharacterClipsPromise;
 }
 
 function buildCharacterInstance(tint){
@@ -1665,17 +1695,20 @@ function artistTransition(a,newState){
   a.state=newState;
   const I=a.inst;
   if(newState==='walk'){
+    I.root.rotation.x=0;
     I.actPaint&&I.actPaint.fadeOut(0.15);
     I.actPanicRun&&I.actPanicRun.fadeOut(0.15);
     I.actIdle&&I.actIdle.fadeOut(0.2);
     I.actWalk&&I.actWalk.reset().fadeIn(0.2).play();
   }else if(newState==='paint'){
+    I.root.rotation.x=0;
     I.actPanicRun&&I.actPanicRun.fadeOut(0.15);
     I.actWalk&&I.actWalk.fadeOut(0.2);
     I.actRun&&I.actRun.fadeOut(0.2);
     if(I.actPaint) I.actPaint.reset().fadeIn(0.2).play();
     else I.actIdle&&I.actIdle.reset().fadeIn(0.2).play();
   }else if(newState==='flee'){
+    I.root.rotation.x=Math.PI*0.5;
     I.actPaint&&I.actPaint.fadeOut(0.15);
     I.actIdle&&I.actIdle.fadeOut(0.15);
     I.actWalk&&I.actWalk.fadeOut(0.15);
@@ -2063,7 +2096,7 @@ canvas.addEventListener('pointerdown',e=>{
 });
 canvas.addEventListener('pointermove',e=>{
   if(!dragging||e.pointerId!==dragPId)return;
-  camYaw=yaw0+(e.clientX-dx0)/W()*4;
+  camYaw=yaw0-(e.clientX-dx0)/W()*4;
   camPitch=clamp(pitch0+(e.clientY-dy0)/H()*3,-0.2,1.0);
 });
 const endDrag=e=>{if(e.pointerId===dragPId){dragging=false;dragPId=null}};
@@ -2463,6 +2496,7 @@ async function init(){
   }
   attachPlayer();
   placePlayerOnPlayableLayer();
+  loadExtraCharacterClips().catch(e=>console.warn('[char] extra clip load failed',e));
   tick(); // begin rendering — intro is still on top
 
   // River detection needs many raycasts. Only attempt when BVH is available.
