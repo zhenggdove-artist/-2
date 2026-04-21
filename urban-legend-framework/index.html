@@ -747,20 +747,21 @@ function buildPlayableFootprint(samples,step){
   return {cell,rows,rowList,cols,colList};
 }
 
-function extractPlayableFloorSample(x,z,ys){
-  if(!ys||ys.length<2) return null;
+function extractPlayableFloorCandidates(x,z,ys){
+  if(!ys||ys.length<2) return [];
   const HEADROOM_MIN=2.2;
   const HEADROOM_MAX=8.5;
   const FLOOR_MIN_Y=0.35;
+  const out=[];
   for(let i=1;i<ys.length;i++){
     const ceilingY=ys[i-1];
     const floorY=ys[i];
     const headroom=ceilingY-floorY;
     if(headroom<HEADROOM_MIN||headroom>HEADROOM_MAX) continue;
     if(floorY<FLOOR_MIN_Y) continue;
-    return {x,z,y:floorY,ceilingY,headroom};
+    out.push({x,z,y:floorY,ceilingY,headroom});
   }
-  return null;
+  return out;
 }
 
 async function detectPlayableLayer(progressFn){
@@ -771,12 +772,16 @@ async function detectPlayableLayer(progressFn){
   for(let z=-worldBoundR;z<=worldBoundR;z+=step) zs.push(z);
   const total=xs.length*zs.length;
   let done=0;
-  const samples=[];
+  const sampleColumns=[];
+  const candidateHeights=[];
   for(const x of xs){
     for(const z of zs){
       const ys=rayGroundHits(x,z);
-      const floorSample=extractPlayableFloorSample(x,z,ys);
-      if(floorSample) samples.push(floorSample);
+      const floors=extractPlayableFloorCandidates(x,z,ys);
+      if(floors.length){
+        sampleColumns.push({x,z,floors});
+        candidateHeights.push(...floors.map(f=>f.y));
+      }
       done++;
       if(done%60===0){
         if(progressFn) progressFn(done/total);
@@ -785,7 +790,34 @@ async function detectPlayableLayer(progressFn){
     }
   }
   if(progressFn) progressFn(1);
-  if(samples.length<20) return null;
+  if(sampleColumns.length<20||candidateHeights.length<20) return null;
+  const clusters=buildHeightClusters(candidateHeights,0.7);
+  if(!clusters.length) return null;
+  const ranked=clusters
+    .map(cluster=>{
+      const samples=[];
+      for(const col of sampleColumns){
+        let best=null;
+        let bestDist=Infinity;
+        for(const floor of col.floors){
+          const dist=Math.abs(floor.y-cluster.avg);
+          if(dist<bestDist){
+            best=floor;
+            bestDist=dist;
+          }
+        }
+        if(best&&bestDist<=0.9) samples.push(best);
+      }
+      return {cluster,samples};
+    })
+    .filter(v=>v.samples.length>=12)
+    .sort((a,b)=>{
+      if(b.samples.length!==a.samples.length) return b.samples.length-a.samples.length;
+      return a.cluster.avg-b.cluster.avg;
+    });
+  const chosen=ranked[0];
+  if(!chosen) return null;
+  const samples=chosen.samples;
   const minX=Math.min(...samples.map(s=>s.x));
   const maxX=Math.max(...samples.map(s=>s.x));
   const minZ=Math.min(...samples.map(s=>s.z));
@@ -803,7 +835,7 @@ async function detectPlayableLayer(progressFn){
     step,
     samples,
     footprint,
-    clusters:buildHeightClusters(samples.map(s=>s.y)).map(c=>({y:c.avg,count:c.count,min:c.min,max:c.max}))
+    clusters:ranked.map(v=>({y:v.cluster.avg,count:v.samples.length,min:v.cluster.min,max:v.cluster.max}))
   };
 }
 
@@ -864,8 +896,10 @@ function createWaterMesh(r){
   const group=new THREE.Group();
 
   const bodyGeo=new THREE.BoxGeometry(w,depth,h);
+  bodyGeo.computeBoundingBox();
+  applyGradientToWaterBox(bodyGeo);
   const bodyMat=new THREE.MeshStandardMaterial({
-    color:'#2e85cf',transparent:true,opacity:0.58,
+    transparent:true,opacity:0.64,vertexColors:true,
     roughness:0.28,metalness:0.04,
     emissive:'#0a4f83',emissiveIntensity:0.18,
   });
@@ -877,8 +911,10 @@ function createWaterMesh(r){
   const segZ=Math.max(12,Math.floor(h*1.2));
   const surfaceGeo=new THREE.PlaneGeometry(w,h,segX,segZ);
   surfaceGeo.rotateX(-Math.PI/2);
+  surfaceGeo.computeBoundingBox();
+  applyGradientToWaterSurface(surfaceGeo);
   const surfaceMat=new THREE.MeshStandardMaterial({
-    color:'#5fc4ff',transparent:true,opacity:0.82,
+    transparent:true,opacity:0.86,vertexColors:true,
     roughness:0.12,metalness:0.06,
     emissive:'#1082c8',emissiveIntensity:0.22,
     side:THREE.DoubleSide,envMapIntensity:1.4,
@@ -905,6 +941,83 @@ function updateWater(t){
     }
     p.needsUpdate=true;
   }
+}
+
+function applyGradientToWaterBox(geo){
+  const pos=geo.attributes.position;
+  const colors=new Float32Array(pos.count*3);
+  const bb=geo.boundingBox||new THREE.Box3().setFromBufferAttribute(pos);
+  const minY=bb.min.y,maxY=bb.max.y,minZ=bb.min.z,maxZ=bb.max.z;
+  const topA=new THREE.Color('#0a3f75');
+  const topB=new THREE.Color('#1469b4');
+  const lowA=new THREE.Color('#07243f');
+  const lowB=new THREE.Color('#0d4d86');
+  const c=new THREE.Color();
+  for(let i=0;i<pos.count;i++){
+    const y=pos.getY(i), z=pos.getZ(i);
+    const ty=(y-minY)/Math.max(0.001,maxY-minY);
+    const tz=(z-minZ)/Math.max(0.001,maxZ-minZ);
+    const a=lowA.clone().lerp(lowB,tz);
+    const b=topA.clone().lerp(topB,tz);
+    c.copy(a).lerp(b,ty);
+    colors[i*3]=c.r;
+    colors[i*3+1]=c.g;
+    colors[i*3+2]=c.b;
+  }
+  geo.setAttribute('color',new THREE.BufferAttribute(colors,3));
+}
+
+function applyGradientToWaterSurface(geo){
+  const pos=geo.attributes.position;
+  const colors=new Float32Array(pos.count*3);
+  const bb=geo.boundingBox||new THREE.Box3().setFromBufferAttribute(pos);
+  const minX=bb.min.x,maxX=bb.max.x,minZ=bb.min.z,maxZ=bb.max.z;
+  const c1=new THREE.Color('#8fe6ff');
+  const c2=new THREE.Color('#49b8ff');
+  const c3=new THREE.Color('#1979d8');
+  const c=new THREE.Color();
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i), z=pos.getZ(i);
+    const tx=(x-minX)/Math.max(0.001,maxX-minX);
+    const tz=(z-minZ)/Math.max(0.001,maxZ-minZ);
+    c.copy(c1).lerp(c2,tx*0.6+tz*0.4).lerp(c3,Math.abs(0.5-tz)*0.9);
+    colors[i*3]=c.r;
+    colors[i*3+1]=c.g;
+    colors[i*3+2]=c.b;
+  }
+  geo.setAttribute('color',new THREE.BufferAttribute(colors,3));
+}
+
+function liftCeilingGeometry(root,anchorY,factor=5){
+  if(!root) return;
+  const worldPos=new THREE.Vector3();
+  const localPos=new THREE.Vector3();
+  const invMatrix=new THREE.Matrix4();
+  root.updateMatrixWorld(true);
+  root.traverse(o=>{
+    if(!o.isMesh||!o.geometry||!o.geometry.attributes?.position) return;
+    const pos=o.geometry.attributes.position;
+    invMatrix.copy(o.matrixWorld).invert();
+    let changed=false;
+    for(let i=0;i<pos.count;i++){
+      localPos.fromBufferAttribute(pos,i);
+      worldPos.copy(localPos).applyMatrix4(o.matrixWorld);
+      if(worldPos.y<=anchorY) continue;
+      worldPos.y=anchorY+(worldPos.y-anchorY)*factor;
+      localPos.copy(worldPos).applyMatrix4(invMatrix);
+      pos.setXYZ(i,localPos.x,localPos.y,localPos.z);
+      changed=true;
+    }
+    if(!changed) return;
+    pos.needsUpdate=true;
+    o.geometry.computeVertexNormals();
+    o.geometry.computeBoundingBox();
+    o.geometry.computeBoundingSphere();
+    if(o.geometry.boundsTree){
+      o.geometry.disposeBoundsTree?.();
+      o.geometry.computeBoundsTree?.();
+    }
+  });
 }
 
 async function loadPlayground(){
@@ -2277,7 +2390,9 @@ async function init(){
     });
     if(playableLayer){
       worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
+      liftCeilingGeometry(playgroundRoot,playableLayer.ceilingY,5);
       groundYCache.clear();
+      collectGroundMeshes(playgroundRoot);
       refreshPlayablePillars();
       console.log('[floor] selected layer:',playableLayer);
     }
