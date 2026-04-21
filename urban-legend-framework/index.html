@@ -747,49 +747,20 @@ function buildPlayableFootprint(samples,step){
   return {cell,rows,rowList,cols,colList};
 }
 
-function scorePlayableCluster(cluster,samples){
-  const tol=Math.max(1.0,(cluster.max-cluster.min)+0.9);
-  let support=0;
-  let enclosed=0;
-  const layerSamples=[];
-  for(const s of samples){
-    const y=pickGroundHitY(s.ys,cluster.avg,tol);
-    if(y===null) continue;
-    const idx=s.ys.findIndex(v=>Math.abs(v-y)<0.22);
-    const above=idx>0 ? s.ys[idx-1]-y : null;
-    const below=idx>=0 && idx<s.ys.length-1 ? y-s.ys[idx+1] : null;
-    const hasRoof=above!==null && above>1.3 && above<9;
-    const hasBase=below!==null && below>0.2 && below<9;
-    if(hasRoof) support++;
-    if(hasRoof&&hasBase) enclosed++;
-    layerSamples.push({x:s.x,z:s.z,y});
+function extractPlayableFloorSample(x,z,ys){
+  if(!ys||ys.length<2) return null;
+  const HEADROOM_MIN=2.2;
+  const HEADROOM_MAX=8.5;
+  const FLOOR_MIN_Y=0.35;
+  for(let i=1;i<ys.length;i++){
+    const ceilingY=ys[i-1];
+    const floorY=ys[i];
+    const headroom=ceilingY-floorY;
+    if(headroom<HEADROOM_MIN||headroom>HEADROOM_MAX) continue;
+    if(floorY<FLOOR_MIN_Y) continue;
+    return {x,z,y:floorY,ceilingY,headroom};
   }
-  if(!layerSamples.length) return null;
-  const minX=Math.min(...layerSamples.map(s=>s.x));
-  const maxX=Math.max(...layerSamples.map(s=>s.x));
-  const minZ=Math.min(...layerSamples.map(s=>s.z));
-  const maxZ=Math.max(...layerSamples.map(s=>s.z));
-  const spanArea=Math.max(1,(maxX-minX)*(maxZ-minZ));
-  const footprint=buildPlayableFootprint(layerSamples,Math.max(0.9,Math.sqrt(spanArea/layerSamples.length)));
-  const rowSpanAvg=footprint.rowList.length
-    ? footprint.rowList.reduce((sum,row)=>sum+(row.maxZ-row.minZ),0)/footprint.rowList.length
-    : 0;
-  const colSpanAvg=footprint.colList.length
-    ? footprint.colList.reduce((sum,col)=>sum+(col.maxX-col.minX),0)/footprint.colList.length
-    : 0;
-  const score=(support*4)+(enclosed*6)+layerSamples.length+(rowSpanAvg+colSpanAvg)*3+spanArea*0.04;
-  return {
-    score,
-    support,
-    enclosed,
-    avg:cluster.avg,
-    tol,
-    layerSamples,
-    minX,maxX,minZ,maxZ,
-    centerX:(minX+maxX)*0.5,
-    centerZ:(minZ+maxZ)*0.5,
-    footprint,
-  };
+  return null;
 }
 
 async function detectPlayableLayer(progressFn){
@@ -800,15 +771,12 @@ async function detectPlayableLayer(progressFn){
   for(let z=-worldBoundR;z<=worldBoundR;z+=step) zs.push(z);
   const total=xs.length*zs.length;
   let done=0;
-  const allHeights=[];
   const samples=[];
   for(const x of xs){
     for(const z of zs){
       const ys=rayGroundHits(x,z);
-      if(ys.length){
-        samples.push({x,z,ys});
-        allHeights.push(...ys);
-      }
+      const floorSample=extractPlayableFloorSample(x,z,ys);
+      if(floorSample) samples.push(floorSample);
       done++;
       if(done%60===0){
         if(progressFn) progressFn(done/total);
@@ -817,31 +785,25 @@ async function detectPlayableLayer(progressFn){
     }
   }
   if(progressFn) progressFn(1);
-  if(samples.length<20||allHeights.length<20) return null;
-
-  const clusters=buildHeightClusters(allHeights);
-  if(!clusters.length) return null;
-  const usable=clusters.filter(c=>c.count>=Math.max(8,allHeights.length*0.05));
-  const rankedHeights=(usable.length?usable:clusters).sort((a,b)=>b.avg-a.avg);
-  const scored=rankedHeights
-    .map(cluster=>({cluster,info:scorePlayableCluster(cluster,samples)}))
-    .filter(v=>v.info && v.info.layerSamples.length>=12)
-    .sort((a,b)=>b.info.score-a.info.score);
-  const best=scored[0]?.info;
-  if(!best) return null;
+  if(samples.length<20) return null;
+  const minX=Math.min(...samples.map(s=>s.x));
+  const maxX=Math.max(...samples.map(s=>s.x));
+  const minZ=Math.min(...samples.map(s=>s.z));
+  const maxZ=Math.max(...samples.map(s=>s.z));
+  const avgY=samples.reduce((sum,s)=>sum+s.y,0)/samples.length;
+  const avgCeilingY=samples.reduce((sum,s)=>sum+s.ceilingY,0)/samples.length;
+  const footprint=buildPlayableFootprint(samples,step);
   return {
-    y:best.avg,
-    tolerance:best.tol,
-    minX:best.minX,maxX:best.maxX,minZ:best.minZ,maxZ:best.maxZ,
-    centerX:best.centerX,
-    centerZ:best.centerZ,
+    y:avgY,
+    ceilingY:avgCeilingY,
+    tolerance:Math.max(1.2,avgCeilingY-avgY+0.5),
+    minX,maxX,minZ,maxZ,
+    centerX:(minX+maxX)*0.5,
+    centerZ:(minZ+maxZ)*0.5,
     step,
-    samples:best.layerSamples,
-    footprint:best.footprint,
-    clusters:scored.map(v=>({
-      y:v.cluster.avg,count:v.cluster.count,min:v.cluster.min,max:v.cluster.max,
-      score:v.info.score,support:v.info.support,enclosed:v.info.enclosed,samples:v.info.layerSamples.length
-    }))
+    samples,
+    footprint,
+    clusters:buildHeightClusters(samples.map(s=>s.y)).map(c=>({y:c.avg,count:c.count,min:c.min,max:c.max}))
   };
 }
 
