@@ -648,13 +648,13 @@ const GROUND_Y_OFFSET=0.05; // small lift to avoid z-fighting with floor
 let playgroundRoot=null;
 const groundMeshes=[];
 const groundRaycaster=new THREE.Raycaster();
-if(bvhReady) groundRaycaster.firstHitOnly=true;
 const _downV=new THREE.Vector3(0,-1,0);
 const _upPos=new THREE.Vector3();
 const groundYCache=new Map(); // key → y (floats rounded to 0.5m grid)
+let playableLayer=null; // {y,tolerance,minX,maxX,minZ,maxZ,centerX,centerZ,step,samples}
 
-function rayGroundY(x,z){
-  if(!groundMeshes.length&&!playgroundRoot) return null;
+function rayGroundHits(x,z){
+  if(!groundMeshes.length&&!playgroundRoot) return [];
   _upPos.set(x,80,z);
   groundRaycaster.set(_upPos,_downV);
   groundRaycaster.far=200;
@@ -662,8 +662,32 @@ function rayGroundY(x,z){
   const hits=groundMeshes.length
     ?groundRaycaster.intersectObjects(target,false)
     :groundRaycaster.intersectObject(target[0],true);
-  if(hits.length) return hits[0].point.y;
-  return null;
+  if(!hits.length) return [];
+  const ys=[];
+  for(const hit of hits){
+    const y=hit.point.y;
+    if(!ys.length || Math.abs(y-ys[ys.length-1])>0.22) ys.push(y);
+  }
+  return ys;
+}
+
+function pickGroundHitY(ys,preferredY=playableLayer?playableLayer.y:null,tolerance=playableLayer?playableLayer.tolerance:null){
+  if(!ys||!ys.length) return null;
+  if(!Number.isFinite(preferredY)) return ys[0];
+  let bestY=ys[0],bestDist=Math.abs(ys[0]-preferredY);
+  for(let i=1;i<ys.length;i++){
+    const d=Math.abs(ys[i]-preferredY);
+    if(d<bestDist){
+      bestDist=d;
+      bestY=ys[i];
+    }
+  }
+  if(Number.isFinite(tolerance) && bestDist>tolerance) return null;
+  return bestY;
+}
+
+function rayGroundY(x,z,preferredY=playableLayer?playableLayer.y:null,tolerance=playableLayer?playableLayer.tolerance:null){
+  return pickGroundHitY(rayGroundHits(x,z),preferredY,tolerance);
 }
 
 function getGroundY(x,z,defaultY){
@@ -682,6 +706,83 @@ function getGroundY(x,z,defaultY){
   return val;
 }
 
+function buildHeightClusters(values,mergeGap=1.15){
+  const sorted=[...values].sort((a,b)=>a-b);
+  const clusters=[];
+  for(const y of sorted){
+    const last=clusters[clusters.length-1];
+    if(last && Math.abs(y-last.avg)<=mergeGap){
+      last.count++;
+      last.sum+=y;
+      last.avg=last.sum/last.count;
+      last.min=Math.min(last.min,y);
+      last.max=Math.max(last.max,y);
+    }else{
+      clusters.push({count:1,sum:y,avg:y,min:y,max:y});
+    }
+  }
+  return clusters;
+}
+
+async function detectPlayableLayer(progressFn){
+  if(!playgroundRoot) return null;
+  const step=Math.max(0.9,worldBoundR/24);
+  const xs=[],zs=[];
+  for(let x=-worldBoundR;x<=worldBoundR;x+=step) xs.push(x);
+  for(let z=-worldBoundR;z<=worldBoundR;z+=step) zs.push(z);
+  const total=xs.length*zs.length;
+  let done=0;
+  const allHeights=[];
+  const samples=[];
+  for(const x of xs){
+    for(const z of zs){
+      const ys=rayGroundHits(x,z);
+      if(ys.length){
+        samples.push({x,z,ys});
+        allHeights.push(...ys);
+      }
+      done++;
+      if(done%60===0){
+        if(progressFn) progressFn(done/total);
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+  }
+  if(progressFn) progressFn(1);
+  if(samples.length<20||allHeights.length<20) return null;
+
+  const clusters=buildHeightClusters(allHeights);
+  if(!clusters.length) return null;
+  const usable=clusters.filter(c=>c.count>=Math.max(8,allHeights.length*0.08));
+  const ranked=(usable.length?usable:clusters).sort((a,b)=>b.avg-a.avg);
+  let chosen=ranked[Math.min(1,ranked.length-1)]||ranked[0];
+  if(ranked.length>=3){
+    const interior=ranked.slice(1,-1).sort((a,b)=>b.count-a.count);
+    if(interior.length) chosen=interior[0];
+  }
+  const tolerance=Math.max(1.2,(chosen.max-chosen.min)+0.8);
+  const layerSamples=[];
+  for(const s of samples){
+    const y=pickGroundHitY(s.ys,chosen.avg,tolerance);
+    if(y!==null) layerSamples.push({x:s.x,z:s.z,y});
+  }
+  if(layerSamples.length<12) return null;
+  const minX=Math.min(...layerSamples.map(s=>s.x));
+  const maxX=Math.max(...layerSamples.map(s=>s.x));
+  const minZ=Math.min(...layerSamples.map(s=>s.z));
+  const maxZ=Math.max(...layerSamples.map(s=>s.z));
+  return {
+    y:chosen.avg,
+    tolerance,
+    minX,maxX,minZ,maxZ,
+    centerX:(minX+maxX)*0.5,
+    centerZ:(minZ+maxZ)*0.5,
+    step,
+    samples:layerSamples,
+    clusters:ranked.map(c=>({y:c.avg,count:c.count,min:c.min,max:c.max}))
+  };
+}
+
 // ===== River (auto-detected low trench) =====
 let RIVER=null; // {minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis:'x'|'z'}
 let waterMesh=null;
@@ -694,40 +795,46 @@ function isInRiver(x,z,groundY){
 }
 
 async function detectRiverBounds(progressFn){
-  if(!playgroundRoot) return null;
-  const samples=[];
-  const STEP=Math.max(1.0,worldBoundR/22);
-  const xs=[],zs=[];
-  for(let x=-worldBoundR;x<=worldBoundR;x+=STEP) xs.push(x);
-  for(let z=-worldBoundR;z<=worldBoundR;z+=STEP) zs.push(z);
-  const total=xs.length*zs.length;
-  let done=0;
-  const BATCH=60;
-  for(const x of xs){
-    for(const z of zs){
-      const y=rayGroundY(x,z);
-      if(y!==null) samples.push({x,z,y});
-      done++;
-      if(done%BATCH===0){
-        if(progressFn) progressFn(done/total);
-        // Yield to the event loop so the page stays responsive
-        await new Promise(r=>setTimeout(r,0));
-      }
-    }
-  }
+  const samples=playableLayer?playableLayer.samples:[];
   if(progressFn) progressFn(1);
   if(samples.length<20) return null;
   const ys=samples.map(s=>s.y).sort((a,b)=>a-b);
   // Take bottom ~20% as low cells
   const lowCount=Math.max(6,Math.floor(samples.length*0.18));
-  const threshold=ys[lowCount];
+  const threshold=ys[Math.min(ys.length-1,lowCount)];
   const low=samples.filter(s=>s.y<=threshold);
   if(low.length<5) return null;
-  const minX=Math.min(...low.map(s=>s.x));
-  const maxX=Math.max(...low.map(s=>s.x));
-  const minZ=Math.min(...low.map(s=>s.z));
-  const maxZ=Math.max(...low.map(s=>s.z));
-  const floorY=Math.min(...low.map(s=>s.y));
+  const cell=Math.max(0.8,playableLayer?playableLayer.step:1);
+  const keyed=new Map(low.map(s=>[`${Math.round(s.x/cell)},${Math.round(s.z/cell)}`,s]));
+  const visited=new Set();
+  const groups=[];
+  for(const key of keyed.keys()){
+    if(visited.has(key)) continue;
+    const stack=[key];
+    const group=[];
+    visited.add(key);
+    while(stack.length){
+      const cur=stack.pop();
+      const s=keyed.get(cur);
+      if(s) group.push(s);
+      const [cx,cz]=cur.split(',').map(Number);
+      for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++){
+        if(!dx&&!dz) continue;
+        const nk=`${cx+dx},${cz+dz}`;
+        if(keyed.has(nk)&&!visited.has(nk)){
+          visited.add(nk);
+          stack.push(nk);
+        }
+      }
+    }
+    groups.push(group);
+  }
+  const trench=groups.sort((a,b)=>b.length-a.length)[0]||low;
+  const minX=Math.min(...trench.map(s=>s.x));
+  const maxX=Math.max(...trench.map(s=>s.x));
+  const minZ=Math.min(...trench.map(s=>s.z));
+  const maxZ=Math.max(...trench.map(s=>s.z));
+  const floorY=Math.min(...trench.map(s=>s.y));
   const surfaceY=floorY+0.55; // water depth ~0.55
   const centerX=(minX+maxX)*0.5, centerZ=(minZ+maxZ)*0.5;
   const axis=(maxX-minX)>(maxZ-minZ)?'x':'z';
@@ -923,6 +1030,54 @@ function detectPillars(root){
   }
 }
 
+function getPlayableBounds(){
+  if(playableLayer){
+    return {
+      minX:playableLayer.minX,
+      maxX:playableLayer.maxX,
+      minZ:playableLayer.minZ,
+      maxZ:playableLayer.maxZ,
+      centerX:playableLayer.centerX,
+      centerZ:playableLayer.centerZ,
+    };
+  }
+  return {
+    minX:-worldBoundR,maxX:worldBoundR,
+    minZ:-worldBoundR,maxZ:worldBoundR,
+    centerX:0,centerZ:0,
+  };
+}
+
+function clampToPlayableArea(pos,margin=0.35){
+  const b=getPlayableBounds();
+  pos.x=clamp(pos.x,b.minX+margin,b.maxX-margin);
+  pos.z=clamp(pos.z,b.minZ+margin,b.maxZ-margin);
+}
+
+function refreshPlayablePillars(){
+  if(!playableLayer) return;
+  const keep=[];
+  for(const p of pillars){
+    const y=rayGroundY(p.pos.x,p.pos.z,playableLayer.y,playableLayer.tolerance+0.8);
+    if(y===null) continue;
+    p.pos.y=y;
+    keep.push(p);
+  }
+  if(keep.length){
+    pillars.length=0;
+    pillars.push(...keep);
+  }
+}
+
+function placePlayerOnPlayableLayer(){
+  const b=getPlayableBounds();
+  const x=b.centerX;
+  const z=b.centerZ;
+  const y=getGroundY(x,z,playableLayer?playableLayer.y:0);
+  player.root.position.set(x,y+GROUND_Y_OFFSET,z);
+  player.groundY=y;
+}
+
 // ===== Graffiti (canvas texture on pillar) =====
 function makeGraffitiTexture(seed){
   const cv=document.createElement('canvas');cv.width=256;cv.height=256;
@@ -965,7 +1120,7 @@ function getOrCreateGraffitiPlane(pillar,facingPlayerDir){
   const offset=(pillar.halfW||0.7)+0.03;
   const dir=facingPlayerDir.clone().setY(0).normalize();
   mesh.position.copy(pillar.pos);
-  mesh.position.y=pillar.topY*0.45;
+  mesh.position.y=pillar.pos.y+pillar.topY*0.45;
   mesh.position.addScaledVector(dir,offset);
   mesh.lookAt(mesh.position.x+dir.x,mesh.position.y,mesh.position.z+dir.z);
   mesh.scale.y=0.05; // grow as paint progresses
@@ -1178,17 +1333,21 @@ const ARTIST_MAX_ALIVE=12;
 
 function pickSpawnPos(){
   // Spawn at world edge — but try to avoid the trench so artists arrive walking, not falling
+  const b=getPlayableBounds();
+  const rx=Math.max(2,(b.maxX-b.minX)*0.48);
+  const rz=Math.max(2,(b.maxZ-b.minZ)*0.48);
   for(let attempts=0;attempts<8;attempts++){
     const a=Math.random()*Math.PI*2;
-    const r=worldBoundR*0.92;
-    const x=Math.cos(a)*r, z=Math.sin(a)*r;
+    const x=b.centerX+Math.cos(a)*rx;
+    const z=b.centerZ+Math.sin(a)*rz;
     if(!isInRiver(x,z,getGroundY(x,z,0))){
-      return new THREE.Vector3(x,0,z);
+      return new THREE.Vector3(x,getGroundY(x,z,0)+GROUND_Y_OFFSET,z);
     }
   }
   const a=Math.random()*Math.PI*2;
-  const r=worldBoundR*0.92;
-  return new THREE.Vector3(Math.cos(a)*r,0,Math.sin(a)*r);
+  const x=b.centerX+Math.cos(a)*rx;
+  const z=b.centerZ+Math.sin(a)*rz;
+  return new THREE.Vector3(x,getGroundY(x,z,0)+GROUND_Y_OFFSET,z);
 }
 
 function pickRiverPoint(){
@@ -1248,6 +1407,7 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
   const speed=baseSpeed*(a.inWater?WATER_SPEED_MULT:1);
   p.x+=nx*speed*dt;
   p.z+=nz*speed*dt;
+  clampToPlayableArea(p,0.2);
   a.inst.outer.rotation.y=Math.atan2(nx,nz);
   // Footstep splash if wading
   if(a.inWater){
@@ -1296,6 +1456,16 @@ function updateArtists(dt){
     }
 
     if(a.state==='walk'){
+      if(!a.target){
+        a.target=pickFreePillar();
+        if(a.target) a.target.claimedBy=a;
+        else{
+          a.state='leave';
+          a.leaveTarget=pickSpawnPos();
+          artistTransition(a,'walk');
+          continue;
+        }
+      }
       const tp=a.target.pos;
       const toX=tp.x-p.x, toZ=tp.z-p.z;
       const dist=Math.sqrt(toX*toX+toZ*toZ);
@@ -1307,6 +1477,12 @@ function updateArtists(dt){
         moveArtist(a,dt,toX/dist,toZ/dist,ARTIST_WALK_SPEED);
       }
     }else if(a.state==='paint'){
+      if(!a.target){
+        a.state='leave';
+        a.leaveTarget=pickSpawnPos();
+        artistTransition(a,'walk');
+        continue;
+      }
       a.paintT+=dt;
       const pillar=a.target;
       const toPlayer=new THREE.Vector3(p.x-pillar.pos.x,0,p.z-pillar.pos.z).normalize();
@@ -1624,7 +1800,7 @@ function updatePlayer(dt){
   if(!player.inst)return;
   // Build input direction in world space relative to camera
   const fwdX=-Math.sin(camYaw),fwdZ=-Math.cos(camYaw);
-  const rightX=-Math.cos(camYaw),rightZ=Math.sin(camYaw);
+  const rightX=Math.cos(camYaw),rightZ=-Math.sin(camYaw);
   let kx=0,ky=0;
   if(keys.w||keys.up)ky-=1;
   if(keys.s||keys.down)ky+=1;
@@ -1648,13 +1824,7 @@ function updatePlayer(dt){
   if(player.curSpeed>0){
     player.root.position.x+=mdx*player.curSpeed*speedMul*dt;
     player.root.position.z+=mdz*player.curSpeed*speedMul*dt;
-    // Clamp inside world bound
-    const d=Math.hypot(player.root.position.x,player.root.position.z);
-    if(d>worldBoundR*0.96){
-      const k=worldBoundR*0.96/d;
-      player.root.position.x*=k;
-      player.root.position.z*=k;
-    }
+    clampToPlayableArea(player.root.position);
   }
 
   // Ground tracking + jump physics
@@ -1923,7 +2093,7 @@ function resetWorld(){
   }
   if(sketchMesh){scene.remove(sketchMesh);sketchMesh=null}
   // Reset player pos
-  player.root.position.set(0,0,0);player.curSpeed=0;
+  placePlayerOnPlayableLayer();player.curSpeed=0;
   player.vy=0;player.isAir=false;player.inWater=false;player.wasInWater=false;player.walkPhase=0;
   player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();
   spawnTimer=1.5;
@@ -1945,31 +2115,34 @@ function tick(){
   const dt=Math.min(0.05,(now-last)/1000);
   last=now;
   const nowS=now/1000;
-
-  if(gameState==='playing'){
-    gameTime+=dt;
-    updateTimerUI();
-    updatePlayer(dt);
-    updateSpawns(dt);
-    updateArtists(dt);
-    updateCoins(dt,nowS);
-    updateSketch(dt,nowS);
-    if(gameTime>=GAME_DURATION){
-      endGame();
+  try{
+    if(gameState==='playing'){
+      gameTime+=dt;
+      updateTimerUI();
+      updatePlayer(dt);
+      updateSpawns(dt);
+      updateArtists(dt);
+      updateCoins(dt,nowS);
+      updateSketch(dt,nowS);
+      if(gameTime>=GAME_DURATION){
+        endGame();
+      }
+    }else{
+      // Still animate artists slightly (idle) in intro for visual
+      if(player.inst) player.inst.mixer.update(dt);
+      for(const a of artists) a.inst.mixer.update(dt);
     }
-  }else{
-    // Still animate artists slightly (idle) in intro for visual
-    if(player.inst) player.inst.mixer.update(dt);
-    for(const a of artists) a.inst.mixer.update(dt);
+  
+    updateFlowers(nowS);
+    updateWater(nowS);
+    updateSplash(dt);
+    updateCam();
+
+    vhsPass.uniforms.time.value=nowS;
+    composer.render();
+  }catch(e){
+    console.error('[tick] update failed:',e);
   }
-
-  updateFlowers(nowS);
-  updateWater(nowS);
-  updateSplash(dt);
-  updateCam();
-
-  vhsPass.uniforms.time.value=nowS;
-  composer.render();
 }
 
 // ===== Init =====
@@ -1983,10 +2156,24 @@ async function init(){
   // computeBoundsTree runs on its geometry right after load.
   await setupBVH();
   // groundRaycaster was created earlier; set firstHitOnly now that we know
-  if(bvhReady) groundRaycaster.firstHitOnly=true;
+  groundRaycaster.firstHitOnly=false;
 
   await Promise.all([loadCharacterTemplate(),loadCoin(),loadPlayground()]);
+  if(bvhReady){
+    startBtn.textContent='SCANNING FLOORS…';
+    playableLayer=await detectPlayableLayer(p=>{
+      const pct=Math.floor(p*100);
+      startBtn.textContent='SCANNING FLOORS… '+pct+'%';
+    });
+    if(playableLayer){
+      worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
+      groundYCache.clear();
+      refreshPlayablePillars();
+      console.log('[floor] selected layer:',playableLayer);
+    }
+  }
   attachPlayer();
+  placePlayerOnPlayableLayer();
   tick(); // begin rendering — intro is still on top
 
   // River detection needs many raycasts. Only attempt when BVH is available.
