@@ -231,6 +231,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
+import {DecalGeometry} from 'three/addons/geometries/DecalGeometry.js';
 
 // Try to enable three-mesh-bvh for fast raycasting against the playground.
 // Without it, every ground-height query iterates all triangles (the playground
@@ -924,6 +925,22 @@ function createWaterMesh(r){
   const surface=new THREE.Mesh(surfaceGeo,surfaceMat);
   surface.position.set(r.centerX,r.surfaceY,r.centerZ);
   surface.userData.basePos=surfaceGeo.attributes.position.array.slice();
+  surface.userData.halfW=w*0.5;
+  surface.userData.halfZ=h*0.5;
+  // Rich palette, lightest foam → deepest abyss. Animated ramp sampling
+  // in updateWater blends between these per-vertex each frame.
+  surface.userData.palette=[
+    new THREE.Color('#f1fdff'),
+    new THREE.Color('#c9f3ff'),
+    new THREE.Color('#a7efff'),
+    new THREE.Color('#79deff'),
+    new THREE.Color('#57cbff'),
+    new THREE.Color('#36aef1'),
+    new THREE.Color('#1f8dd6'),
+    new THREE.Color('#146fc7'),
+    new THREE.Color('#0d4fa4'),
+    new THREE.Color('#062f74'),
+  ];
   group.userData.surface=surface;
   group.add(surface);
   scene.add(group);
@@ -931,17 +948,45 @@ function createWaterMesh(r){
 }
 
 function updateWater(t){
+  const _c=new THREE.Color();
   for(const waterMesh of waterMeshes){
     const surface=waterMesh.userData.surface;
     if(!surface) continue;
-    const p=surface.geometry.attributes.position;
+    const geo=surface.geometry;
+    const p=geo.attributes.position;
+    const col=geo.attributes.color;
     const base=surface.userData.basePos;
+    const palette=surface.userData.palette;
+    const hw=surface.userData.halfW||5;
+    const hz=surface.userData.halfZ||5;
+    const palLast=palette.length-1;
     for(let i=0;i<p.count;i++){
       const bx=base[i*3], bz=base[i*3+2];
-      const wave=Math.sin(bx*0.6+t*1.3)*0.08 + Math.cos(bz*0.8+t*1.7)*0.06 + Math.sin((bx+bz)*0.4+t*2.1)*0.04;
-      p.setY(i,wave);
+      // Multi-frequency wave displacement
+      const w1=Math.sin(bx*0.6+t*1.3)*0.08;
+      const w2=Math.cos(bz*0.8+t*1.7)*0.06;
+      const w3=Math.sin((bx+bz)*0.4+t*2.1)*0.04;
+      const w4=Math.sin(bx*1.4-t*0.9)*0.025;
+      const h=w1+w2+w3+w4;
+      p.setY(i,h);
+      // Color: animated blend through palette based on several noise
+      // octaves + centre-deeper bias + wave height. Looks like living ripples.
+      const edgeBias=1-Math.abs(bz)/hz; // 1 at centre → 0 at banks
+      const n1=Math.sin(bx*0.55+bz*0.42+t*1.1)*0.5+0.5;
+      const n2=Math.sin(bx*0.22-bz*0.61+t*0.75)*0.5+0.5;
+      const n3=Math.cos(bx*1.15+bz*0.84-t*1.55)*0.5+0.5;
+      const sparkle=Math.pow(Math.sin(bx*3.2+bz*2.7+t*4.1)*0.5+0.5,6); // foam flecks
+      let brightness=clamp(edgeBias*0.52+(n1*0.45+n2*0.32+n3*0.23)*0.35+h*0.9,0,1);
+      brightness=brightness*(1-sparkle*0.85); // sparkle → drag toward light
+      const palIdxF=brightness*palLast;
+      const i0=Math.floor(palIdxF);
+      const i1=Math.min(palLast,i0+1);
+      const f=palIdxF-i0;
+      _c.copy(palette[i0]).lerp(palette[i1],f);
+      col.setXYZ(i,_c.r,_c.g,_c.b);
     }
     p.needsUpdate=true;
+    col.needsUpdate=true;
   }
 }
 
@@ -1323,71 +1368,167 @@ function placePlayerOnPlayableLayer(){
   camDist=5.4;
 }
 
-// ===== Graffiti (canvas texture on pillar) =====
+// ===== Graffiti (canvas texture baked onto the pillar skin via DecalGeometry) =====
+// Progressive renderer: creates a canvas + an update function that reveals
+// the graffiti based on 0..1 progress. Strokes appear in order, final tag
+// fades in last.
 function makeGraffitiTexture(seed){
   const cv=document.createElement('canvas');cv.width=256;cv.height=256;
   const ctx=cv.getContext('2d');
-  ctx.fillStyle='rgba(0,0,0,0)';ctx.fillRect(0,0,256,256);
   const rng=srand(seed);
-  const colors=['#ff3366','#ffcc00','#33ccff','#88ff66','#ff66ff','#ff9933'];
-  // Random scribble strokes
+  const colors=['#ff3366','#ffcc00','#33ccff','#88ff66','#ff66ff','#ff9933','#ff5599','#66ff99'];
+  const strokes=[];
   for(let i=0;i<6;i++){
-    ctx.strokeStyle=colors[Math.floor(rng()*colors.length)];
-    ctx.lineWidth=8+Math.floor(rng()*14);
-    ctx.lineCap='round';ctx.beginPath();
-    const x0=30+rng()*196,y0=30+rng()*196;
-    ctx.moveTo(x0,y0);
+    const stroke={
+      color:colors[Math.floor(rng()*colors.length)],
+      width:10+Math.floor(rng()*16),
+      pts:[{x:24+rng()*208,y:24+rng()*208}],
+    };
     const nPts=3+Math.floor(rng()*5);
     for(let j=0;j<nPts;j++){
-      ctx.quadraticCurveTo(rng()*256,rng()*256,rng()*256,rng()*256);
+      stroke.pts.push({
+        cpx:rng()*256, cpy:rng()*256,
+        x:rng()*256,    y:rng()*256,
+      });
     }
-    ctx.stroke();
+    strokes.push(stroke);
   }
-  // Random tags: symbols or letters
-  const tags=['X','✗','!','?','@','#','☆'];
-  ctx.fillStyle=colors[Math.floor(rng()*colors.length)];
-  ctx.font='bold 140px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(tags[Math.floor(rng()*tags.length)],128,140);
+  const tags=['X','✗','!','?','@','#','☆','♦'];
+  const tag={
+    text:tags[Math.floor(rng()*tags.length)],
+    color:colors[Math.floor(rng()*colors.length)],
+  };
+
   const tex=new THREE.CanvasTexture(cv);
   tex.anisotropy=4;
-  return tex;
+  tex.colorSpace=THREE.SRGBColorSpace;
+
+  function render(progress){
+    progress=Math.max(0,Math.min(1,progress));
+    ctx.clearRect(0,0,256,256);
+    const total=strokes.length+1; // strokes + final tag
+    const step=progress*total;
+    for(let i=0;i<strokes.length;i++){
+      const s=strokes[i];
+      const t=step-i;
+      if(t<=0) continue;
+      ctx.strokeStyle=s.color;
+      ctx.lineWidth=s.width;
+      ctx.lineCap='round';
+      ctx.lineJoin='round';
+      ctx.globalAlpha=Math.min(1,t*1.4);
+      ctx.beginPath();
+      ctx.moveTo(s.pts[0].x,s.pts[0].y);
+      const segs=s.pts.length-1;
+      const drawT=Math.min(1,t);
+      for(let j=0;j<segs;j++){
+        const seg=s.pts[j+1];
+        const local=drawT*segs-j;
+        if(local<=0) break;
+        const prev=s.pts[j];
+        if(local<1){
+          const f=local;
+          const tx=prev.x+(seg.x-prev.x)*f;
+          const ty=prev.y+(seg.y-prev.y)*f;
+          ctx.quadraticCurveTo(seg.cpx||prev.x,seg.cpy||prev.y,tx,ty);
+          break;
+        }
+        ctx.quadraticCurveTo(seg.cpx||prev.x,seg.cpy||prev.y,seg.x,seg.y);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    if(step>strokes.length){
+      const tagT=Math.min(1,step-strokes.length);
+      ctx.fillStyle=tag.color;
+      ctx.font='bold 140px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.globalAlpha=tagT;
+      ctx.fillText(tag.text,128,140);
+      ctx.globalAlpha=1;
+    }
+    tex.needsUpdate=true;
+  }
+  return {tex,render};
 }
 
-function getOrCreateGraffitiPlane(pillar,facingPlayerDir){
+// Build a decal that conforms to the pillar mesh surface, facing outward
+// toward `facingDir` (the artist's side). Falls back to a thin floating
+// plane only if DecalGeometry fails (e.g. no usable target mesh).
+function getOrCreateGraffitiPlane(pillar,facingDir){
   if(pillar.graffiti) return pillar.graffiti;
-  const tex=makeGraffitiTexture(Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999));
-  const planeH=Math.min(3.2,pillar.topY*0.7);
-  const planeW=planeH*0.9;
-  const geo=new THREE.PlaneGeometry(planeW,planeH);
-  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:0.92,depthWrite:false,side:THREE.DoubleSide});
-  const mesh=new THREE.Mesh(geo,mat);
-  const dir=facingPlayerDir.clone().setY(0).normalize();
-  const bb=new THREE.Box3().setFromObject(pillar.mesh||new THREE.Object3D());
-  if(Number.isFinite(bb.min.x) && Number.isFinite(bb.max.x)){
-    const center=new THREE.Vector3(); bb.getCenter(center);
+  const seed=Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999);
+  const {tex,render}=makeGraffitiTexture(seed);
+
+  const bb=pillar.mesh?new THREE.Box3().setFromObject(pillar.mesh):null;
+  const hasTarget=pillar.mesh && bb && Number.isFinite(bb.min.x) && Number.isFinite(bb.max.x);
+  const outward=new THREE.Vector3(facingDir.x,0,facingDir.z);
+  if(outward.lengthSq()<1e-6) outward.set(1,0,0);
+  outward.normalize();
+
+  let mesh=null;
+  if(hasTarget){
     const size=new THREE.Vector3(); bb.getSize(size);
-    mesh.position.copy(center);
-    mesh.position.y=bb.min.y+Math.min(size.y*0.6,planeH*0.55+size.y*0.15);
-    if(Math.abs(dir.x)>=Math.abs(dir.z)){
-      const sx=Math.sign(dir.x)||1;
-      mesh.position.x=(sx>0?bb.max.x:bb.min.x)+sx*0.015;
-      mesh.lookAt(mesh.position.x+sx,mesh.position.y,mesh.position.z);
-    }else{
-      const sz=Math.sign(dir.z)||1;
-      mesh.position.z=(sz>0?bb.max.z:bb.min.z)+sz*0.015;
-      mesh.lookAt(mesh.position.x,mesh.position.y,mesh.position.z+sz);
+    const center=new THREE.Vector3(); bb.getCenter(center);
+    const pillarR=Math.max(0.25,Math.max(size.x,size.z)*0.5);
+    const decalH=Math.min(2.6,Math.max(1.4,size.y*0.55));
+    const decalW=decalH*0.82;
+    // Project decal box deeply enough to span the pillar
+    const decalDepth=pillarR*2.2+0.6;
+    // Decal centre: on the outward face, mid-height
+    const midY=bb.min.y+Math.min(size.y*0.55, decalH*0.5+size.y*0.3);
+    const surfacePt=center.clone();
+    surfacePt.y=midY;
+    // Nudge slightly outward so the decal box straddles the surface
+    surfacePt.addScaledVector(outward,pillarR*0.05);
+    // Orient: decal's -Z points INTO the pillar (along -outward)
+    const forward=outward.clone().multiplyScalar(-1);
+    const up=new THREE.Vector3(0,1,0);
+    const right=new THREE.Vector3().crossVectors(up,forward).normalize();
+    const upFixed=new THREE.Vector3().crossVectors(forward,right).normalize();
+    const m=new THREE.Matrix4().makeBasis(right,upFixed,forward);
+    const orient=new THREE.Euler().setFromRotationMatrix(m);
+    try{
+      const decalGeo=new DecalGeometry(
+        pillar.mesh,
+        surfacePt,
+        orient,
+        new THREE.Vector3(decalW,decalH,decalDepth)
+      );
+      if(decalGeo.attributes.position && decalGeo.attributes.position.count>0){
+        const mat=new THREE.MeshBasicMaterial({
+          map:tex,transparent:true,opacity:0.96,depthWrite:false,
+          polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4,
+        });
+        mesh=new THREE.Mesh(decalGeo,mat);
+        mesh.renderOrder=2;
+      }else{
+        decalGeo.dispose();
+      }
+    }catch(e){
+      console.warn('[graffiti] decal build failed',e);
     }
-  }else{
-    const offset=(pillar.halfW||0.7)+0.015;
-    mesh.position.copy(pillar.pos);
-    mesh.position.y=pillar.pos.y+pillar.topY*0.45;
-    mesh.position.addScaledVector(dir,offset);
-    mesh.lookAt(mesh.position.x+dir.x,mesh.position.y,mesh.position.z+dir.z);
   }
-  mesh.scale.y=0.05; // grow as paint progresses
+  if(!mesh){
+    // Fallback: floating plane hugging the pillar bbox face
+    const planeH=Math.min(2.4,(pillar.topY||3)*0.6);
+    const planeW=planeH*0.85;
+    const geo=new THREE.PlaneGeometry(planeW,planeH);
+    const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:0.94,depthWrite:false,side:THREE.DoubleSide});
+    mesh=new THREE.Mesh(geo,mat);
+    const off=(pillar.halfW||0.7)+0.02;
+    mesh.position.copy(pillar.pos);
+    mesh.position.y=(pillar.pos.y||0)+(pillar.topY||3)*0.5;
+    mesh.position.addScaledVector(outward,off);
+    mesh.lookAt(mesh.position.x+outward.x,mesh.position.y,mesh.position.z+outward.z);
+  }
   scene.add(mesh);
   pillar.graffiti=mesh;
-  pillar.graffitiSide=dir.clone();
+  pillar.graffitiSide=outward.clone();
+  pillar.graffitiRender=render;
+  pillar.graffitiProgress=0;
+  render(0.02); // tiny smudge on first stroke
   return mesh;
 }
 
@@ -1685,10 +1826,57 @@ function spawnArtist(){
     fleeChance:0.35+Math.random()*0.35, // 35-70% chance to flee when threatened
     fleeCooldown:0, // sec until allowed to flee again
     fleeTarget:null,
+    fleeReplanTimer:0,
     panicUntil:0,
+    preferRiver:Math.random()<0.45, // some artists dive for the water
   };
   target.claimedBy=artist;
   artists.push(artist);
+}
+
+// Pick the safest flee destination given the player's current position.
+// Evaluates several candidate directions and scores them by pillar
+// clearance, proximity to the river (for river-seekers), and distance
+// kept from playable edges.
+function pickFleeTarget(a,px,pz){
+  const p=a.inst.outer.position;
+  const awayX=p.x-px, awayZ=p.z-pz;
+  const awayD=Math.max(0.001,Math.hypot(awayX,awayZ));
+  const baseAngle=Math.atan2(awayX,awayZ);
+  const jitters=[0,0.35,-0.35,0.7,-0.7,1.1,-1.1,1.8,-1.8];
+  const tmp=new THREE.Vector3();
+  let best=null;
+  for(const j of jitters){
+    const ang=baseAngle+j;
+    const dist=7+Math.random()*5;
+    const tx=p.x+Math.sin(ang)*dist;
+    const tz=p.z+Math.cos(ang)*dist;
+    let score=0;
+    // Penalise targets that squish the artist into a pillar
+    for(const pil of pillars){
+      const d=Math.hypot(pil.pos.x-tx,pil.pos.z-tz);
+      const margin=(pil.halfW||0.7)+1.3;
+      if(d<margin) score-=12;
+      else if(d<margin+1.5) score-=3;
+    }
+    // Prefer the river for river-seekers, lightly prefer it for everyone
+    if(isInRiver(tx,tz)){
+      score+=a.preferRiver?6:2;
+    }
+    // Penalise if the playable-area clamp drags it far — means target is off the arena
+    tmp.set(tx,0,tz);
+    clampToPlayableArea(tmp,0.5);
+    const drag=Math.hypot(tmp.x-tx,tmp.z-tz);
+    if(drag>1.5) score-=6;
+    else if(drag>0.4) score-=2;
+    // Encourage some sideways flight so artists don't all bunch up on a single line
+    if(Math.abs(j)<0.1) score-=0.3;
+    score+=Math.random()*0.25; // small tiebreaker
+    if(!best || score>best.score){
+      best={x:tmp.x,z:tmp.z,score};
+    }
+  }
+  return new THREE.Vector3(best.x,0,best.z);
 }
 
 function artistTransition(a,newState){
@@ -1708,7 +1896,10 @@ function artistTransition(a,newState){
     if(I.actPaint) I.actPaint.reset().fadeIn(0.2).play();
     else I.actIdle&&I.actIdle.reset().fadeIn(0.2).play();
   }else if(newState==='flee'){
-    I.root.rotation.x=Math.PI*0.5;
+    // Keep the character upright — the panic-run clip plus a slight
+    // backward tilt reads as "bolting in fear" without flipping them onto
+    // their chest like the previous +π/2 rotation did.
+    I.root.rotation.x=-0.12;
     I.actPaint&&I.actPaint.fadeOut(0.15);
     I.actIdle&&I.actIdle.fadeOut(0.15);
     I.actWalk&&I.actWalk.fadeOut(0.15);
@@ -1754,24 +1945,20 @@ function updateArtists(dt){
     }
     if(a.fleeCooldown>0) a.fleeCooldown-=dt;
 
-    // Threat check: if player is close and we're not painting yet, flee in panic.
-    if(RIVER && (a.state==='walk'||a.state==='paint') && a.fleeCooldown<=0){
+    // Threat check: if player is close and we're not painting yet, flee.
+    // Emergency trigger (very close) bypasses the normal cooldown.
+    if((a.state==='walk'||a.state==='paint') && (a.fleeCooldown<=0 || Math.hypot(px-p.x,pz-p.z)<3.0)){
       const dx=px-p.x, dz=pz-p.z;
       const distP=Math.sqrt(dx*dx+dz*dz);
-      if(distP<6.5){
+      const threshold=a.state==='paint'?5.2:6.5;
+      if(distP<threshold){
         if(a.target&&a.target.claimedBy===a) a.target.claimedBy=null;
         a.target=null;
-        const awayX=p.x-px, awayZ=p.z-pz;
-        const awayD=Math.max(0.001,Math.hypot(awayX,awayZ));
-        const fleeDist=6+Math.random()*4;
-        const rawTarget=new THREE.Vector3(p.x+(awayX/awayD)*fleeDist,0,p.z+(awayZ/awayD)*fleeDist);
-        clampToPlayableArea(rawTarget,0.4);
-        a.fleeTarget=rawTarget;
-        if(a.fleeTarget){
-          a.panicUntil=performance.now()/1000 + 2.4;
-          a.fleeCooldown=4.0;
-          artistTransition(a,'flee');
-        }
+        a.fleeTarget=pickFleeTarget(a,px,pz);
+        a.fleeReplanTimer=0.7+Math.random()*0.5;
+        a.panicUntil=performance.now()/1000 + 2.4;
+        a.fleeCooldown=3.0;
+        artistTransition(a,'flee');
       }
     }
 
@@ -1805,11 +1992,20 @@ function updateArtists(dt){
       }
       a.paintT+=dt;
       const pillar=a.target;
-      const toPlayer=new THREE.Vector3(p.x-pillar.pos.x,0,p.z-pillar.pos.z).normalize();
-      const plane=getOrCreateGraffitiPlane(pillar,toPlayer);
+      // Direction from pillar centre to the artist — that's the face to tag
+      const facing=new THREE.Vector3(p.x-pillar.pos.x,0,p.z-pillar.pos.z);
+      if(facing.lengthSq()<1e-6) facing.set(1,0,0);
+      facing.normalize();
+      getOrCreateGraffitiPlane(pillar,facing);
       pillar.paintProgress=Math.min(1,a.paintT/ARTIST_PAINT_TIME);
-      plane.scale.y=Math.max(0.05,pillar.paintProgress);
-      plane.scale.x=Math.max(0.3,0.3+pillar.paintProgress*0.7);
+      // Progressive canvas redraw — no more geometry scaling
+      if(pillar.graffitiRender){
+        const prev=pillar.graffitiProgress||0;
+        if(Math.abs(pillar.paintProgress-prev)>0.015 || pillar.paintProgress>=1){
+          pillar.graffitiRender(pillar.paintProgress);
+          pillar.graffitiProgress=pillar.paintProgress;
+        }
+      }
       // bob head slightly during painting
       p.y+=Math.sin(performance.now()*0.012)*0.04;
       if(pillar.paintProgress>=1){
@@ -1820,11 +2016,19 @@ function updateArtists(dt){
         a.leaveTarget=pickSpawnPos();
       }
     }else if(a.state==='flee'){
+      const playerDist=Math.hypot(px-p.x,pz-p.z);
+      // Re-plan the escape periodically or when the player closes in
+      a.fleeReplanTimer-=dt;
+      if(!a.fleeTarget || a.fleeReplanTimer<=0 || playerDist<2.6){
+        a.fleeTarget=pickFleeTarget(a,px,pz);
+        a.fleeReplanTimer=0.7+Math.random()*0.6;
+      }
       const lt=a.fleeTarget;
       const toX=lt.x-p.x, toZ=lt.z-p.z;
       const d=Math.sqrt(toX*toX+toZ*toZ);
-      const playerDist=Math.hypot(px-p.x,pz-p.z);
-      if(d<1.2 || (playerDist>8.5 && performance.now()/1000>a.panicUntil)){
+      const panicExpired=performance.now()/1000>a.panicUntil;
+      if(d<1.2 && playerDist>6 && panicExpired){
+        // Safe distance reached — resume painting or leave
         a.target=pickFreePillar();
         if(a.target){
           a.target.claimedBy=a;
@@ -1835,6 +2039,10 @@ function updateArtists(dt){
           a.state='leave';
           artistTransition(a,'walk');
         }
+      }else if(d<1.2){
+        // Reached flee spot but player still close — pick another escape
+        a.fleeTarget=pickFleeTarget(a,px,pz);
+        a.panicUntil=Math.max(a.panicUntil,performance.now()/1000+1.0);
       }else{
         moveArtist(a,dt,toX/d,toZ/d,ARTIST_WALK_SPEED*1.7);
       }
@@ -2273,10 +2481,14 @@ function checkAttackHit(){
 function killArtist(a){
   a.state='dying';a.deathT=0;
   if(a.target && a.target.claimedBy===a) a.target.claimedBy=null;
-  // Fade animations
+  // Fade animations + clear the flee tilt so the death anim plays upright
   const I=a.inst;
+  I.root.rotation.x=0;
   I.actIdle&&I.actIdle.fadeOut(0.2);
   I.actWalk&&I.actWalk.fadeOut(0.2);
+  I.actRun&&I.actRun.fadeOut(0.2);
+  I.actPanicRun&&I.actPanicRun.fadeOut(0.2);
+  I.actPaint&&I.actPaint.fadeOut(0.2);
   killCount++;updateKillUI();
 }
 
@@ -2408,8 +2620,17 @@ function resetWorld(){
   for(let i=COINS_FLOATING.length-1;i>=0;i--){scene.remove(COINS_FLOATING[i]);COINS_FLOATING.splice(i,1)}
   // Reset pillars graffiti
   for(const p of pillars){
-    if(p.graffiti){scene.remove(p.graffiti);p.graffiti.geometry.dispose();p.graffiti.material.map&&p.graffiti.material.map.dispose();p.graffiti.material.dispose();p.graffiti=null}
-    p.paintProgress=0;p.claimedBy=null;
+    if(p.graffiti){
+      scene.remove(p.graffiti);
+      p.graffiti.geometry.dispose();
+      p.graffiti.material.map&&p.graffiti.material.map.dispose();
+      p.graffiti.material.dispose();
+      p.graffiti=null;
+    }
+    p.graffitiRender=null;
+    p.graffitiProgress=0;
+    p.paintProgress=0;
+    p.claimedBy=null;
   }
   if(sketchMesh){scene.remove(sketchMesh);sketchMesh=null}
   // Reset player pos
