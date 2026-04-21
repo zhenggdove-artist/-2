@@ -814,7 +814,7 @@ const waterMeshes=[];
 
 function isInRiver(x,z,groundY){
   if(!RIVERS.length) return false;
-  const y=groundY!==undefined?groundY:getGroundY(x,z,0);
+  const y=groundY!==undefined?groundY:getPlayableSurfaceY(x,z,0);
   return RIVERS.some(r=>{
     if(x<r.minX||x>r.maxX||z<r.minZ||z>r.maxZ) return false;
     return y < r.surfaceY-0.05;
@@ -831,86 +831,73 @@ async function detectRiverBounds(progressFn){
   const threshold=ys[Math.min(ys.length-1,lowCount)];
   const low=samples.filter(s=>s.y<=threshold);
   if(low.length<5) return null;
-  const cell=Math.max(0.8,playableLayer?playableLayer.step:1);
-  const keyed=new Map(low.map(s=>[`${Math.round(s.x/cell)},${Math.round(s.z/cell)}`,s]));
-  const visited=new Set();
-  const groups=[];
-  for(const key of keyed.keys()){
-    if(visited.has(key)) continue;
-    const stack=[key];
-    const group=[];
-    visited.add(key);
-    while(stack.length){
-      const cur=stack.pop();
-      const s=keyed.get(cur);
-      if(s) group.push(s);
-      const [cx,cz]=cur.split(',').map(Number);
-      for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++){
-        if(!dx&&!dz) continue;
-        const nk=`${cx+dx},${cz+dz}`;
-        if(keyed.has(nk)&&!visited.has(nk)){
-          visited.add(nk);
-          stack.push(nk);
-        }
-      }
-    }
-    groups.push(group);
-  }
-  const minCells=Math.max(4,Math.floor(low.length*0.08));
-  const trenches=groups
-    .filter(group=>group.length>=minCells)
-    .sort((a,b)=>b.length-a.length)
-    .map(group=>{
-      const minX=Math.min(...group.map(s=>s.x));
-      const maxX=Math.max(...group.map(s=>s.x));
-      const minZ=Math.min(...group.map(s=>s.z));
-      const maxZ=Math.max(...group.map(s=>s.z));
-      const floorY=Math.min(...group.map(s=>s.y));
-      const surfaceY=floorY+0.55;
-      const centerX=(minX+maxX)*0.5, centerZ=(minZ+maxZ)*0.5;
-      const axis=(maxX-minX)>(maxZ-minZ)?'x':'z';
-      return {minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis};
-    });
-  return trenches.length?trenches:(groups.length?[groups.sort((a,b)=>b.length-a.length)[0]].map(group=>{
-    const minX=Math.min(...group.map(s=>s.x));
-    const maxX=Math.max(...group.map(s=>s.x));
-    const minZ=Math.min(...group.map(s=>s.z));
-    const maxZ=Math.max(...group.map(s=>s.z));
-    const floorY=Math.min(...group.map(s=>s.y));
-    const surfaceY=floorY+0.55;
-    const centerX=(minX+maxX)*0.5, centerZ=(minZ+maxZ)*0.5;
-    const axis=(maxX-minX)>(maxZ-minZ)?'x':'z';
-    return {minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis};
-  }):null);
+  const sideGap=(playableLayer?.step||1)*0.6;
+  const pick=(arr,p)=>{
+    const sorted=[...arr].sort((a,b)=>a-b);
+    return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
+  };
+  const trenches=[
+    low.filter(s=>s.x<playableLayer.centerX-sideGap),
+    low.filter(s=>s.x>playableLayer.centerX+sideGap),
+  ].filter(side=>side.length>=4).map(side=>{
+    const floorY=Math.min(...side.map(s=>s.y));
+    const surfaceY=floorY+0.62;
+    const minX=pick(side.map(s=>s.x),0.08)-0.45;
+    const maxX=pick(side.map(s=>s.x),0.92)+0.45;
+    const minZ=Math.min(...side.map(s=>s.z))-(playableLayer.step||1)*0.75;
+    const maxZ=Math.max(...side.map(s=>s.z))+(playableLayer.step||1)*0.75;
+    return {
+      minX,maxX,minZ,maxZ,
+      floorY,surfaceY,
+      centerX:(minX+maxX)*0.5,
+      centerZ:(minZ+maxZ)*0.5,
+      axis:'z'
+    };
+  }).sort((a,b)=>a.centerX-b.centerX);
+  return trenches.length?trenches:null;
 }
 
 function createWaterMesh(r){
   const w=Math.max(1,r.maxX-r.minX);
   const h=Math.max(1,r.maxZ-r.minZ);
-  // Subdivided plane for vertex wave displacement
-  const segX=Math.max(8,Math.floor(w*1.2));
-  const segZ=Math.max(8,Math.floor(h*1.2));
-  const geo=new THREE.PlaneGeometry(w,h,segX,segZ);
-  geo.rotateX(-Math.PI/2);
-  const mat=new THREE.MeshStandardMaterial({
-    color:'#3aa6e0',transparent:true,opacity:0.78,
-    roughness:0.18,metalness:0.05,
-    emissive:'#0a5a9a',emissiveIntensity:0.15,
-    side:THREE.DoubleSide,
-    envMapIntensity:1.4,
+  const depth=Math.max(0.32,r.surfaceY-r.floorY);
+  const group=new THREE.Group();
+
+  const bodyGeo=new THREE.BoxGeometry(w,depth,h);
+  const bodyMat=new THREE.MeshStandardMaterial({
+    color:'#2e85cf',transparent:true,opacity:0.58,
+    roughness:0.28,metalness:0.04,
+    emissive:'#0a4f83',emissiveIntensity:0.18,
   });
-  const m=new THREE.Mesh(geo,mat);
-  m.position.set(r.centerX,r.surfaceY,r.centerZ);
-  // Save original positions for wave animation
-  m.userData.basePos=geo.attributes.position.array.slice();
-  scene.add(m);
-  return m;
+  const body=new THREE.Mesh(bodyGeo,bodyMat);
+  body.position.set(r.centerX,r.floorY+depth*0.5,r.centerZ);
+  group.add(body);
+
+  const segX=Math.max(8,Math.floor(w*1.2));
+  const segZ=Math.max(12,Math.floor(h*1.2));
+  const surfaceGeo=new THREE.PlaneGeometry(w,h,segX,segZ);
+  surfaceGeo.rotateX(-Math.PI/2);
+  const surfaceMat=new THREE.MeshStandardMaterial({
+    color:'#5fc4ff',transparent:true,opacity:0.82,
+    roughness:0.12,metalness:0.06,
+    emissive:'#1082c8',emissiveIntensity:0.22,
+    side:THREE.DoubleSide,envMapIntensity:1.4,
+  });
+  const surface=new THREE.Mesh(surfaceGeo,surfaceMat);
+  surface.position.set(r.centerX,r.surfaceY,r.centerZ);
+  surface.userData.basePos=surfaceGeo.attributes.position.array.slice();
+  group.userData.surface=surface;
+  group.add(surface);
+  scene.add(group);
+  return group;
 }
 
 function updateWater(t){
   for(const waterMesh of waterMeshes){
-    const p=waterMesh.geometry.attributes.position;
-    const base=waterMesh.userData.basePos;
+    const surface=waterMesh.userData.surface;
+    if(!surface) continue;
+    const p=surface.geometry.attributes.position;
+    const base=surface.userData.basePos;
     for(let i=0;i<p.count;i++){
       const bx=base[i*3], bz=base[i*3+2];
       const wave=Math.sin(bx*0.6+t*1.3)*0.08 + Math.cos(bz*0.8+t*1.7)*0.06 + Math.sin((bx+bz)*0.4+t*2.1)*0.04;
@@ -1133,13 +1120,8 @@ function findBestPlayableSample(options={}){
 
 function getPlayableSurfaceY(x,z,defaultY){
   const nearest=findNearestPlayableSample(x,z);
-  if(nearest){
-    const maxD=Math.max(1.2,(playableLayer?.step||1)*1.35);
-    if(Math.hypot(nearest.x-x,nearest.z-z)<=maxD){
-      return nearest.y;
-    }
-  }
-  return getGroundY(x,z,defaultY);
+  if(nearest) return nearest.y;
+  return defaultY!==undefined ? defaultY : (playableLayer?playableLayer.y:0);
 }
 
 function getRiverSurfaceY(x,z,groundY){
@@ -1190,12 +1172,18 @@ function refreshPlayablePillars(){
 
 function placePlayerOnPlayableLayer(){
   const b=getPlayableBounds();
-  const nearest=findBestPlayableSample({targetX:b.centerX,targetZ:b.centerZ,preferDry:true,preferHigh:true});
+  const targetZ=b.minZ+(b.maxZ-b.minZ)*0.46;
+  const nearest=findBestPlayableSample({targetX:b.centerX,targetZ,preferDry:true,preferHigh:true});
   const x=nearest?nearest.x:b.centerX;
-  const z=nearest?nearest.z:b.centerZ;
-  const y=nearest?nearest.y:getGroundY(x,z,playableLayer?playableLayer.y:0);
+  const z=nearest?nearest.z:targetZ;
+  const y=nearest?nearest.y:getPlayableSurfaceY(x,z,playableLayer?playableLayer.y:0);
   player.root.position.set(x,y+GROUND_Y_OFFSET,z);
   player.groundY=y;
+  player.yaw=0;
+  player.root.rotation.y=0;
+  camYaw=Math.PI;
+  camPitch=0.30;
+  camDist=5.4;
 }
 
 // ===== Graffiti (canvas texture on pillar) =====
@@ -1908,7 +1896,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();camDist=clamp(camDist+e.d
 
 function updateCam(){
   const tx=player.root.position.x;
-  const ty=player.root.position.y+1.2;
+  const ty=player.root.position.y+1.35;
   const tz=player.root.position.z;
   const cx=tx+Math.sin(camYaw)*camDist*Math.cos(camPitch);
   const cy=ty+Math.sin(camPitch)*camDist;
