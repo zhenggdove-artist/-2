@@ -221,7 +221,7 @@
 <div id="fade"></div>
 <audio id="bgm" loop preload="auto" playsinline></audio>
 
-<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","three-mesh-bvh":"https://unpkg.com/three-mesh-bvh@0.7.5/build/index.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -230,6 +230,23 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
+
+// Try to enable three-mesh-bvh for fast raycasting against the playground.
+// Without it, every ground-height query iterates all triangles (the playground
+// is 17MB — this is what was locking the main thread on load).
+let bvhReady=false;
+async function setupBVH(){
+  try{
+    const bvh=await import('three-mesh-bvh');
+    THREE.Mesh.prototype.raycast=bvh.acceleratedRaycast;
+    THREE.BufferGeometry.prototype.computeBoundsTree=bvh.computeBoundsTree;
+    THREE.BufferGeometry.prototype.disposeBoundsTree=bvh.disposeBoundsTree;
+    bvhReady=true;
+    console.log('[bvh] loaded');
+  }catch(e){
+    console.warn('[bvh] unavailable — ground raycasts will fall back to flat',e);
+  }
+}
 
 const W=()=>window.innerWidth, H=()=>window.innerHeight;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -629,21 +646,40 @@ let groundLoaded=false;
 let worldBoundR=40; // playable radius estimated from playground bbox
 const GROUND_Y_OFFSET=0.05; // small lift to avoid z-fighting with floor
 let playgroundRoot=null;
+const groundMeshes=[];
 const groundRaycaster=new THREE.Raycaster();
+if(bvhReady) groundRaycaster.firstHitOnly=true;
 const _downV=new THREE.Vector3(0,-1,0);
 const _upPos=new THREE.Vector3();
+const groundYCache=new Map(); // key → y (floats rounded to 0.5m grid)
+
 function rayGroundY(x,z){
-  if(!playgroundRoot) return null;
+  if(!groundMeshes.length&&!playgroundRoot) return null;
   _upPos.set(x,80,z);
   groundRaycaster.set(_upPos,_downV);
   groundRaycaster.far=200;
-  const hits=groundRaycaster.intersectObject(playgroundRoot,true);
+  const target=groundMeshes.length?groundMeshes:[playgroundRoot];
+  const hits=groundMeshes.length
+    ?groundRaycaster.intersectObjects(target,false)
+    :groundRaycaster.intersectObject(target[0],true);
   if(hits.length) return hits[0].point.y;
   return null;
 }
+
 function getGroundY(x,z,defaultY){
+  if(!playgroundRoot) return defaultY!==undefined?defaultY:0;
+  // Without BVH, per-frame raycasts on a 17MB mesh would stutter the game.
+  // Treat the ground as flat in that fallback case.
+  if(!bvhReady) return defaultY!==undefined?defaultY:0;
+  // Cache on a 0.5m grid so moving characters don't redo the same raycast
+  const kx=Math.round(x*2), kz=Math.round(z*2);
+  const key=kx*100000+kz;
+  if(groundYCache.has(key)) return groundYCache.get(key);
   const y=rayGroundY(x,z);
-  return y!==null?y:(defaultY!==undefined?defaultY:0);
+  const val=y!==null?y:(defaultY!==undefined?defaultY:0);
+  groundYCache.set(key,val);
+  if(groundYCache.size>6000) groundYCache.clear();
+  return val;
 }
 
 // ===== River (auto-detected low trench) =====
@@ -657,16 +693,29 @@ function isInRiver(x,z,groundY){
   return (groundY!==undefined?groundY:getGroundY(x,z,0)) < RIVER.surfaceY-0.05;
 }
 
-function detectRiverBounds(){
+async function detectRiverBounds(progressFn){
   if(!playgroundRoot) return null;
   const samples=[];
-  const STEP=Math.max(1.0,worldBoundR/24);
-  for(let x=-worldBoundR;x<=worldBoundR;x+=STEP){
-    for(let z=-worldBoundR;z<=worldBoundR;z+=STEP){
+  const STEP=Math.max(1.0,worldBoundR/22);
+  const xs=[],zs=[];
+  for(let x=-worldBoundR;x<=worldBoundR;x+=STEP) xs.push(x);
+  for(let z=-worldBoundR;z<=worldBoundR;z+=STEP) zs.push(z);
+  const total=xs.length*zs.length;
+  let done=0;
+  const BATCH=60;
+  for(const x of xs){
+    for(const z of zs){
       const y=rayGroundY(x,z);
       if(y!==null) samples.push({x,z,y});
+      done++;
+      if(done%BATCH===0){
+        if(progressFn) progressFn(done/total);
+        // Yield to the event loop so the page stays responsive
+        await new Promise(r=>setTimeout(r,0));
+      }
     }
   }
+  if(progressFn) progressFn(1);
   if(samples.length<20) return null;
   const ys=samples.map(s=>s.y).sort((a,b)=>a-b);
   // Take bottom ~20% as low cells
@@ -680,7 +729,6 @@ function detectRiverBounds(){
   const maxZ=Math.max(...low.map(s=>s.z));
   const floorY=Math.min(...low.map(s=>s.y));
   const surfaceY=floorY+0.55; // water depth ~0.55
-  const xs=low.map(s=>s.x), zs=low.map(s=>s.z);
   const centerX=(minX+maxX)*0.5, centerZ=(minZ+maxZ)*0.5;
   const axis=(maxX-minX)>(maxZ-minZ)?'x':'z';
   return {minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis};
@@ -771,14 +819,23 @@ async function loadPlayground(){
     groundLoaded=true;
     console.log('[playground] loaded. scale=',sc,' pillars=',pillars.length,' worldR=',worldBoundR);
 
-    // Detect river trench from low areas
-    RIVER=detectRiverBounds();
-    if(RIVER){
-      console.log('[river] detected:',RIVER);
-      waterMesh=createWaterMesh(RIVER);
-    }else{
-      console.warn('[river] no trench detected — playground may be flat');
+    // Collect "ground-ish" meshes to raycast against (flat, wide).
+    // Falls back to all meshes if heuristic finds too few.
+    collectGroundMeshes(root);
+
+    // Compute BVH so raycasts are O(log n) instead of O(n).
+    if(bvhReady){
+      let total=0;
+      root.traverse(o=>{
+        if(o.isMesh && o.geometry && o.geometry.attributes && o.geometry.attributes.position){
+          try{ if(!o.geometry.boundsTree){ o.geometry.computeBoundsTree(); total++; } }
+          catch(e){/* skip bad geo */}
+        }
+      });
+      console.log('[bvh] built for',total,'meshes');
     }
+
+    // NOTE: river detection moved to init() so it can yield and not block UI
   }catch(e){
     console.error('[playground] failed to load:',e);
     // Fallback plain ground
@@ -798,6 +855,27 @@ async function loadPlayground(){
     worldBoundR=22;
     groundLoaded=true;
   }
+}
+
+function collectGroundMeshes(root){
+  groundMeshes.length=0;
+  const _bb=new THREE.Box3();
+  const _sz=new THREE.Vector3();
+  root.traverse(o=>{
+    if(!o.isMesh||!o.geometry) return;
+    _bb.setFromObject(o);
+    _bb.getSize(_sz);
+    // Ground-ish: not too tall AND has some horizontal footprint
+    if(_sz.y<2.5 && Math.max(_sz.x,_sz.z)>2.0){
+      groundMeshes.push(o);
+    }
+  });
+  if(groundMeshes.length<2){
+    // Too few — use all meshes
+    groundMeshes.length=0;
+    root.traverse(o=>{if(o.isMesh&&o.geometry) groundMeshes.push(o)});
+  }
+  console.log('[ground] meshes for raycast:',groundMeshes.length);
 }
 
 function detectPillars(root){
@@ -1896,9 +1974,44 @@ function tick(){
 
 // ===== Init =====
 async function init(){
+  // Gate the Start button while heavy work runs
+  startBtn.disabled=true;
+  const origLabel=startBtn.textContent;
+  startBtn.textContent='LOADING…';
+
+  // Enable BVH raycast acceleration BEFORE loading the playground, so
+  // computeBoundsTree runs on its geometry right after load.
+  await setupBVH();
+  // groundRaycaster was created earlier; set firstHitOnly now that we know
+  if(bvhReady) groundRaycaster.firstHitOnly=true;
+
   await Promise.all([loadCharacterTemplate(),loadCoin(),loadPlayground()]);
   attachPlayer();
-  tick();
+  tick(); // begin rendering — intro is still on top
+
+  // River detection needs many raycasts. Only attempt when BVH is available.
+  if(bvhReady){
+    try{
+      startBtn.textContent='SCANNING TERRAIN…';
+      RIVER=await detectRiverBounds(p=>{
+        const pct=Math.floor(p*100);
+        startBtn.textContent='SCANNING TERRAIN… '+pct+'%';
+      });
+      if(RIVER){
+        console.log('[river] detected:',RIVER);
+        waterMesh=createWaterMesh(RIVER);
+      }else{
+        console.warn('[river] no trench detected — playground may be flat');
+      }
+    }catch(e){
+      console.warn('[river] detection failed',e);
+    }
+  }else{
+    console.warn('[river] skipped — no BVH support');
+  }
+
+  startBtn.textContent=origLabel;
+  startBtn.disabled=false;
 }
 init();
 
