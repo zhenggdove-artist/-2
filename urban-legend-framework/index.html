@@ -226,6 +226,7 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
+import {FBXLoader} from 'three/addons/loaders/FBXLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
@@ -639,6 +640,7 @@ const dracoLoader=new DRACOLoader();
 dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
 const loader=new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
+const fbxLoader=new FBXLoader();
 
 // ===== Ground: playground.glb =====
 const pillars=[]; // { pos:Vector3, topY:number, mesh:Mesh, graffiti:null|Mesh, paintProgress:0..1, claimedBy:null|Artist }
@@ -943,23 +945,37 @@ function updateWater(t){
   }
 }
 
+function sampleWaterRamp(stops,t){
+  const x=clamp(t,0,1);
+  for(let i=1;i<stops.length;i++){
+    const a=stops[i-1], b=stops[i];
+    if(x<=b.t){
+      const local=(x-a.t)/Math.max(0.0001,b.t-a.t);
+      return a.color.clone().lerp(b.color,local);
+    }
+  }
+  return stops[stops.length-1].color.clone();
+}
+
 function applyGradientToWaterBox(geo){
   const pos=geo.attributes.position;
   const colors=new Float32Array(pos.count*3);
   const bb=geo.boundingBox||new THREE.Box3().setFromBufferAttribute(pos);
   const minY=bb.min.y,maxY=bb.max.y,minZ=bb.min.z,maxZ=bb.max.z;
-  const topA=new THREE.Color('#0a3f75');
-  const topB=new THREE.Color('#1469b4');
-  const lowA=new THREE.Color('#07243f');
-  const lowB=new THREE.Color('#0d4d86');
+  const ramp=[
+    {t:0.00,color:new THREE.Color('#041a33')},
+    {t:0.18,color:new THREE.Color('#062a52')},
+    {t:0.36,color:new THREE.Color('#0b4278')},
+    {t:0.54,color:new THREE.Color('#0f5f9f')},
+    {t:0.76,color:new THREE.Color('#1984c2')},
+    {t:1.00,color:new THREE.Color('#35a6de')},
+  ];
   const c=new THREE.Color();
   for(let i=0;i<pos.count;i++){
     const y=pos.getY(i), z=pos.getZ(i);
     const ty=(y-minY)/Math.max(0.001,maxY-minY);
     const tz=(z-minZ)/Math.max(0.001,maxZ-minZ);
-    const a=lowA.clone().lerp(lowB,tz);
-    const b=topA.clone().lerp(topB,tz);
-    c.copy(a).lerp(b,ty);
+    c.copy(sampleWaterRamp(ramp,ty*0.7+tz*0.3));
     colors[i*3]=c.r;
     colors[i*3+1]=c.g;
     colors[i*3+2]=c.b;
@@ -972,15 +988,23 @@ function applyGradientToWaterSurface(geo){
   const colors=new Float32Array(pos.count*3);
   const bb=geo.boundingBox||new THREE.Box3().setFromBufferAttribute(pos);
   const minX=bb.min.x,maxX=bb.max.x,minZ=bb.min.z,maxZ=bb.max.z;
-  const c1=new THREE.Color('#8fe6ff');
-  const c2=new THREE.Color('#49b8ff');
-  const c3=new THREE.Color('#1979d8');
+  const ramp=[
+    {t:0.00,color:new THREE.Color('#d9fbff')},
+    {t:0.18,color:new THREE.Color('#a7efff')},
+    {t:0.36,color:new THREE.Color('#79deff')},
+    {t:0.54,color:new THREE.Color('#4cc7ff')},
+    {t:0.72,color:new THREE.Color('#279fe9')},
+    {t:0.90,color:new THREE.Color('#146fc7')},
+    {t:1.00,color:new THREE.Color('#0b4ea2')},
+  ];
   const c=new THREE.Color();
   for(let i=0;i<pos.count;i++){
     const x=pos.getX(i), z=pos.getZ(i);
     const tx=(x-minX)/Math.max(0.001,maxX-minX);
     const tz=(z-minZ)/Math.max(0.001,maxZ-minZ);
-    c.copy(c1).lerp(c2,tx*0.6+tz*0.4).lerp(c3,Math.abs(0.5-tz)*0.9);
+    const waveMix=(Math.sin(x*0.35)+Math.cos(z*0.28)+2)/4;
+    const edgeMix=Math.abs(0.5-tz)*0.85;
+    c.copy(sampleWaterRamp(ramp,clamp(waveMix*0.55+edgeMix*0.45+tx*0.1,0,1)));
     colors[i*3]=c.r;
     colors[i*3+1]=c.g;
     colors[i*3+2]=c.b;
@@ -1033,6 +1057,7 @@ async function loadPlayground(){
     let sc=1;
     if(maxH<5) sc=12;
     else if(maxH>120) sc=60/maxH;
+    sc*=8;
     root.scale.setScalar(sc);
     root.updateMatrixWorld(true);
     const bbox2=new THREE.Box3().setFromObject(root);
@@ -1353,8 +1378,25 @@ function getOrCreateGraffitiPlane(pillar,facingPlayerDir){
 
 // ===== Character template + loader =====
 let charGLTF=null;
-let clipIdle=null,clipWalk=null,clipRun=null,clipJump=null;
+let clipIdle=null,clipWalk=null,clipRun=null,clipJump=null,clipPaint=null,clipPanicRun=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
+
+function sanitizeClip(clip){
+  clip.tracks=clip.tracks.filter(t=>{
+    if(!t.name||!t.name.endsWith('.position'))return true;
+    return !/hips|root|armature|mixamorig/i.test(t.name);
+  });
+  return clip;
+}
+
+async function loadFBXClip(path,name){
+  const fbx=await fbxLoader.loadAsync(path);
+  const src=fbx.animations&&fbx.animations[0];
+  if(!src) return null;
+  const clip=src.clone();
+  clip.name=name;
+  return sanitizeClip(clip);
+}
 
 async function loadCharacterTemplate(){
   try{
@@ -1372,16 +1414,18 @@ async function loadCharacterTemplate(){
     // Find animations
     for(const clip of gltf.animations){
       const n=(clip.name||'').toLowerCase();
-      // strip root motion tracks
-      clip.tracks=clip.tracks.filter(t=>{
-        if(!t.name||!t.name.endsWith('.position'))return true;
-        return !/hips|root|armature|mixamorig/i.test(t.name);
-      });
+      sanitizeClip(clip);
       if(n==='idle')clipIdle=clip;
       else if(n==='walk')clipWalk=clip;
       else if(n==='run'||n==='running')clipRun=clip;
       else if(n==='jump')clipJump=clip;
     }
+    const [panicRunClip,paintClip]=await Promise.all([
+      loadFBXClip('playermodel/主角/Running.fbx','panic-run').catch(()=>null),
+      loadFBXClip('playermodel/主角/painting.fbx','paint').catch(()=>null),
+    ]);
+    clipPanicRun=panicRunClip||clipRun;
+    clipPaint=paintClip||clipIdle;
     console.log('[char] loaded, anims:',gltf.animations.map(c=>c.name));
   }catch(e){console.error('[char] failed',e)}
 }
@@ -1419,9 +1463,13 @@ function buildCharacterInstance(tint){
   const actWalk=clipWalk?mixer.clipAction(clipWalk):null;
   const actRun=clipRun?mixer.clipAction(clipRun):null;
   const actJump=clipJump?mixer.clipAction(clipJump):null;
+  const actPaint=clipPaint?mixer.clipAction(clipPaint):null;
+  const actPanicRun=clipPanicRun?mixer.clipAction(clipPanicRun):null;
   if(actJump){actJump.setLoop(THREE.LoopOnce);actJump.clampWhenFinished=true}
+  if(actPaint){actPaint.setLoop(THREE.LoopRepeat);actPaint.clampWhenFinished=false}
+  if(actPanicRun){actPanicRun.setLoop(THREE.LoopRepeat);actPanicRun.clampWhenFinished=false}
   actIdle&&actIdle.play();
-  return {root,outer,mixer,actIdle,actWalk,actRun,actJump,halfH:(bbox.max.y-bbox.min.y)*0.5};
+  return {root,outer,mixer,actIdle,actWalk,actRun,actJump,actPaint,actPanicRun,halfH:(bbox.max.y-bbox.min.y)*0.5};
 }
 
 // Find a bone matching a regex (for hand attachment)
@@ -1608,6 +1656,7 @@ function spawnArtist(){
     fleeChance:0.35+Math.random()*0.35, // 35-70% chance to flee when threatened
     fleeCooldown:0, // sec until allowed to flee again
     fleeTarget:null,
+    panicUntil:0,
   };
   target.claimedBy=artist;
   artists.push(artist);
@@ -1617,11 +1666,23 @@ function artistTransition(a,newState){
   a.state=newState;
   const I=a.inst;
   if(newState==='walk'){
+    I.actPaint&&I.actPaint.fadeOut(0.15);
+    I.actPanicRun&&I.actPanicRun.fadeOut(0.15);
     I.actIdle&&I.actIdle.fadeOut(0.2);
     I.actWalk&&I.actWalk.reset().fadeIn(0.2).play();
   }else if(newState==='paint'){
+    I.actPanicRun&&I.actPanicRun.fadeOut(0.15);
     I.actWalk&&I.actWalk.fadeOut(0.2);
-    I.actIdle&&I.actIdle.reset().fadeIn(0.2).play();
+    I.actRun&&I.actRun.fadeOut(0.2);
+    if(I.actPaint) I.actPaint.reset().fadeIn(0.2).play();
+    else I.actIdle&&I.actIdle.reset().fadeIn(0.2).play();
+  }else if(newState==='flee'){
+    I.actPaint&&I.actPaint.fadeOut(0.15);
+    I.actIdle&&I.actIdle.fadeOut(0.15);
+    I.actWalk&&I.actWalk.fadeOut(0.15);
+    I.actRun&&I.actRun.fadeOut(0.15);
+    if(I.actPanicRun) I.actPanicRun.reset().fadeIn(0.15).play();
+    else if(I.actRun) I.actRun.reset().fadeIn(0.15).play();
   }
 }
 
@@ -1661,19 +1722,23 @@ function updateArtists(dt){
     }
     if(a.fleeCooldown>0) a.fleeCooldown-=dt;
 
-    // Threat check: if player is close and we're not painting yet, may flee to river
+    // Threat check: if player is close and we're not painting yet, flee in panic.
     if(RIVER && (a.state==='walk'||a.state==='paint') && a.fleeCooldown<=0){
       const dx=px-p.x, dz=pz-p.z;
       const distP=Math.sqrt(dx*dx+dz*dz);
-      if(distP<5.0 && Math.random()<a.fleeChance*0.02){
-        // Flee
+      if(distP<6.5){
         if(a.target&&a.target.claimedBy===a) a.target.claimedBy=null;
         a.target=null;
-        a.fleeTarget=pickRiverPoint();
+        const awayX=p.x-px, awayZ=p.z-pz;
+        const awayD=Math.max(0.001,Math.hypot(awayX,awayZ));
+        const fleeDist=6+Math.random()*4;
+        const rawTarget=new THREE.Vector3(p.x+(awayX/awayD)*fleeDist,0,p.z+(awayZ/awayD)*fleeDist);
+        clampToPlayableArea(rawTarget,0.4);
+        a.fleeTarget=rawTarget;
         if(a.fleeTarget){
-          a.state='flee';
+          a.panicUntil=performance.now()/1000 + 2.4;
           a.fleeCooldown=4.0;
-          artistTransition(a,'walk');
+          artistTransition(a,'flee');
         }
       }
     }
@@ -1726,20 +1791,20 @@ function updateArtists(dt){
       const lt=a.fleeTarget;
       const toX=lt.x-p.x, toZ=lt.z-p.z;
       const d=Math.sqrt(toX*toX+toZ*toZ);
-      if(d<1.2){
-        // Reached river — wander there until killed or claimedBy timeout
-        // Idle in water; pick a new river point occasionally
-        if(Math.random()<0.005){a.fleeTarget=pickRiverPoint()}
-        if(a.inst.actWalk&&a.inst.actWalk.isRunning()){
-          a.inst.actWalk.fadeOut(0.2);
-          a.inst.actIdle&&a.inst.actIdle.reset().fadeIn(0.2).play();
+      const playerDist=Math.hypot(px-p.x,pz-p.z);
+      if(d<1.2 || (playerDist>8.5 && performance.now()/1000>a.panicUntil)){
+        a.target=pickFreePillar();
+        if(a.target){
+          a.target.claimedBy=a;
+          a.paintT=0;
+          artistTransition(a,'walk');
+        }else{
+          a.leaveTarget=pickSpawnPos();
+          a.state='leave';
+          artistTransition(a,'walk');
         }
       }else{
-        if(a.inst.actIdle&&a.inst.actIdle.isRunning() && a.inst.actWalk){
-          a.inst.actIdle.fadeOut(0.15);
-          a.inst.actWalk.reset().fadeIn(0.15).play();
-        }
-        moveArtist(a,dt,toX/d,toZ/d,ARTIST_WALK_SPEED*1.3);
+        moveArtist(a,dt,toX/d,toZ/d,ARTIST_WALK_SPEED*1.7);
       }
     }else if(a.state==='leave'){
       const lt=a.leaveTarget;
