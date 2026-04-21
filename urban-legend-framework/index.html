@@ -1057,7 +1057,6 @@ async function loadPlayground(){
     let sc=1;
     if(maxH<5) sc=12;
     else if(maxH>120) sc=60/maxH;
-    sc*=8;
     root.scale.setScalar(sc);
     root.updateMatrixWorld(true);
     const bbox2=new THREE.Box3().setFromObject(root);
