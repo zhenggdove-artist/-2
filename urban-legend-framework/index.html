@@ -43,6 +43,69 @@
     box-shadow:0 4px 14px rgba(0,0,0,0.35);color:#fff;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:1px;
     font-size:18px;text-shadow:0 1px 4px rgba(0,0,0,0.6)}
+  /* Mobile / small-screen: push title well below the HUD row and
+     shrink the HUD a bit so the three boxes + title don't all
+     stack on the same line. */
+  @media (max-width:640px){
+    #title{top:auto;bottom:46vh;font-size:clamp(12px,3.5vw,20px);letter-spacing:0.25em;opacity:0.55}
+    #hud{top:8px;left:8px;right:8px;gap:6px}
+    .hud-box{font-size:13px;padding:4px 9px;border-radius:10px}
+    #kill-box,#coin-box,#timer-box{flex:0 0 auto}
+  }
+  @media (max-width:420px){
+    .hud-box{font-size:11px;padding:3px 7px}
+  }
+
+  /* Paint invasion bar (left side).
+     Hot-pink liquid is the home's lifeblood; each completed pillar
+     pumps rainbow graffiti paint up from the bottom. 10 completions
+     and the artists have overtaken the arena. */
+  #paint-bar{position:fixed;left:14px;top:50%;transform:translateY(-50%);
+    width:28px;height:52vh;z-index:14;pointer-events:none;
+    border:2px solid #fff;border-radius:16px;
+    background:linear-gradient(180deg,#ff3a9a 0%,#d11a70 100%);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.25),0 6px 16px rgba(0,0,0,0.5);
+    overflow:hidden}
+  #paint-bar::after{content:'';position:absolute;inset:0;
+    background:repeating-linear-gradient(180deg,
+      rgba(255,255,255,0.18) 0 3px, transparent 3px 12px);
+    pointer-events:none}
+  #paint-bar-fill{position:absolute;left:0;right:0;bottom:0;
+    height:0%;
+    background:linear-gradient(0deg,
+      #e40303 0%, #ff8c00 16%, #ffed00 32%, #008026 48%,
+      #004dff 66%, #750787 82%, #ff66c4 100%);
+    transition:height 0.6s cubic-bezier(.2,.8,.2,1);
+    box-shadow:0 -4px 12px rgba(255,255,255,0.55) inset}
+  #paint-bar-fill::before{content:'';position:absolute;left:0;right:0;top:-6px;height:10px;
+    background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0));
+    filter:blur(2px)}
+  #paint-bar-label{position:absolute;bottom:-22px;left:-4px;width:36px;
+    text-align:center;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    color:#fff;font-size:11px;letter-spacing:2px;
+    text-shadow:0 1px 2px rgba(0,0,0,0.7)}
+  @media (max-width:640px){
+    #paint-bar{width:22px;left:10px;height:46vh}
+    #paint-bar-label{font-size:10px;width:30px}
+  }
+
+  /* ART WINS — fade to black cutscene when the bar fills */
+  #art-wins{position:fixed;inset:0;z-index:700;display:flex;
+    align-items:center;justify-content:center;flex-direction:column;gap:24px;
+    background:#000;opacity:0;pointer-events:none;
+    transition:opacity 2.2s ease}
+  #art-wins.show{opacity:1;pointer-events:auto}
+  #art-wins .aw-text{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-size:clamp(42px,10vw,120px);letter-spacing:0.3em;font-weight:bold;
+    background:linear-gradient(90deg,#e40303,#ff8c00,#ffed00,#008026,#004dff,#750787,#ff66c4);
+    background-size:300% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    color:transparent;-webkit-text-fill-color:transparent;
+    animation:awShimmer 3s linear infinite;
+    filter:drop-shadow(0 6px 20px rgba(0,0,0,0.9))}
+  #art-wins .aw-sub{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    color:#d8d8d8;letter-spacing:0.25em;font-size:clamp(11px,1.6vw,14px);opacity:0.7}
+  @keyframes awShimmer{from{background-position:0% 50%}to{background-position:300% 50%}}
   #kill-box{color:#ffcf5e}
   #coin-box{color:#FFD700}
   #timer-box{color:#b5e2fa;font-variant-numeric:tabular-nums}
@@ -170,6 +233,16 @@
   <div class="hud-box" id="kill-box">💀 <span id="kill-count">0</span> / 100</div>
   <div class="hud-box" id="timer-box">⏱ <span id="timer-text">3:00</span></div>
   <div class="hud-box" id="coin-box">🪙 <span id="coin-count">0</span></div>
+</div>
+
+<div id="paint-bar">
+  <div id="paint-bar-fill"></div>
+  <div id="paint-bar-label">0/10</div>
+</div>
+
+<div id="art-wins">
+  <div class="aw-text">ART WINS</div>
+  <div class="aw-sub">YOUR HOME IS LOST TO THE PAINT</div>
 </div>
 
 <div id="game-controls">
@@ -705,18 +778,39 @@ function rayGroundY(x,z,preferredY=playableLayer?playableLayer.y:null,tolerance=
 
 function getGroundY(x,z,defaultY){
   if(!playgroundRoot) return defaultY!==undefined?defaultY:0;
-  // Without BVH, per-frame raycasts on a 17MB mesh would stutter the game.
-  // Treat the ground as flat in that fallback case.
   if(!bvhReady) return defaultY!==undefined?defaultY:0;
-  // Cache on a 0.5m grid so moving characters don't redo the same raycast
   const kx=Math.round(x*2), kz=Math.round(z*2);
   const key=kx*100000+kz;
   if(groundYCache.has(key)) return groundYCache.get(key);
   const y=rayGroundY(x,z);
   const val=y!==null?y:(defaultY!==undefined?defaultY:0);
   groundYCache.set(key,val);
-  if(groundYCache.size>6000) groundYCache.clear();
+  // LRU-style eviction instead of wholesale clear to avoid a frame spike
+  // when the cache hits its cap and every character has to re-raycast.
+  if(groundYCache.size>6000){
+    const firstKey=groundYCache.keys().next().value;
+    groundYCache.delete(firstKey);
+  }
   return val;
+}
+
+// Returns an honest ground Y for character feet:
+// 1. Real raycast (within play-layer tolerance) — precise on a step mesh
+// 2. Nearest playable sample — catches gaps in the mesh (holes/overhang)
+// 3. The provided fallback (usually the player's last-known Y) — avoids
+//    the "fall through a crack" teleport when both above fail for one frame
+function getStandY(x,z,fallback){
+  if(playableLayer){
+    const ray=rayGroundY(x,z,playableLayer.y,playableLayer.tolerance+1.5);
+    if(ray!==null) return ray;
+    const s=findNearestPlayableSample(x,z);
+    if(s) return s.y;
+  }else{
+    const ray=rayGroundY(x,z);
+    if(ray!==null) return ray;
+  }
+  if(Number.isFinite(fallback)) return fallback;
+  return playableLayer?playableLayer.y:0;
 }
 
 function buildHeightClusters(values,mergeGap=1.15){
@@ -1589,27 +1683,36 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
     const decalH=2.0;
     const decalW=1.7;
     const decalDepth=0.5; // thin slab so we only carve the front face
-    // Centre the slab on the surface point, half inside / half outside
     const boxCentre=surfacePt.clone().addScaledVector(surfaceNormal,-decalDepth*0.15);
 
-    try{
-      const decalGeo=new DecalGeometry(
-        targetMesh,
-        boxCentre,
-        orient,
-        new THREE.Vector3(decalW,decalH,decalDepth)
-      );
-      if(decalGeo.attributes.position && decalGeo.attributes.position.count>0){
-        const mat=new THREE.MeshBasicMaterial({
-          map:tex,transparent:true,opacity:0.97,depthWrite:false,
-          polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
-        });
-        mesh=new THREE.Mesh(decalGeo,mat);
-        mesh.renderOrder=3;
-      }else{
-        decalGeo.dispose();
-      }
-    }catch(e){/* fall through to plane fallback */}
+    // DecalGeometry iterates every triangle of the target mesh. For the
+    // giant playground structure mesh that can take hundreds of ms and
+    // look like a game hang. Skip the decal for ultra-dense targets and
+    // fall straight to the surface-locked plane, which looks nearly
+    // identical but is free.
+    const targetTri=targetMesh.geometry.index
+      ? targetMesh.geometry.index.count/3
+      : targetMesh.geometry.attributes.position.count/3;
+    if(targetTri<=18000){
+      try{
+        const decalGeo=new DecalGeometry(
+          targetMesh,
+          boxCentre,
+          orient,
+          new THREE.Vector3(decalW,decalH,decalDepth)
+        );
+        if(decalGeo.attributes.position && decalGeo.attributes.position.count>0){
+          const mat=new THREE.MeshBasicMaterial({
+            map:tex,transparent:true,opacity:0.97,depthWrite:false,
+            polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
+          });
+          mesh=new THREE.Mesh(decalGeo,mat);
+          mesh.renderOrder=3;
+        }else{
+          decalGeo.dispose();
+        }
+      }catch(e){/* fall through to plane fallback */}
+    }
 
     // Last-resort fallback: small plane parked on the actual hit point.
     if(!mesh){
@@ -1992,7 +2095,7 @@ function artistTransition(a,newState){
   if(newState==='walk'){
     I.root.rotation.x=0;
     I.outer && (I.outer.rotation.x=0);
-    I.actPaint&&I.actPaint.fadeOut(0.15);
+    if(I.actPaint){I.actPaint.fadeOut(0.2); I.actPaint.stop();} // ensure paint stops, not just fades
     I.actPanicRun&&I.actPanicRun.fadeOut(0.15);
     if(I.actRun){I.actRun.fadeOut(0.2); if(I.actRun.timeScale!==undefined) I.actRun.timeScale=1}
     I.actIdle&&I.actIdle.fadeOut(0.2);
@@ -2006,8 +2109,15 @@ function artistTransition(a,newState){
     I.actPanicRun&&I.actPanicRun.fadeOut(0.15);
     I.actWalk&&I.actWalk.fadeOut(0.2);
     if(I.actRun){I.actRun.fadeOut(0.2); if(I.actRun.timeScale!==undefined) I.actRun.timeScale=1}
-    if(I.actPaint) I.actPaint.reset().fadeIn(0.2).play();
-    else I.actIdle&&I.actIdle.reset().fadeIn(0.2).play();
+    // Important: fade out idle so it doesn't blend with the paint clip
+    // and cause the painting arms to do nothing.
+    I.actIdle&&I.actIdle.fadeOut(0.2);
+    if(I.actPaint){
+      I.actPaint.reset().fadeIn(0.2).play();
+      if(I.actPaint.timeScale!==undefined) I.actPaint.timeScale=1.0;
+    }else if(I.actIdle){
+      I.actIdle.reset().fadeIn(0.2).play();
+    }
   }else if(newState==='flee'){
     // Fully upright run. The separately-loaded panic-run FBX was being
     // retargeted onto a skeleton it doesn't match, which is what caused
@@ -2053,10 +2163,18 @@ function updateArtists(dt){
     const p=a.inst.outer.position;
     a.inst.mixer.update(dt);
 
-    // Ground stick + water state for non-dying artists
+    // Ground stick + water state for non-dying artists.
+    // Use hybrid stand-Y with previous p.y as fallback so a single
+    // missed raycast doesn't drop the artist through the floor.
     if(a.state!=='dying'){
-      const gY=getPlayableSurfaceY(p.x,p.z,0);
-      p.y=gY+GROUND_Y_OFFSET;
+      const prevY=p.y;
+      const gY=getStandY(p.x,p.z,a.groundY);
+      a.groundY=gY;
+      const tY=gY+GROUND_Y_OFFSET;
+      // Smooth Y change — harsh Y snaps cause the "pop into floor" look
+      const diff=tY-prevY;
+      if(Math.abs(diff)>0.8) p.y=tY; // big step, don't try to slide
+      else p.y=prevY+diff*Math.min(1,dt*16);
       a.wasInWater=a.inWater;
       a.inWater=isInRiver(p.x,p.z,gY);
       if(a.inWater && !a.wasInWater){
@@ -2137,6 +2255,11 @@ function updateArtists(dt){
       // bob head slightly during painting
       p.y+=Math.sin(performance.now()*0.012)*0.04;
       if(pillar.paintProgress>=1){
+        if(!pillar.fillCounted){
+          pillar.fillCounted=true;
+          paintFillCount++;
+          updatePaintBar();
+        }
         a.state='leave';
         pillar.claimedBy=null;
         a.target=null;
@@ -2251,7 +2374,11 @@ function spawnFlowerAt(x,z){
 
 // ===== Coin system =====
 let coinModel=null;
-const COIN_SCALE=4; // was 40 — user asked for 10% size
+// ==========================================================
+// 金幣尺寸微調：改這一個數字即可。值越大金幣越大。
+// 歷史：40 → 4（10%）→ 0.2（再縮到 5%）
+// ==========================================================
+const COIN_SCALE=0.2;
 const COINS_FLOATING=[]; // coins on ground to pick up
 const COIN_PICKUP_DIST=1.8;
 const COIN_VANISH_DUR=0.7; // seconds — rise + spin + fade
@@ -2555,7 +2682,10 @@ function updatePlayer(dt){
   }
 
   // Ground tracking + jump physics
-  const gY=getPlayableSurfaceY(player.root.position.x,player.root.position.z,0);
+  // Hybrid lookup: real raycast first (precise), nearest sample next,
+  // last-known groundY as final fallback. This stops the character from
+  // teleporting down whenever BVH raycast misses a thin ground face.
+  const gY=getStandY(player.root.position.x,player.root.position.z,player.groundY);
   player.groundY=gY;
   if(player.isAir){
     player.vy-=GRAVITY*dt;
@@ -2565,7 +2695,6 @@ function updatePlayer(dt){
       const landedHard=(player.vy<-2.5);
       player.vy=0;
       player.isAir=false;
-      // Splash if landing into water
       const landedInRiver=isInRiver(player.root.position.x,player.root.position.z,gY);
       if(landedInRiver){
         spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,landedHard?1.6:1.0);
@@ -2573,12 +2702,17 @@ function updatePlayer(dt){
     }
   }else{
     const targetY=gY+GROUND_Y_OFFSET;
-    if(targetY < player.root.position.y - 0.4){
-      // Walked off a ledge — start falling
+    const curY=player.root.position.y;
+    if(targetY < curY - 0.75){
+      // Real ledge drop — start falling
       player.isAir=true;
       player.vy=0;
     }else{
-      player.root.position.y=targetY;
+      // Smoothly follow small steps so a single bad raycast doesn't
+      // yank the camera down (the "sink into the floor" bug)
+      const diff=targetY-curY;
+      if(Math.abs(diff)<0.04) player.root.position.y=targetY;
+      else player.root.position.y=curY+diff*Math.min(1,dt*14);
     }
   }
 
@@ -2693,12 +2827,17 @@ function killArtist(a){
 
 // ===== HUD / Timer / Game state =====
 const GAME_DURATION=180; // 3 min
-let gameState='intro'; // intro|playing|ended
+let gameState='intro'; // intro|playing|ended|artWins
 let gameTime=0;
 let killCount=0;
+let paintFillCount=0;
+const PAINT_FILL_GOAL=10;
 const killEl=document.getElementById('kill-count');
 const timerEl=document.getElementById('timer-text');
 const timerBox=document.getElementById('timer-box');
+const paintBarFill=document.getElementById('paint-bar-fill');
+const paintBarLabel=document.getElementById('paint-bar-label');
+const artWinsOverlay=document.getElementById('art-wins');
 
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
@@ -2707,6 +2846,29 @@ function updateTimerUI(){
   const s=Math.floor(r%60);
   timerEl.textContent=m+':'+(s<10?'0':'')+s;
   if(r<30)timerBox.classList.add('warn');else timerBox.classList.remove('warn');
+}
+
+function updatePaintBar(){
+  if(!paintBarFill) return;
+  const pct=Math.min(100,(paintFillCount/PAINT_FILL_GOAL)*100);
+  paintBarFill.style.height=pct+'%';
+  paintBarLabel.textContent=paintFillCount+'/'+PAINT_FILL_GOAL;
+  if(paintFillCount>=PAINT_FILL_GOAL && gameState==='playing'){
+    triggerArtWins();
+  }
+}
+
+function triggerArtWins(){
+  gameState='artWins';
+  // Kick off the fade-to-black + overlay reveal
+  artWinsOverlay.classList.add('show');
+  // Freeze artists where they are; no more spawns, no more movement.
+  // The scene keeps rendering underneath the fade for a couple seconds
+  // then the overlay fully covers it.
+  try{
+    const bgm=document.getElementById('bgm');
+    if(bgm) bgm.volume=Math.max(0,bgm.volume*0.4);
+  }catch{}
 }
 
 // Artist spawn scheduler
@@ -2755,8 +2917,9 @@ startBtn.addEventListener('click',()=>{
 
 function startGame(){
   gameState='playing';
-  gameTime=0;killCount=0;coinCount=0;sketchDropped=false;
-  updateKillUI();updateCoinUI();updateTimerUI();
+  gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
+  artWinsOverlay.classList.remove('show');
+  updateKillUI();updateCoinUI();updateTimerUI();updatePaintBar();
   // Try autoplay BGM
   const bgm=document.getElementById('bgm');
   try{
@@ -2831,6 +2994,7 @@ function resetWorld(){
     p.graffitiTries=0;
     p.paintProgress=0;
     p.claimedBy=null;
+    p.fillCounted=false;
   }
   if(sketchMesh){scene.remove(sketchMesh);sketchMesh=null}
   // Reset player pos
