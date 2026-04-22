@@ -783,23 +783,50 @@ function rayGroundY(x,z,preferredY=playableLayer?playableLayer.y:null,tolerance=
   return pickGroundHitY(rayGroundHits(x,z),preferredY,tolerance);
 }
 
-// Cached raycast: returns actual ground Y, or null for a miss.
-// Keyed on a 0.5m grid — each cell is only raycast once until evicted.
-// This is what stops per-frame raycasts from tanking the frame rate.
-function cachedRayY(x,z){
+// Cached raycast: returns the FULL list of ground Y hits under (x,z),
+// or null for a miss. Keyed on a 0.5m grid — each cell is only
+// raycast once until evicted. Storing the whole hit list (instead of
+// only the "best" Y) is what stops getStandY from snapping a
+// character off a raised walkway onto the lower main floor that
+// shares the same cell: each caller can now pick the hit closest to
+// THEIR reference Y.
+function cachedRayHits(x,z){
   if(!playgroundRoot||!bvhReady) return null;
   const kx=Math.round(x*2), kz=Math.round(z*2);
   const key=kx*100000+kz;
   if(groundYCache.has(key)) return groundYCache.get(key);
-  const y=playableLayer
-    ? rayGroundY(x,z,playableLayer.y,playableLayer.tolerance+1.5)
-    : rayGroundY(x,z);
-  groundYCache.set(key,y); // stores number OR null on miss
+  const ys=rayGroundHits(x,z);
+  const val=(ys&&ys.length)?ys:null;
+  groundYCache.set(key,val);
   if(groundYCache.size>6000){
     const firstKey=groundYCache.keys().next().value;
     groundYCache.delete(firstKey);
   }
-  return y;
+  return val;
+}
+
+// From a hit list, pick the Y closest to `ref`. Respects a tolerance
+// window (hits farther than `tolerance` from ref are ignored).
+function pickHitNear(hits,ref,tolerance){
+  if(!hits||!hits.length) return null;
+  let best=null;
+  let bestD=Infinity;
+  for(let i=0;i<hits.length;i++){
+    const d=Math.abs(hits[i]-ref);
+    if(d<bestD){bestD=d;best=hits[i]}
+  }
+  if(Number.isFinite(tolerance)&&bestD>tolerance) return null;
+  return best;
+}
+
+// Backwards-compat: one-Y entrypoint that keeps the old "prefer the
+// playable layer" behaviour (used by spawn placement and similar).
+function cachedRayY(x,z){
+  const hits=cachedRayHits(x,z);
+  if(!hits) return null;
+  const ref=playableLayer?playableLayer.y:0;
+  const tol=playableLayer?playableLayer.tolerance+1.5:null;
+  return pickHitNear(hits,ref,tol);
 }
 
 function getGroundY(x,z,defaultY){
@@ -807,30 +834,52 @@ function getGroundY(x,z,defaultY){
   return y!==null?y:(defaultY!==undefined?defaultY:0);
 }
 
-// Feet-standing Y. Priority order:
-//   1. Raycast hit, if it's not absurdly far below the play layer.
-//   2. Caller's last-known groundY (fallback) — keeps the character
-//      from teleporting down into the terrain when a single frame's
-//      raycast glitches on a raised surface (the "buried in green
-//      ground" bug).
-//   3. Nearest playable sample — only used when we have no cached Y
-//      and no fallback, e.g. the very first frame.
-// Before, priority 2 and 3 were flipped. That meant a null ray would
-// pull the character down to the sample layer (the lower bank of
-// the river) every frame they stood on a raised area the ray
-// couldn't see — the character ended up knee- or waist-deep in
-// that raised mesh.
+// Feet-standing Y. Picks the HIGHEST hit under the cell that is not
+// above the caller's current Y + 1.2m — that combination keeps
+// a character anchored to their current stratum (main floor or
+// raised walkway) without snapping them up through a ceiling they
+// happen to be walking beneath.
+//
+// Key cases:
+//   - Player on main floor (ref≈0.5), cell has hits [0.5, 2.0]:
+//     2.0 > 0.5+1.2 → ignored as roof. Best = 0.5. Stay on main.
+//   - Player on walkway (ref≈2.0), cell has [0.5, 2.0]:
+//     2.0 ≤ 2.0+1.2 → accepted. Highest is 2.0. Stay on walkway.
+//   - Player in mid-air above walkway (ref≈3.5), cell has [0.5, 2.0]:
+//     both pass the "below ref+1.2" check. Highest is 2.0. Lands
+//     on walkway.
+//   - Player on the walkway but raycast glitches / no hits:
+//     fall through to `fallback` so we don't teleport down.
+//
+// Callers should pass their character's CURRENT Y as fallback (not
+// the last-known groundY) so this logic can distinguish "on the
+// walkway" from "under the walkway on the main floor".
 function getStandY(x,z,fallback){
-  const ray=cachedRayY(x,z);
-  if(ray!==null){
-    if(playableLayer){
-      const drop=playableLayer.y-ray;
-      // Trust the ray if it's at the play layer, above (raised
-      // platform/stairs — drop is negative), or only modestly below
-      // (real trench/ramp). A big drop is almost always wrong.
-      if(drop<2.5) return ray;
-    }else{
-      return ray;
+  const hits=cachedRayHits(x,z);
+  if(hits){
+    const ref=Number.isFinite(fallback)?fallback:(playableLayer?playableLayer.y:0);
+    const ceilingCutoff=ref+1.2;
+    let best=null;
+    for(let i=0;i<hits.length;i++){
+      const y=hits[i];
+      if(y>ceilingCutoff) continue; // above us — treat as a roof, not floor
+      if(best===null||y>best) best=y;
+    }
+    // No hit survived the cutoff (e.g. character has jumped above
+    // every surface — ref+1.2 is still below real ground). Fall
+    // back to the globally highest hit so they can land.
+    if(best===null){
+      for(let i=0;i<hits.length;i++){
+        if(best===null||hits[i]>best) best=hits[i];
+      }
+    }
+    if(best!==null){
+      if(playableLayer){
+        const drop=playableLayer.y-best;
+        if(drop<2.5) return best;
+      }else{
+        return best;
+      }
     }
   }
   if(Number.isFinite(fallback)) return fallback;
@@ -1718,36 +1767,41 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
 
   let mesh=null;
   let hit=null;
-  // Two-stage raycast.
-  // Stage 1: aim at pillar.mesh only — cheap (just that one mesh)
-  //   and it can't accidentally grab a wall/ceiling behind the pillar
-  //   the way a whole-playground raycast did in the previous pass
-  //   (the "graffiti floating in the air" regression).
-  // Stage 2: if pillar.mesh gives nothing (detected mesh wasn't the
-  //   true pillar skin), fall back to a short-reach ray against the
-  //   whole playground at a single height.
+  // Sweep a small cone of directions × a couple of heights against
+  // pillar.mesh. Merged-pillar meshes (one buffer holds several
+  // pillars) put pillar.pos in empty space between the real pillars,
+  // so a single ray in the artist→pillar.pos direction often misses
+  // the actual geometry entirely. Sweeping ±~35° almost always
+  // catches SOMETHING on the mesh. Fall back to a short-reach ray
+  // against the whole playground if all pillar.mesh attempts miss.
   const prev=_gfxRay.firstHitOnly;
   _gfxRay.firstHitOnly=false;
-  const tryRay=(target,heights,far)=>{
+  const _sweep=new THREE.Vector3();
+  const tryRay=(target,heights,angles,far)=>{
     for(const dy of heights){
       const origin=new THREE.Vector3(artistPos.x,(artistPos.y||0)+dy,artistPos.z);
-      _gfxRay.set(origin,dir);
-      _gfxRay.far=far;
-      const hits=_gfxRay.intersectObject(target,true);
-      for(const h of hits){
-        if(!h.face||!h.object||!h.object.geometry) continue;
-        const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
-        if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
-        return h;
+      for(const ang of angles){
+        const c=Math.cos(ang),s=Math.sin(ang);
+        _sweep.set(dir.x*c - dir.z*s, 0, dir.x*s + dir.z*c).normalize();
+        _gfxRay.set(origin,_sweep);
+        _gfxRay.far=far;
+        const hits=_gfxRay.intersectObject(target,true);
+        for(const h of hits){
+          if(!h.face||!h.object||!h.object.geometry) continue;
+          const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
+          if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
+          return h;
+        }
       }
     }
     return null;
   };
+  const sweepAngles=[0,-0.3,0.3,-0.6,0.6];
   if(pillar.mesh){
-    hit=tryRay(pillar.mesh,[1.45,0.80,1.95,0.35],4.0);
+    hit=tryRay(pillar.mesh,[1.45,0.80,1.95,0.35],sweepAngles,4.0);
   }
   if(!hit && playgroundRoot){
-    hit=tryRay(playgroundRoot,[1.25,0.65],2.2);
+    hit=tryRay(playgroundRoot,[1.25,0.65],[0,-0.3,0.3],2.4);
   }
   _gfxRay.firstHitOnly=prev;
 
@@ -1824,42 +1878,14 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       mesh.renderOrder=3;
     }
   }else{
-    // Forced fallback: both raycasts missed, but the pillar was
-    // tagged (paint timer finished). Use pillar.mesh's live world
-    // bbox when we have it — the TIGHTEST horizontal extent becomes
-    // the distance from the pillar centre to its skin, so the plane
-    // parks flush against the actual surface instead of floating out
-    // in the air the way pillar.halfW could.
-    const surfaceNormal=dir.clone().negate();
-    let cx=pillar.pos.x||0, cz=pillar.pos.z||0, cy=(pillar.pos.y||0)+(pillar.topY||3)*0.45;
-    let halfExt=Math.max(0.4,pillar.halfW||0.7);
-    if(pillar.mesh){
-      const bb=new THREE.Box3().setFromObject(pillar.mesh);
-      if(isFinite(bb.min.x)){
-        cx=(bb.min.x+bb.max.x)*0.5;
-        cz=(bb.min.z+bb.max.z)*0.5;
-        cy=(bb.min.y+bb.max.y)*0.5;
-        const hx=(bb.max.x-bb.min.x)*0.5;
-        const hz=(bb.max.z-bb.min.z)*0.5;
-        halfExt=Math.max(0.35,Math.min(hx,hz));
-      }
-    }
-    const surfacePt=new THREE.Vector3(
-      cx+surfaceNormal.x*halfExt,
-      cy,
-      cz+surfaceNormal.z*halfExt
-    );
-    const planeH=1.4,planeW=1.1;
-    const geo=new THREE.PlaneGeometry(planeW,planeH);
-    const mat=new THREE.MeshBasicMaterial({
-      map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
-      polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
-    });
-    mesh=new THREE.Mesh(geo,mat);
-    mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
-    mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
-    mesh.renderOrder=3;
-    pillar.graffitiSide=surfaceNormal.clone();
+    // No surface hit. The "forced fallback at pillar.pos" version
+    // produced floating ghost graffiti whenever detectPillars
+    // grabbed a merged multi-pillar mesh — pillar.pos ended up in
+    // the empty space between real pillars. Cleaner to return null
+    // and let the caller retry for a few frames; if nothing ever
+    // sticks, the pillar just doesn't get a tag. No more floaters.
+    tex.dispose&&tex.dispose();
+    return null;
   }
 
   scene.add(mesh);
@@ -2293,11 +2319,14 @@ function updateArtists(dt){
     a.inst.mixer.update(dt);
 
     // Ground stick + water state for non-dying artists.
-    // Use hybrid stand-Y with previous p.y as fallback so a single
-    // missed raycast doesn't drop the artist through the floor.
+    // Use hybrid stand-Y with the artist's CURRENT Y as the
+    // reference — that's what lets getStandY choose between the
+    // main floor and a raised walkway at the same XZ (it picks
+    // the surface nearest their current level, so a walkway
+    // artist stays on the walkway).
     if(a.state!=='dying'){
       const prevY=p.y;
-      const gY=getStandY(p.x,p.z,a.groundY);
+      const gY=getStandY(p.x,p.z,prevY);
       a.groundY=gY;
       const tY=gY+GROUND_Y_OFFSET;
       // Smooth Y change — harsh Y snaps cause the "pop into floor" look
@@ -2363,11 +2392,16 @@ function updateArtists(dt){
       const facingForward=new THREE.Vector3(pillar.pos.x-p.x,0,pillar.pos.z-p.z);
       if(facingForward.lengthSq()<1e-6) facingForward.set(1,0,0);
       facingForward.normalize();
-      // Lazy-init the graffiti. The function now always returns a mesh
-      // (forced fallback to a pillar-centred plane if all raycasts miss),
-      // so this should succeed on the first call almost every time.
+      // Lazy-init the graffiti. The builder now returns null instead
+      // of silently placing a floating ghost; retry a handful of
+      // times as the artist shuffles into position so the raycast
+      // has a chance of actually hitting the pillar surface.
       if(!pillar.graffiti){
-        getOrCreateGraffitiPlane(pillar,p,facingForward);
+        if(pillar.graffitiTries===undefined) pillar.graffitiTries=0;
+        if(pillar.graffitiTries<8){
+          const built=getOrCreateGraffitiPlane(pillar,p,facingForward);
+          if(!built) pillar.graffitiTries++;
+        }
       }
       pillar.paintProgress=Math.min(1,a.paintT/ARTIST_PAINT_TIME);
       // Progressive canvas redraw. Threshold 0.06 ≈ 17 redraws per full
@@ -2830,11 +2864,12 @@ function updatePlayer(dt){
     clampToPlayableArea(player.root.position);
   }
 
-  // Ground tracking + jump physics
-  // Hybrid lookup: real raycast first (precise), nearest sample next,
-  // last-known groundY as final fallback. This stops the character from
-  // teleporting down whenever BVH raycast misses a thin ground face.
-  const gY=getStandY(player.root.position.x,player.root.position.z,player.groundY);
+  // Ground tracking + jump physics. Pass the player's CURRENT Y
+  // (not last groundY) so getStandY can tell the main floor apart
+  // from a raised walkway that shares the same XZ cell. A jumped
+  // character at y=3 over a walkway will correctly snap down to
+  // the walkway top instead of the main floor below it.
+  const gY=getStandY(player.root.position.x,player.root.position.z,player.root.position.y);
   player.groundY=gY;
   if(player.isAir){
     player.vy-=GRAVITY*dt;
