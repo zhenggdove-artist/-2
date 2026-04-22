@@ -1452,8 +1452,46 @@ function getPlayableBounds(){
   };
 }
 
+// Build a cell grid over playableLayer.samples so findNearestPlayableSample
+// can run in O(1) instead of O(N). Called once after detectPlayableLayer,
+// and after any change to the sample set. Empty cells mean we fall back to
+// the full linear scan — rare and already handled below.
+function buildPlayableSampleIndex(layer){
+  if(!layer||!layer.samples||!layer.samples.length) return null;
+  const cellSize=Math.max(0.5,layer.step||1);
+  const grid=new Map();
+  for(const s of layer.samples){
+    const kx=Math.floor(s.x/cellSize), kz=Math.floor(s.z/cellSize);
+    const k=kx*100000+kz;
+    let cell=grid.get(k);
+    if(!cell){cell=[];grid.set(k,cell)}
+    cell.push(s);
+  }
+  return {cellSize,grid};
+}
+
 function findNearestPlayableSample(x,z){
   if(!playableLayer||!playableLayer.samples||!playableLayer.samples.length) return null;
+  const idx=playableLayer.sampleIndex;
+  if(idx){
+    const {cellSize,grid}=idx;
+    const kx=Math.floor(x/cellSize), kz=Math.floor(z/cellSize);
+    let best=null, bestD=Infinity;
+    for(let dz=-1;dz<=1;dz++){
+      for(let dx=-1;dx<=1;dx++){
+        const cell=grid.get((kx+dx)*100000+(kz+dz));
+        if(!cell) continue;
+        for(let i=0;i<cell.length;i++){
+          const s=cell[i];
+          const ex=s.x-x, ez=s.z-z;
+          const d=ex*ex+ez*ez;
+          if(d<bestD){bestD=d;best=s}
+        }
+      }
+    }
+    if(best) return best;
+    // Query point far from any populated cell — fall through to full scan.
+  }
   let best=null;
   let bestD=Infinity;
   for(const s of playableLayer.samples){
@@ -1518,6 +1556,17 @@ function clampToPlayableArea(pos,margin=0.35){
   const b=getPlayableBounds();
   pos.x=clamp(pos.x,b.minX+margin,b.maxX-margin);
   pos.z=clamp(pos.z,b.minZ+margin,b.maxZ-margin);
+  // River trench floors aren't in playableLayer.samples (they sit
+  // outside the height cluster tolerance), so the "snap to nearest
+  // sample" below would kick the player back out of the water every
+  // frame — the "can't walk forward, keeps hitting wall" bug. Skip
+  // the snap whenever we're inside any river's XZ footprint.
+  if(RIVERS.length){
+    for(let i=0;i<RIVERS.length;i++){
+      const r=RIVERS[i];
+      if(pos.x>=r.minX&&pos.x<=r.maxX&&pos.z>=r.minZ&&pos.z<=r.maxZ) return;
+    }
+  }
   const nearest=findNearestPlayableSample(pos.x,pos.z);
   if(!nearest) return;
   const maxD=Math.max(1.4,(playableLayer?.step||1)*1.65);
@@ -2294,10 +2343,15 @@ function updateArtists(dt){
         getOrCreateGraffitiPlane(pillar,p,facingForward);
       }
       pillar.paintProgress=Math.min(1,a.paintT/ARTIST_PAINT_TIME);
-      // Progressive canvas redraw — no more geometry scaling
+      // Progressive canvas redraw. Threshold 0.06 ≈ 17 redraws per full
+      // paint, down from 67 at the old 0.015. Each redraw re-uploads a
+      // 256×256 RGBA (~256 KB) to the GPU, and mobile Safari will
+      // drop the WebGL context if several pillars hammer uploads
+      // at once. Always redraw on full completion so the final tag
+      // appears.
       if(pillar.graffitiRender){
         const prev=pillar.graffitiProgress||0;
-        if(Math.abs(pillar.paintProgress-prev)>0.015 || pillar.paintProgress>=1){
+        if(Math.abs(pillar.paintProgress-prev)>0.06 || (pillar.paintProgress>=1 && prev<1)){
           pillar.graffitiRender(pillar.paintProgress);
           pillar.graffitiProgress=pillar.paintProgress;
         }
@@ -3076,10 +3130,15 @@ tabletClose.addEventListener('click',()=>{tabletScene.classList.remove('show')})
 
 // ===== Main loop =====
 let last=performance.now();
+// Rolling perf counters — printed every ~30s while playing so that if
+// the game locks up or the tab dies, the console history shows the
+// trend (frame time, entity counts, cache growth) right up to it.
+let _perfSince=0,_perfFrames=0,_perfMaxMs=0;
 function tick(){
   requestAnimationFrame(tick);
   const now=performance.now();
   const dt=Math.min(0.05,(now-last)/1000);
+  const frameMs=now-last;
   last=now;
   const nowS=now/1000;
   try{
@@ -3094,12 +3153,23 @@ function tick(){
       if(gameTime>=GAME_DURATION){
         endGame();
       }
+      _perfFrames++;
+      _perfSince+=dt;
+      if(frameMs>_perfMaxMs) _perfMaxMs=frameMs;
+      if(_perfSince>=30){
+        const avgMs=(_perfSince*1000)/Math.max(1,_perfFrames);
+        console.log('[perf] avg',avgMs.toFixed(1),'ms max',_perfMaxMs.toFixed(0),'ms',
+          '| artists',artists.length,'coins',COINS_FLOATING.length,
+          'flowers',flowerGroup.children.length,'groundCache',groundYCache.size,
+          'paintBar',paintFillCount+'/'+PAINT_FILL_GOAL);
+        _perfSince=0;_perfFrames=0;_perfMaxMs=0;
+      }
     }else{
       // Still animate artists slightly (idle) in intro for visual
       if(player.inst) player.inst.mixer.update(dt);
       for(const a of artists) a.inst.mixer.update(dt);
     }
-  
+
     updateFlowers(nowS);
     updateWater(nowS);
     updateSplash(dt);
@@ -3139,8 +3209,13 @@ async function init(){
       liftCeilingGeometry(playgroundRoot,playableLayer.ceilingY,5);
       groundYCache.clear();
       collectGroundMeshes(playgroundRoot);
+      // Index the playable samples for O(1) nearest-neighbour lookups.
+      // getStandY's fallback and clampToPlayableArea hammer this in
+      // every frame, so an unindexed O(N) scan becomes a real crash
+      // vector on mobile once you've played for a minute or two.
+      playableLayer.sampleIndex=buildPlayableSampleIndex(playableLayer);
       refreshPlayablePillars();
-      console.log('[floor] selected layer:',playableLayer);
+      console.log('[floor] selected layer:',playableLayer,'indexCells=',playableLayer.sampleIndex?playableLayer.sampleIndex.grid.size:0);
     }
   }
   attachPlayer();
