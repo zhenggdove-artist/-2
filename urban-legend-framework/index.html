@@ -776,39 +776,37 @@ function rayGroundY(x,z,preferredY=playableLayer?playableLayer.y:null,tolerance=
   return pickGroundHitY(rayGroundHits(x,z),preferredY,tolerance);
 }
 
-function getGroundY(x,z,defaultY){
-  if(!playgroundRoot) return defaultY!==undefined?defaultY:0;
-  if(!bvhReady) return defaultY!==undefined?defaultY:0;
+// Cached raycast: returns actual ground Y, or null for a miss.
+// Keyed on a 0.5m grid — each cell is only raycast once until evicted.
+// This is what stops per-frame raycasts from tanking the frame rate.
+function cachedRayY(x,z){
+  if(!playgroundRoot||!bvhReady) return null;
   const kx=Math.round(x*2), kz=Math.round(z*2);
   const key=kx*100000+kz;
   if(groundYCache.has(key)) return groundYCache.get(key);
-  const y=rayGroundY(x,z);
-  const val=y!==null?y:(defaultY!==undefined?defaultY:0);
-  groundYCache.set(key,val);
-  // LRU-style eviction instead of wholesale clear to avoid a frame spike
-  // when the cache hits its cap and every character has to re-raycast.
+  const y=playableLayer
+    ? rayGroundY(x,z,playableLayer.y,playableLayer.tolerance+1.5)
+    : rayGroundY(x,z);
+  groundYCache.set(key,y); // stores number OR null on miss
   if(groundYCache.size>6000){
     const firstKey=groundYCache.keys().next().value;
     groundYCache.delete(firstKey);
   }
-  return val;
+  return y;
 }
 
-// Returns an honest ground Y for character feet:
-// 1. Real raycast (within play-layer tolerance) — precise on a step mesh
-// 2. Nearest playable sample — catches gaps in the mesh (holes/overhang)
-// 3. The provided fallback (usually the player's last-known Y) — avoids
-//    the "fall through a crack" teleport when both above fail for one frame
+function getGroundY(x,z,defaultY){
+  const y=cachedRayY(x,z);
+  return y!==null?y:(defaultY!==undefined?defaultY:0);
+}
+
+// Feet-standing Y with three fallback layers — all cached so the
+// per-frame cost is O(1) after first visit to each 0.5m cell.
 function getStandY(x,z,fallback){
-  if(playableLayer){
-    const ray=rayGroundY(x,z,playableLayer.y,playableLayer.tolerance+1.5);
-    if(ray!==null) return ray;
-    const s=findNearestPlayableSample(x,z);
-    if(s) return s.y;
-  }else{
-    const ray=rayGroundY(x,z);
-    if(ray!==null) return ray;
-  }
+  const ray=cachedRayY(x,z);
+  if(ray!==null) return ray;
+  const s=findNearestPlayableSample(x,z);
+  if(s) return s.y;
   if(Number.isFinite(fallback)) return fallback;
   return playableLayer?playableLayer.y:0;
 }
@@ -978,16 +976,25 @@ async function detectRiverBounds(progressFn){
     const sorted=[...arr].sort((a,b)=>a-b);
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
   };
-  const trenches=[
+  // Build exactly 2 river channels: one left of centre, one right.
+  // Each channel stretches the FULL Z range of the playable area so the
+  // water reads as a continuous river rather than 4 chopped-up puddles.
+  const sides=[
     low.filter(s=>s.x<playableLayer.centerX-sideGap),
     low.filter(s=>s.x>playableLayer.centerX+sideGap),
-  ].filter(side=>side.length>=4).map(side=>{
+  ].filter(side=>side.length>=4);
+  const bandStep=(playableLayer.step||1);
+  const arenaMinZ=playableLayer.minZ-bandStep*0.5;
+  const arenaMaxZ=playableLayer.maxZ+bandStep*0.5;
+  const trenches=sides.map(side=>{
     const floorY=Math.min(...side.map(s=>s.y));
     const surfaceY=floorY+0.62;
     const minX=pick(side.map(s=>s.x),0.08)-0.45;
     const maxX=pick(side.map(s=>s.x),0.92)+0.45;
-    const minZ=Math.min(...side.map(s=>s.z))-(playableLayer.step||1)*0.75;
-    const maxZ=Math.max(...side.map(s=>s.z))+(playableLayer.step||1)*0.75;
+    // Extend each channel end-to-end across the arena Z, so any
+    // gaps between detected low-cells get bridged into one river.
+    const minZ=arenaMinZ;
+    const maxZ=arenaMaxZ;
     return {
       minX,maxX,minZ,maxZ,
       floorY,surfaceY,
@@ -1645,18 +1652,29 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   let mesh=null;
   let hit=null;
   if(playgroundRoot){
-    const eyeY=(artistPos.y||0)+1.45;
+    const eyeY=(artistPos.y||0)+1.25;
     const origin=new THREE.Vector3(artistPos.x,eyeY,artistPos.z);
     _gfxRay.set(origin,dir);
-    _gfxRay.far=4.5;
+    // Short reach — artists tag pillars they're almost touching, not
+    // far walls. This also prevents grabbing some distant trench wall
+    // when the artist happens to be standing near the river.
+    _gfxRay.far=2.0;
     const prev=_gfxRay.firstHitOnly;
-    _gfxRay.firstHitOnly=true;
+    _gfxRay.firstHitOnly=false; // need all hits so we can skip floor/ceiling
     const hits=_gfxRay.intersectObject(playgroundRoot,true);
     _gfxRay.firstHitOnly=prev;
-    if(hits.length) hit=hits[0];
+    // Walk through hits in distance order and pick the first one whose
+    // surface is roughly vertical (a wall), not horizontal (ground/ceiling).
+    for(const h of hits){
+      if(!h.face||!h.object||!h.object.geometry) continue;
+      const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
+      if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
+      hit=h;
+      break;
+    }
   }
 
-  if(hit && hit.face && hit.object && hit.object.geometry){
+  if(hit){
     const targetMesh=hit.object;
     const surfacePt=hit.point.clone();
     let surfaceNormal=hit.face.normal.clone()
@@ -1664,7 +1682,7 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       .normalize();
     // Make the normal point back toward the artist
     if(surfaceNormal.dot(dir)>0) surfaceNormal.negate();
-    // Keep the decal vertical; flatten any tilt
+    // Flatten tilt so the decal stays upright
     surfaceNormal.y=0;
     if(surfaceNormal.lengthSq()<0.05) surfaceNormal.copy(dir).negate();
     surfaceNormal.normalize();
@@ -1714,16 +1732,17 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       }catch(e){/* fall through to plane fallback */}
     }
 
-    // Last-resort fallback: small plane parked on the actual hit point.
+    // Fallback plane parked flush on the hit surface, sized to fit
+    // most pillars without hanging off the edges.
     if(!mesh){
-      const planeH=2.0,planeW=1.6;
+      const planeH=1.4,planeW=1.1;
       const geo=new THREE.PlaneGeometry(planeW,planeH);
       const mat=new THREE.MeshBasicMaterial({
         map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
         polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
       });
       mesh=new THREE.Mesh(geo,mat);
-      mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.02);
+      mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
       mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
       mesh.renderOrder=3;
     }
@@ -1976,7 +1995,7 @@ const artists=[]; // {inst, state:'walk'|'paint'|'dying'|'dead', target pillar, 
 let artistIdCounter=0;
 const ARTIST_TINT=new THREE.Color('#ffc8c8'); // subtle reddish tint
 const ARTIST_WALK_SPEED=2.8;
-const ARTIST_PAINT_TIME=14; // sec to fully paint a pillar
+const ARTIST_PAINT_TIME=3; // sec to fully paint a pillar (was 14)
 const ARTIST_SPAWN_BASE=2.2; // base interval (sec); decreases with time
 const ARTIST_MAX_ALIVE=12;
 
@@ -2376,9 +2395,9 @@ function spawnFlowerAt(x,z){
 let coinModel=null;
 // ==========================================================
 // 金幣尺寸微調：改這一個數字即可。值越大金幣越大。
-// 歷史：40 → 4（10%）→ 0.2（再縮到 5%）
+// 歷史：40 → 4 → 0.2 → 0.6 (×3)
 // ==========================================================
-const COIN_SCALE=0.2;
+const COIN_SCALE=0.6;
 const COINS_FLOATING=[]; // coins on ground to pick up
 const COIN_PICKUP_DIST=1.8;
 const COIN_VANISH_DUR=0.7; // seconds — rise + spin + fade
