@@ -1767,41 +1767,48 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
 
   let mesh=null;
   let hit=null;
-  // Sweep a small cone of directions × a couple of heights against
-  // pillar.mesh. Merged-pillar meshes (one buffer holds several
-  // pillars) put pillar.pos in empty space between the real pillars,
-  // so a single ray in the artist→pillar.pos direction often misses
-  // the actual geometry entirely. Sweeping ±~35° almost always
-  // catches SOMETHING on the mesh. Fall back to a short-reach ray
-  // against the whole playground if all pillar.mesh attempts miss.
+  // Sweep a small cone of directions × heights. pillar.mesh pass uses
+  // firstHitOnly=true (pillars are vertical so the first hit IS the
+  // skin) — 3× faster with BVH. The playgroundRoot fallback keeps
+  // firstHitOnly=false because THAT one might poke through a floor
+  // before a wall, and we need to walk past it.
+  //
+  // 3 angles × 2 heights against pillar.mesh = 6 rays; 3×1 against
+  // playground = 3 rays. Down from 20+ before.
   const prev=_gfxRay.firstHitOnly;
-  _gfxRay.firstHitOnly=false;
   const _sweep=new THREE.Vector3();
-  const tryRay=(target,heights,angles,far)=>{
-    for(const dy of heights){
-      const origin=new THREE.Vector3(artistPos.x,(artistPos.y||0)+dy,artistPos.z);
-      for(const ang of angles){
+  const _origin=new THREE.Vector3();
+  const tryRay=(target,heights,angles,far,skipHorizontal)=>{
+    for(let i=0;i<heights.length;i++){
+      const dy=heights[i];
+      _origin.set(artistPos.x,(artistPos.y||0)+dy,artistPos.z);
+      for(let j=0;j<angles.length;j++){
+        const ang=angles[j];
         const c=Math.cos(ang),s=Math.sin(ang);
         _sweep.set(dir.x*c - dir.z*s, 0, dir.x*s + dir.z*c).normalize();
-        _gfxRay.set(origin,_sweep);
+        _gfxRay.set(_origin,_sweep);
         _gfxRay.far=far;
         const hits=_gfxRay.intersectObject(target,true);
-        for(const h of hits){
+        for(let k=0;k<hits.length;k++){
+          const h=hits[k];
           if(!h.face||!h.object||!h.object.geometry) continue;
-          const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
-          if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
+          if(skipHorizontal){
+            const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
+            if(Math.abs(n.y)>0.6) continue;
+          }
           return h;
         }
       }
     }
     return null;
   };
-  const sweepAngles=[0,-0.3,0.3,-0.6,0.6];
   if(pillar.mesh){
-    hit=tryRay(pillar.mesh,[1.45,0.80,1.95,0.35],sweepAngles,4.0);
+    _gfxRay.firstHitOnly=true;
+    hit=tryRay(pillar.mesh,[1.20,0.60],[0,-0.45,0.45],4.0,false);
   }
   if(!hit && playgroundRoot){
-    hit=tryRay(playgroundRoot,[1.25,0.65],[0,-0.3,0.3],2.4);
+    _gfxRay.firstHitOnly=false;
+    hit=tryRay(playgroundRoot,[1.20],[0,-0.35,0.35],2.2,true);
   }
   _gfxRay.firstHitOnly=prev;
 
@@ -2131,9 +2138,12 @@ const artists=[]; // {inst, state:'walk'|'paint'|'dying'|'dead', target pillar, 
 let artistIdCounter=0;
 const ARTIST_TINT=new THREE.Color('#ffc8c8'); // subtle reddish tint
 const ARTIST_WALK_SPEED=2.8;
-const ARTIST_PAINT_TIME=3; // sec to fully paint a pillar (was 14)
-const ARTIST_SPAWN_BASE=2.2; // base interval (sec); decreases with time
+const ARTIST_PAINT_TIME=7;          // sec to fully paint a pillar
+const ARTIST_SPAWN_BASE=2.2;        // base spawn interval (sec)
 const ARTIST_MAX_ALIVE=12;
+const ARTIST_FLEE_TRIGGER=3.0;      // player closer than this → flee
+const ARTIST_FLEE_SAFE=6.0;         // player farther than this → calm down
+const ARTIST_FLEE_SPEED_MUL=1.7;    // flee run speed multiplier
 
 function pickSpawnPos(){
   // Spawn at world edge — but try to avoid the trench so artists arrive walking, not falling
@@ -2185,64 +2195,21 @@ function spawnArtist(){
   const artist={
     id,inst,state:'walk',target,paintT:0,deathT:0,
     stumbleVel:new THREE.Vector3(),
-    walkPhase:0, // for footstep splash
+    walkPhase:0,      // for footstep splash
     wasInWater:false,
     inWater:false,
-    fleeChance:0.35+Math.random()*0.35, // 35-70% chance to flee when threatened
-    fleeCooldown:0, // sec until allowed to flee again
-    fleeTarget:null,
-    fleeReplanTimer:0,
-    panicUntil:0,
-    preferRiver:Math.random()<0.45, // some artists dive for the water
+    groundY:pos.y,
   };
   target.claimedBy=artist;
   artists.push(artist);
 }
 
-// Pick the safest flee destination given the player's current position.
-// Evaluates several candidate directions and scores them by pillar
-// clearance, proximity to the river (for river-seekers), and distance
-// kept from playable edges.
-function pickFleeTarget(a,px,pz){
-  const p=a.inst.outer.position;
-  const awayX=p.x-px, awayZ=p.z-pz;
-  const awayD=Math.max(0.001,Math.hypot(awayX,awayZ));
-  const baseAngle=Math.atan2(awayX,awayZ);
-  const jitters=[0,0.35,-0.35,0.7,-0.7,1.1,-1.1,1.8,-1.8];
-  const tmp=new THREE.Vector3();
-  let best=null;
-  for(const j of jitters){
-    const ang=baseAngle+j;
-    const dist=7+Math.random()*5;
-    const tx=p.x+Math.sin(ang)*dist;
-    const tz=p.z+Math.cos(ang)*dist;
-    let score=0;
-    // Penalise targets that squish the artist into a pillar
-    for(const pil of pillars){
-      const d=Math.hypot(pil.pos.x-tx,pil.pos.z-tz);
-      const margin=(pil.halfW||0.7)+1.3;
-      if(d<margin) score-=12;
-      else if(d<margin+1.5) score-=3;
-    }
-    // Prefer the river for river-seekers, lightly prefer it for everyone
-    if(isInRiver(tx,tz)){
-      score+=a.preferRiver?6:2;
-    }
-    // Penalise if the playable-area clamp drags it far — means target is off the arena
-    tmp.set(tx,0,tz);
-    clampToPlayableArea(tmp,0.5);
-    const drag=Math.hypot(tmp.x-tx,tmp.z-tz);
-    if(drag>1.5) score-=6;
-    else if(drag>0.4) score-=2;
-    // Encourage some sideways flight so artists don't all bunch up on a single line
-    if(Math.abs(j)<0.1) score-=0.3;
-    score+=Math.random()*0.25; // small tiebreaker
-    if(!best || score>best.score){
-      best={x:tmp.x,z:tmp.z,score};
-    }
-  }
-  return new THREE.Vector3(best.x,0,best.z);
-}
+// Flee now runs "straight away from the player" every frame (computed
+// directly in the state-machine update) — no more pickFleeTarget with
+// scored candidate directions. The old scorer spawned noticeable
+// wandering: artists zig-zagged toward "nice-looking" candidates and
+// kept re-planning every second, instead of just bolting. Simpler
+// behaviour, less per-frame work, cleaner look.
 
 function artistTransition(a,newState){
   a.state=newState;
@@ -2339,21 +2306,15 @@ function updateArtists(dt){
         spawnSplash(p.x,getRiverSurfaceY(p.x,p.z,gY),p.z,1.0);
       }
     }
-    if(a.fleeCooldown>0) a.fleeCooldown-=dt;
-
-    // Threat check: if player is close and we're not painting yet, flee.
-    // Emergency trigger (very close) bypasses the normal cooldown.
-    if((a.state==='walk'||a.state==='paint') && (a.fleeCooldown<=0 || Math.hypot(px-p.x,pz-p.z)<3.0)){
+    // Threat check: only flee when the player is genuinely close
+    // (ARTIST_FLEE_TRIGGER). Before, different thresholds for walk
+    // vs paint states plus randomised fleeChance produced a lot of
+    // flinch-and-wander behaviour. Single deterministic trigger.
+    if(a.state==='walk'||a.state==='paint'){
       const dx=px-p.x, dz=pz-p.z;
-      const distP=Math.sqrt(dx*dx+dz*dz);
-      const threshold=a.state==='paint'?5.2:6.5;
-      if(distP<threshold){
+      if(dx*dx+dz*dz<ARTIST_FLEE_TRIGGER*ARTIST_FLEE_TRIGGER){
         if(a.target&&a.target.claimedBy===a) a.target.claimedBy=null;
         a.target=null;
-        a.fleeTarget=pickFleeTarget(a,px,pz);
-        a.fleeReplanTimer=0.7+Math.random()*0.5;
-        a.panicUntil=performance.now()/1000 + 2.4;
-        a.fleeCooldown=3.0;
         artistTransition(a,'flee');
       }
     }
@@ -2388,31 +2349,31 @@ function updateArtists(dt){
       }
       a.paintT+=dt;
       const pillar=a.target;
-      // Direction the artist is currently looking — toward the pillar
-      const facingForward=new THREE.Vector3(pillar.pos.x-p.x,0,pillar.pos.z-p.z);
-      if(facingForward.lengthSq()<1e-6) facingForward.set(1,0,0);
-      facingForward.normalize();
-      // Lazy-init the graffiti. The builder now returns null instead
-      // of silently placing a floating ghost; retry a handful of
-      // times as the artist shuffles into position so the raycast
-      // has a chance of actually hitting the pillar surface.
+      // Lazy-init the graffiti. Only allocate the facingForward vector
+      // the frames we actually need it (during retries, before the
+      // graffiti mesh is created). Allocating every paint frame for
+      // every artist was pushing ~700 Vec3s/sec through the GC.
       if(!pillar.graffiti){
         if(pillar.graffitiTries===undefined) pillar.graffitiTries=0;
         if(pillar.graffitiTries<8){
+          const facingForward=new THREE.Vector3(pillar.pos.x-p.x,0,pillar.pos.z-p.z);
+          if(facingForward.lengthSq()<1e-6) facingForward.set(1,0,0);
+          facingForward.normalize();
           const built=getOrCreateGraffitiPlane(pillar,p,facingForward);
           if(!built) pillar.graffitiTries++;
         }
       }
       pillar.paintProgress=Math.min(1,a.paintT/ARTIST_PAINT_TIME);
-      // Progressive canvas redraw. Threshold 0.06 ≈ 17 redraws per full
-      // paint, down from 67 at the old 0.015. Each redraw re-uploads a
-      // 256×256 RGBA (~256 KB) to the GPU, and mobile Safari will
-      // drop the WebGL context if several pillars hammer uploads
-      // at once. Always redraw on full completion so the final tag
-      // appears.
+      // Progressive canvas redraw. Threshold 0.12 = ~8 redraws per
+      // 7-sec paint cycle. Each redraw clears + redraws 6 strokes on
+      // a 256×256 canvas AND re-uploads that 256 KB to the GPU —
+      // with multiple pillars painting simultaneously on mobile, the
+      // upload bandwidth was the main stutter source. 8 redraws is
+      // still enough to visually "fill in" smoothly; the completion
+      // branch guarantees the final tag is drawn.
       if(pillar.graffitiRender){
         const prev=pillar.graffitiProgress||0;
-        if(Math.abs(pillar.paintProgress-prev)>0.06 || (pillar.paintProgress>=1 && prev<1)){
+        if(Math.abs(pillar.paintProgress-prev)>0.12 || (pillar.paintProgress>=1 && prev<1)){
           pillar.graffitiRender(pillar.paintProgress);
           pillar.graffitiProgress=pillar.paintProgress;
         }
@@ -2432,19 +2393,12 @@ function updateArtists(dt){
         a.leaveTarget=pickSpawnPos();
       }
     }else if(a.state==='flee'){
-      const playerDist=Math.hypot(px-p.x,pz-p.z);
-      // Re-plan the escape periodically or when the player closes in
-      a.fleeReplanTimer-=dt;
-      if(!a.fleeTarget || a.fleeReplanTimer<=0 || playerDist<2.6){
-        a.fleeTarget=pickFleeTarget(a,px,pz);
-        a.fleeReplanTimer=0.7+Math.random()*0.6;
-      }
-      const lt=a.fleeTarget;
-      const toX=lt.x-p.x, toZ=lt.z-p.z;
-      const d=Math.sqrt(toX*toX+toZ*toZ);
-      const panicExpired=performance.now()/1000>a.panicUntil;
-      if(d<1.2 && playerDist>6 && panicExpired){
-        // Safe distance reached — resume painting or leave
+      // Fleeing is dead simple now: run directly away from the player
+      // every frame. Once the player is far enough away, calm down
+      // and find a new pillar to paint.
+      const dx=p.x-px, dz=p.z-pz;
+      const distSq=dx*dx+dz*dz;
+      if(distSq>ARTIST_FLEE_SAFE*ARTIST_FLEE_SAFE){
         a.target=pickFreePillar();
         if(a.target){
           a.target.claimedBy=a;
@@ -2455,12 +2409,9 @@ function updateArtists(dt){
           a.state='leave';
           artistTransition(a,'walk');
         }
-      }else if(d<1.2){
-        // Reached flee spot but player still close — pick another escape
-        a.fleeTarget=pickFleeTarget(a,px,pz);
-        a.panicUntil=Math.max(a.panicUntil,performance.now()/1000+1.0);
       }else{
-        moveArtist(a,dt,toX/d,toZ/d,ARTIST_WALK_SPEED*1.7);
+        const d=Math.max(0.001,Math.sqrt(distSq));
+        moveArtist(a,dt,dx/d,dz/d,ARTIST_WALK_SPEED*ARTIST_FLEE_SPEED_MUL);
       }
     }else if(a.state==='leave'){
       const lt=a.leaveTarget;
@@ -2522,6 +2473,7 @@ function spawnFlowerAt(x,z){
     const oz=Math.sin(angle)*radius;
     grp.position.set(x+ox,gY,z+oz);
     flowerGroup.add(grp);
+    registerGrowingFlower(grp);
   }
   // Cap total flowers to keep memory bounded over a long game
   while(flowerGroup.children.length>120){
@@ -2529,6 +2481,10 @@ function spawnFlowerAt(x,z){
     flowerGroup.remove(old);
     old.traverse(o=>{
       if(o.isMesh){
+        // Remove from the growing list too, otherwise updateFlowers
+        // dereferences a disposed geometry on the next frame.
+        const idx=growingFlowerMeshes.indexOf(o);
+        if(idx>=0) growingFlowerMeshes.splice(idx,1);
         o.geometry&&o.geometry.dispose();
         const ms=Array.isArray(o.material)?o.material:[o.material];
         ms.forEach(m=>m&&m.dispose&&m.dispose());
@@ -3067,20 +3023,33 @@ function updateSpawns(dt){
   }
 }
 
-// Flower growth (drawRange animation)
+// Flower growth (drawRange animation). Tracks the set of currently
+// growing flower meshes in a tight list so the per-frame cost is
+// O(growing) rather than O(all flowers). Before, this traversed the
+// whole flowerGroup every frame — ~360 function calls each tick
+// whether any flower was actually animating or not.
+const growingFlowerMeshes=[];
+function registerGrowingFlower(grp){
+  grp.traverse(o=>{if(o.isMesh&&o.userData.totalIdx!==undefined) growingFlowerMeshes.push(o)});
+}
 function updateFlowers(now){
-  flowerGroup.traverse(o=>{
-    if(o.parent&&o.parent.userData&&o.parent.userData.growStart!==undefined && o.isMesh){
-      const grp=o.parent;
-      if(o.userData.totalIdx!==undefined){
-        const t=Math.min(1,(now-grp.userData.growStart)/grp.userData.growDur);
-        const ease=1-(1-t)*(1-t);
-        const count=Math.ceil(ease*o.userData.totalIdx/3)*3;
-        o.geometry.setDrawRange(0,count);
-        if(t>=1) delete o.userData.totalIdx;
-      }
+  if(!growingFlowerMeshes.length) return;
+  for(let i=growingFlowerMeshes.length-1;i>=0;i--){
+    const o=growingFlowerMeshes[i];
+    const grp=o.parent;
+    if(!grp||!grp.userData||grp.userData.growStart===undefined||o.userData.totalIdx===undefined){
+      growingFlowerMeshes.splice(i,1);
+      continue;
     }
-  });
+    const t=Math.min(1,(now-grp.userData.growStart)/grp.userData.growDur);
+    const ease=1-(1-t)*(1-t);
+    const count=Math.ceil(ease*o.userData.totalIdx/3)*3;
+    o.geometry.setDrawRange(0,count);
+    if(t>=1){
+      delete o.userData.totalIdx;
+      growingFlowerMeshes.splice(i,1);
+    }
+  }
 }
 
 // ===== Intro / Start / End / Leaderboard =====
@@ -3157,7 +3126,8 @@ replayBtn.addEventListener('click',()=>{
 function resetWorld(){
   // Remove all artists
   for(let i=artists.length-1;i>=0;i--) removeArtist(i);
-  // Clear all flowers
+  // Clear all flowers (and the growing-mesh tracking list)
+  growingFlowerMeshes.length=0;
   while(flowerGroup.children.length){
     const c=flowerGroup.children[0];flowerGroup.remove(c);
     c.traverse(o=>{if(o.isMesh){o.geometry&&o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms&&ms.forEach&&ms.forEach(m=>m&&m.dispose&&m.dispose())}});
