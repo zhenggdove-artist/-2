@@ -802,9 +802,22 @@ function getGroundY(x,z,defaultY){
 
 // Feet-standing Y with three fallback layers — all cached so the
 // per-frame cost is O(1) after first visit to each 0.5m cell.
+// Rejects ray hits that are far below the play layer (those are usually
+// the rooftop's underside or a floor on a level we don't care about,
+// and snapping to them is what made the player fall through the world).
 function getStandY(x,z,fallback){
   const ray=cachedRayY(x,z);
-  if(ray!==null) return ray;
+  if(ray!==null){
+    if(playableLayer){
+      const drop=playableLayer.y-ray;
+      // Trust the ray if it's at the play layer, slightly above (a step
+      // up is fine), or only modestly below (a real trench/ramp). A
+      // big drop is almost always wrong.
+      if(drop<2.5) return ray;
+    }else{
+      return ray;
+    }
+  }
   const s=findNearestPlayableSample(x,z);
   if(s) return s.y;
   if(Number.isFinite(fallback)) return fallback;
@@ -976,33 +989,33 @@ async function detectRiverBounds(progressFn){
     const sorted=[...arr].sort((a,b)=>a-b);
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
   };
-  // Build exactly 2 river channels: one left of centre, one right.
-  // Each channel stretches the FULL Z range of the playable area so the
-  // water reads as a continuous river rather than 4 chopped-up puddles.
+  // Build exactly 2 river channels: one along the BACK (−Z) side and
+  // one along the FRONT (+Z) side. Each stretches the FULL X range so
+  // the water reads as a single continuous channel, not chopped puddles.
   const sides=[
-    low.filter(s=>s.x<playableLayer.centerX-sideGap),
-    low.filter(s=>s.x>playableLayer.centerX+sideGap),
+    low.filter(s=>s.z<playableLayer.centerZ-sideGap),
+    low.filter(s=>s.z>playableLayer.centerZ+sideGap),
   ].filter(side=>side.length>=4);
   const bandStep=(playableLayer.step||1);
-  const arenaMinZ=playableLayer.minZ-bandStep*0.5;
-  const arenaMaxZ=playableLayer.maxZ+bandStep*0.5;
+  const arenaMinX=playableLayer.minX-bandStep*0.5;
+  const arenaMaxX=playableLayer.maxX+bandStep*0.5;
   const trenches=sides.map(side=>{
     const floorY=Math.min(...side.map(s=>s.y));
     const surfaceY=floorY+0.62;
-    const minX=pick(side.map(s=>s.x),0.08)-0.45;
-    const maxX=pick(side.map(s=>s.x),0.92)+0.45;
-    // Extend each channel end-to-end across the arena Z, so any
-    // gaps between detected low-cells get bridged into one river.
-    const minZ=arenaMinZ;
-    const maxZ=arenaMaxZ;
+    const minZ=pick(side.map(s=>s.z),0.08)-0.45;
+    const maxZ=pick(side.map(s=>s.z),0.92)+0.45;
+    // Extend each channel end-to-end across the arena X axis so any
+    // sampling gap inside it gets bridged into one continuous river.
+    const minX=arenaMinX;
+    const maxX=arenaMaxX;
     return {
       minX,maxX,minZ,maxZ,
       floorY,surfaceY,
       centerX:(minX+maxX)*0.5,
       centerZ:(minZ+maxZ)*0.5,
-      axis:'z'
+      axis:'x'
     };
-  }).sort((a,b)=>a.centerX-b.centerX);
+  }).sort((a,b)=>a.centerZ-b.centerZ);
   return trenches.length?trenches:null;
 }
 
@@ -1652,26 +1665,27 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   let mesh=null;
   let hit=null;
   if(playgroundRoot){
-    const eyeY=(artistPos.y||0)+1.25;
-    const origin=new THREE.Vector3(artistPos.x,eyeY,artistPos.z);
-    _gfxRay.set(origin,dir);
-    // Short reach — artists tag pillars they're almost touching, not
-    // far walls. This also prevents grabbing some distant trench wall
-    // when the artist happens to be standing near the river.
-    _gfxRay.far=2.0;
+    // Try several heights — pillars often have a base/cap that the
+    // single eye-height ray would miss. We accept the first wall-like
+    // hit. This made the difference between "1 graffiti shows up" and
+    // "every painted pillar gets one".
+    const heights=[1.45,1.05,0.65,1.85,0.30];
     const prev=_gfxRay.firstHitOnly;
-    _gfxRay.firstHitOnly=false; // need all hits so we can skip floor/ceiling
-    const hits=_gfxRay.intersectObject(playgroundRoot,true);
-    _gfxRay.firstHitOnly=prev;
-    // Walk through hits in distance order and pick the first one whose
-    // surface is roughly vertical (a wall), not horizontal (ground/ceiling).
-    for(const h of hits){
-      if(!h.face||!h.object||!h.object.geometry) continue;
-      const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
-      if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
-      hit=h;
-      break;
+    _gfxRay.firstHitOnly=false;
+    outer: for(const dy of heights){
+      const origin=new THREE.Vector3(artistPos.x,(artistPos.y||0)+dy,artistPos.z);
+      _gfxRay.set(origin,dir);
+      _gfxRay.far=3.5;
+      const hits=_gfxRay.intersectObject(playgroundRoot,true);
+      for(const h of hits){
+        if(!h.face||!h.object||!h.object.geometry) continue;
+        const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
+        if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
+        hit=h;
+        break outer;
+      }
     }
+    _gfxRay.firstHitOnly=prev;
   }
 
   if(hit){
@@ -1747,9 +1761,29 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       mesh.renderOrder=3;
     }
   }else{
-    // Couldn't find a surface at all — bail without spawning a floating
-    // ghost. Returning null tells the caller to try again next frame.
-    return null;
+    // Forced fallback: no raycast found a wall in 5 height attempts,
+    // but a pillar genuinely got tagged (paint timer says so). Place a
+    // plane at the pillar's known centre, offset toward the artist by
+    // its half-width. Not as pretty as a decal but always visible —
+    // beats "graffiti silently never appears".
+    const surfaceNormal=dir.clone().negate();
+    const halfW=Math.max(0.4,pillar.halfW||0.7);
+    const surfacePt=new THREE.Vector3(
+      (pillar.pos.x||0)+surfaceNormal.x*halfW,
+      (pillar.pos.y||0)+(pillar.topY||3)*0.45,
+      (pillar.pos.z||0)+surfaceNormal.z*halfW
+    );
+    const planeH=1.4,planeW=1.1;
+    const geo=new THREE.PlaneGeometry(planeW,planeH);
+    const mat=new THREE.MeshBasicMaterial({
+      map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
+      polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
+    });
+    mesh=new THREE.Mesh(geo,mat);
+    mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
+    mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
+    mesh.renderOrder=3;
+    pillar.graffitiSide=surfaceNormal.clone();
   }
 
   scene.add(mesh);
@@ -2253,14 +2287,11 @@ function updateArtists(dt){
       const facingForward=new THREE.Vector3(pillar.pos.x-p.x,0,pillar.pos.z-p.z);
       if(facingForward.lengthSq()<1e-6) facingForward.set(1,0,0);
       facingForward.normalize();
-      // Lazy-init the decal: retry a handful of times until raycast finds
-      // a real surface, then stop hammering raycasts each frame.
+      // Lazy-init the graffiti. The function now always returns a mesh
+      // (forced fallback to a pillar-centred plane if all raycasts miss),
+      // so this should succeed on the first call almost every time.
       if(!pillar.graffiti){
-        if(pillar.graffitiTries===undefined) pillar.graffitiTries=0;
-        if(pillar.graffitiTries<6){
-          const built=getOrCreateGraffitiPlane(pillar,p,facingForward);
-          if(!built) pillar.graffitiTries++;
-        }
+        getOrCreateGraffitiPlane(pillar,p,facingForward);
       }
       pillar.paintProgress=Math.min(1,a.paintT/ARTIST_PAINT_TIME);
       // Progressive canvas redraw — no more geometry scaling
@@ -2407,14 +2438,26 @@ async function loadCoin(){
     const gltf=await loader.loadAsync('coin.glb');
     coinModel=gltf.scene;
     coinModel.scale.setScalar(COIN_SCALE);
+    // Replace the baked copper/bronze material with a shiny gold tone.
+    // The coin.glb ships with its own colours; we override here so it
+    // reads unambiguously as a gold coin regardless of source material.
     coinModel.traverse(o=>{
       if(o.isMesh){
         o.frustumCulled=false;
         if(o.material){
-          // Clone materials so vanish-fade doesn't bleed across all coins
           const mats=Array.isArray(o.material)?o.material:[o.material];
           for(const m of mats){
             m.side=THREE.DoubleSide;
+            if(m.color) m.color.setHex(0xffd24a);       // warm gold
+            if('metalness' in m) m.metalness=0.92;
+            if('roughness' in m) m.roughness=0.22;
+            if(m.emissive) m.emissive.setHex(0x563000); // gentle amber glow
+            if('emissiveIntensity' in m) m.emissiveIntensity=0.25;
+            if(m.map){
+              // Tint the existing texture so any surface detail stays,
+              // but the overall hue is gold.
+              m.color.setHex(0xffe388);
+            }
           }
         }
       }
