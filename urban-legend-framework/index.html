@@ -43,11 +43,12 @@
     box-shadow:0 4px 14px rgba(0,0,0,0.35);color:#fff;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:1px;
     font-size:18px;text-shadow:0 1px 4px rgba(0,0,0,0.6)}
-  /* Mobile / small-screen: push title well below the HUD row and
-     shrink the HUD a bit so the three boxes + title don't all
-     stack on the same line. */
+  /* Mobile / small-screen: keep title at the top of the screen, but
+     tucked just below the HUD row so the three boxes + title don't
+     collide. (Earlier rev pushed it to bottom:46vh, which dumped it
+     into the middle of the play area — not what we want.) */
   @media (max-width:640px){
-    #title{top:auto;bottom:46vh;font-size:clamp(12px,3.5vw,20px);letter-spacing:0.25em;opacity:0.55}
+    #title{top:44px;bottom:auto;font-size:clamp(12px,3.5vw,20px);letter-spacing:0.25em;opacity:0.6}
     #hud{top:8px;left:8px;right:8px;gap:6px}
     .hud-box{font-size:13px;padding:4px 9px;border-radius:10px}
     #kill-box,#coin-box,#timer-box{flex:0 0 auto}
@@ -239,6 +240,12 @@
   <div id="paint-bar-fill"></div>
   <div id="paint-bar-label">0/10</div>
 </div>
+
+<!-- Debug coords (toggle with Shift+X). Hidden by default. -->
+<div id="debug-coords" style="display:none;position:fixed;top:50%;left:8px;transform:translateY(-50%);
+  background:rgba(0,0,0,0.72);color:#8ef58e;padding:6px 10px;border-radius:6px;
+  font-family:monospace;font-size:12px;line-height:1.45;z-index:20;pointer-events:none;
+  border:1px solid rgba(142,245,142,0.35);letter-spacing:0.5px;white-space:pre"></div>
 
 <div id="art-wins">
   <div class="aw-text">ART WINS</div>
@@ -800,27 +807,35 @@ function getGroundY(x,z,defaultY){
   return y!==null?y:(defaultY!==undefined?defaultY:0);
 }
 
-// Feet-standing Y with three fallback layers — all cached so the
-// per-frame cost is O(1) after first visit to each 0.5m cell.
-// Rejects ray hits that are far below the play layer (those are usually
-// the rooftop's underside or a floor on a level we don't care about,
-// and snapping to them is what made the player fall through the world).
+// Feet-standing Y. Priority order:
+//   1. Raycast hit, if it's not absurdly far below the play layer.
+//   2. Caller's last-known groundY (fallback) — keeps the character
+//      from teleporting down into the terrain when a single frame's
+//      raycast glitches on a raised surface (the "buried in green
+//      ground" bug).
+//   3. Nearest playable sample — only used when we have no cached Y
+//      and no fallback, e.g. the very first frame.
+// Before, priority 2 and 3 were flipped. That meant a null ray would
+// pull the character down to the sample layer (the lower bank of
+// the river) every frame they stood on a raised area the ray
+// couldn't see — the character ended up knee- or waist-deep in
+// that raised mesh.
 function getStandY(x,z,fallback){
   const ray=cachedRayY(x,z);
   if(ray!==null){
     if(playableLayer){
       const drop=playableLayer.y-ray;
-      // Trust the ray if it's at the play layer, slightly above (a step
-      // up is fine), or only modestly below (a real trench/ramp). A
-      // big drop is almost always wrong.
+      // Trust the ray if it's at the play layer, above (raised
+      // platform/stairs — drop is negative), or only modestly below
+      // (real trench/ramp). A big drop is almost always wrong.
       if(drop<2.5) return ray;
     }else{
       return ray;
     }
   }
+  if(Number.isFinite(fallback)) return fallback;
   const s=findNearestPlayableSample(x,z);
   if(s) return s.y;
-  if(Number.isFinite(fallback)) return fallback;
   return playableLayer?playableLayer.y:0;
 }
 
@@ -1556,25 +1571,15 @@ function clampToPlayableArea(pos,margin=0.35){
   const b=getPlayableBounds();
   pos.x=clamp(pos.x,b.minX+margin,b.maxX-margin);
   pos.z=clamp(pos.z,b.minZ+margin,b.maxZ-margin);
-  // River trench floors aren't in playableLayer.samples (they sit
-  // outside the height cluster tolerance), so the "snap to nearest
-  // sample" below would kick the player back out of the water every
-  // frame — the "can't walk forward, keeps hitting wall" bug. Skip
-  // the snap whenever we're inside any river's XZ footprint.
-  if(RIVERS.length){
-    for(let i=0;i<RIVERS.length;i++){
-      const r=RIVERS[i];
-      if(pos.x>=r.minX&&pos.x<=r.maxX&&pos.z>=r.minZ&&pos.z<=r.maxZ) return;
-    }
-  }
-  const nearest=findNearestPlayableSample(pos.x,pos.z);
-  if(!nearest) return;
-  const maxD=Math.max(1.4,(playableLayer?.step||1)*1.65);
-  const dist=Math.hypot(nearest.x-pos.x,nearest.z-pos.z);
-  if(dist>maxD){
-    pos.x=nearest.x;
-    pos.z=nearest.z;
-  }
+  // Removed the "snap to nearest sample when >1.4m away" behaviour
+  // entirely. It was catching the player in perfectly legitimate
+  // sampling dead-zones — the river trench (no samples, outside
+  // cluster tolerance) and parts of the middle-front of the arena
+  // where the sparse grid happened to miss — and kicking them back
+  // every frame. The bounds clamp above still keeps the player
+  // inside the arena rectangle; getStandY now falls back to the
+  // caller's last known Y when the raycast glitches, so there's no
+  // "fall through the floor" risk left for the snap to guard.
 }
 
 function refreshPlayablePillars(){
@@ -1713,29 +1718,38 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
 
   let mesh=null;
   let hit=null;
-  if(playgroundRoot){
-    // Try several heights — pillars often have a base/cap that the
-    // single eye-height ray would miss. We accept the first wall-like
-    // hit. This made the difference between "1 graffiti shows up" and
-    // "every painted pillar gets one".
-    const heights=[1.45,1.05,0.65,1.85,0.30];
-    const prev=_gfxRay.firstHitOnly;
-    _gfxRay.firstHitOnly=false;
-    outer: for(const dy of heights){
+  // Two-stage raycast.
+  // Stage 1: aim at pillar.mesh only — cheap (just that one mesh)
+  //   and it can't accidentally grab a wall/ceiling behind the pillar
+  //   the way a whole-playground raycast did in the previous pass
+  //   (the "graffiti floating in the air" regression).
+  // Stage 2: if pillar.mesh gives nothing (detected mesh wasn't the
+  //   true pillar skin), fall back to a short-reach ray against the
+  //   whole playground at a single height.
+  const prev=_gfxRay.firstHitOnly;
+  _gfxRay.firstHitOnly=false;
+  const tryRay=(target,heights,far)=>{
+    for(const dy of heights){
       const origin=new THREE.Vector3(artistPos.x,(artistPos.y||0)+dy,artistPos.z);
       _gfxRay.set(origin,dir);
-      _gfxRay.far=3.5;
-      const hits=_gfxRay.intersectObject(playgroundRoot,true);
+      _gfxRay.far=far;
+      const hits=_gfxRay.intersectObject(target,true);
       for(const h of hits){
         if(!h.face||!h.object||!h.object.geometry) continue;
         const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
         if(Math.abs(n.y)>0.6) continue; // skip floors & ceilings
-        hit=h;
-        break outer;
+        return h;
       }
     }
-    _gfxRay.firstHitOnly=prev;
+    return null;
+  };
+  if(pillar.mesh){
+    hit=tryRay(pillar.mesh,[1.45,0.80,1.95,0.35],4.0);
   }
+  if(!hit && playgroundRoot){
+    hit=tryRay(playgroundRoot,[1.25,0.65],2.2);
+  }
+  _gfxRay.firstHitOnly=prev;
 
   if(hit){
     const targetMesh=hit.object;
@@ -1810,17 +1824,30 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       mesh.renderOrder=3;
     }
   }else{
-    // Forced fallback: no raycast found a wall in 5 height attempts,
-    // but a pillar genuinely got tagged (paint timer says so). Place a
-    // plane at the pillar's known centre, offset toward the artist by
-    // its half-width. Not as pretty as a decal but always visible —
-    // beats "graffiti silently never appears".
+    // Forced fallback: both raycasts missed, but the pillar was
+    // tagged (paint timer finished). Use pillar.mesh's live world
+    // bbox when we have it — the TIGHTEST horizontal extent becomes
+    // the distance from the pillar centre to its skin, so the plane
+    // parks flush against the actual surface instead of floating out
+    // in the air the way pillar.halfW could.
     const surfaceNormal=dir.clone().negate();
-    const halfW=Math.max(0.4,pillar.halfW||0.7);
+    let cx=pillar.pos.x||0, cz=pillar.pos.z||0, cy=(pillar.pos.y||0)+(pillar.topY||3)*0.45;
+    let halfExt=Math.max(0.4,pillar.halfW||0.7);
+    if(pillar.mesh){
+      const bb=new THREE.Box3().setFromObject(pillar.mesh);
+      if(isFinite(bb.min.x)){
+        cx=(bb.min.x+bb.max.x)*0.5;
+        cz=(bb.min.z+bb.max.z)*0.5;
+        cy=(bb.min.y+bb.max.y)*0.5;
+        const hx=(bb.max.x-bb.min.x)*0.5;
+        const hz=(bb.max.z-bb.min.z)*0.5;
+        halfExt=Math.max(0.35,Math.min(hx,hz));
+      }
+    }
     const surfacePt=new THREE.Vector3(
-      (pillar.pos.x||0)+surfaceNormal.x*halfW,
-      (pillar.pos.y||0)+(pillar.topY||3)*0.45,
-      (pillar.pos.z||0)+surfaceNormal.z*halfW
+      cx+surfaceNormal.x*halfExt,
+      cy,
+      cz+surfaceNormal.z*halfExt
     );
     const planeH=1.4,planeW=1.1;
     const geo=new THREE.PlaneGeometry(planeW,planeH);
@@ -2662,6 +2689,12 @@ window.addEventListener('keydown',e=>{
   if(k==='arrowright')keys.right=true;
   if(k===' '||k==='spacebar'){keys.space=true;tryJump();e.preventDefault()}
   if(k==='f'||k==='j'){tryAttack();e.preventDefault()}
+  // Shift+X: toggle the debug coordinate readout. Updated in tick().
+  if(k==='x'&&e.shiftKey){
+    const el=document.getElementById('debug-coords');
+    if(el) el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none';
+    e.preventDefault();
+  }
 });
 window.addEventListener('keyup',e=>{
   const k=e.key.toLowerCase();
@@ -3128,6 +3161,26 @@ function showTabletScene(){
 }
 tabletClose.addEventListener('click',()=>{tabletScene.classList.remove('show')});
 
+// ===== Debug coord readout (toggled by Shift+X) =====
+const _debugEl=document.getElementById('debug-coords');
+function updateDebugCoords(){
+  if(!_debugEl||_debugEl.style.display==='none'||!_debugEl.style.display) return;
+  const p=player.root&&player.root.position;
+  if(!p) return;
+  const r=RIVERS&&RIVERS.length?RIVERS.length:0;
+  const inR=(RIVERS||[]).some(rv=>p.x>=rv.minX&&p.x<=rv.maxX&&p.z>=rv.minZ&&p.z<=rv.maxZ);
+  _debugEl.textContent=
+    'X: '+p.x.toFixed(2)+
+    '\nY: '+p.y.toFixed(2)+
+    '\nZ: '+p.z.toFixed(2)+
+    '\ngY: '+(player.groundY!==undefined?player.groundY.toFixed(2):'?')+
+    '\nair: '+(player.isAir?'Y':'N')+
+    '  water: '+(player.inWater?'Y':'N')+
+    '\nriv: '+(inR?'IN':'-')+' ('+r+')'+
+    '\nart: '+artists.length+
+    '  fps: '+(Math.round(1000/Math.max(1,performance.now()-last)));
+}
+
 // ===== Main loop =====
 let last=performance.now();
 // Rolling perf counters — printed every ~30s while playing so that if
@@ -3174,6 +3227,7 @@ function tick(){
     updateWater(nowS);
     updateSplash(dt);
     updateCam();
+    updateDebugCoords();
 
     vhsPass.uniforms.time.value=nowS;
     composer.render();
