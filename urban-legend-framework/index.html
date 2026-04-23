@@ -1914,11 +1914,38 @@ let clipArtistIdle=null,clipArtistWalk=null;
 let extraCharacterClipsPromise=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
 
+// Detected once from the GLB after it loads. If the GLB's bones are
+// named "mixamorig:Hips" we keep that prefix on FBX clip tracks; if
+// they're bare ("Hips") we strip the prefix. Getting this wrong
+// produces the T-pose bug (clip loads but tracks bind to nothing).
+let _mixamoPrefix='';
+function detectMixamoPrefix(scene){
+  if(!scene) return '';
+  let pre='';
+  scene.traverse(o=>{
+    if(!o.isBone||pre) return;
+    const m=/^(mixamorig\d*:)/i.exec(o.name||'');
+    if(m) pre=m[1];
+  });
+  return pre;
+}
+
 function sanitizeClip(clip){
+  // 1. Drop position tracks on the root/hip bones — they'd teleport
+  //    the character back to the animation origin every frame.
   clip.tracks=clip.tracks.filter(t=>{
     if(!t.name||!t.name.endsWith('.position'))return true;
     return !/hips|root|armature|mixamorig/i.test(t.name);
   });
+  // 2. Normalise the bone-name prefix to whatever the GLB skeleton
+  //    actually uses. Mixamo FBX tracks always start with
+  //    "mixamorig:" / "mixamorig1:"; the GLB may or may not, so we
+  //    strip the FBX prefix and re-prepend the GLB's detected one.
+  for(const t of clip.tracks){
+    if(!t.name) continue;
+    const stripped=t.name.replace(/^mixamorig\d*:/i,'');
+    t.name=_mixamoPrefix+stripped;
+  }
   return clip;
 }
 
@@ -1944,6 +1971,10 @@ async function loadCharacterTemplate(){
     }
     if(!gltf) gltf=await loader.loadAsync('character.glb');
     charGLTF=gltf;
+    // Detect bone-name convention BEFORE sanitising any clip — both
+    // the GLB's own and the FBX clips share the same normaliser.
+    _mixamoPrefix=detectMixamoPrefix(gltf.scene);
+    console.log('[char] mixamoPrefix=',JSON.stringify(_mixamoPrefix));
     // Find animations
     for(const clip of gltf.animations){
       const n=(clip.name||'').toLowerCase();
@@ -2189,7 +2220,7 @@ const ARTIST_PAINT_TIME=7;          // sec to fully paint a pillar
 const ARTIST_SPAWN_BASE=2.2;        // base spawn interval (sec)
 const ARTIST_MAX_ALIVE=12;
 const ARTIST_FLEE_TRIGGER=3.0;      // player closer than this → flee
-const ARTIST_FLEE_SAFE=6.0;         // player farther than this → calm down
+const ARTIST_FLEE_SAFE=10.0;        // player farther than this → calm down, walk again
 const ARTIST_FLEE_SPEED_MUL=1.7;    // flee run speed multiplier
 
 function pickSpawnPos(){
@@ -2268,6 +2299,11 @@ function spawnArtist(){
 
 function artistTransition(a,newState){
   a.state=newState;
+  // Always reset stuck accumulation when we change what we're trying
+  // to do — otherwise a counter built up during a previous walk
+  // carries over into (say) the paint state and immediately makes
+  // the next walk look stuck.
+  a.stuckFrames=0;
   const I=a.inst;
   if(newState==='walk'){
     I.root.rotation.x=0;
@@ -2325,15 +2361,18 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
   clampToPlayableArea(p,0.2);
   a.inst.outer.rotation.y=Math.atan2(nx,nz);
   // Stuck detection: if the arena-bounds clamp ate most of the step
-  // (artist pushed into an edge/corner), count frames. Walk branches
-  // use this to steer around the obstacle instead of just grinding
-  // forward in place.
+  // (artist pushed into an edge/corner), count frames. DECAY slowly
+  // when moving — don't snap back to 0. The reset-on-move version
+  // let the artist oscillate: steer sideways ⇒ tiny motion ⇒
+  // counter reset ⇒ head back at wall ⇒ bump. Keeping the counter
+  // high until they actually clear the obstacle makes the steering
+  // angle persist long enough for them to escape.
   const stepLen=Math.hypot(p.x-beforeX,p.z-beforeZ);
   const wanted=speed*dt;
   if(wanted>0.01 && stepLen<wanted*0.35){
     a.stuckFrames=(a.stuckFrames||0)+1;
   }else{
-    a.stuckFrames=0;
+    a.stuckFrames=Math.max(0,(a.stuckFrames||0)-2);
   }
   // Footstep splash if wading
   if(a.inWater){
@@ -2416,7 +2455,7 @@ function updateArtists(dt){
         let hx=toX/dist, hz=toZ/dist;
         const stuck=a.stuckFrames||0;
         if(stuck>6){
-          const sign=(a.id&1)?1:-1;
+          const sign=((((stuck/25)|0)+(a.id&1))&1)?1:-1;
           // Ramp up to ~160° so a really stuck artist can reverse out
         // of a corner, not just scrape sideways along the wall that
         // blocked them. 0.09 rad per stuck frame → hits the cap at
@@ -2508,7 +2547,7 @@ function updateArtists(dt){
         let hx=dx/d, hz=dz/d;
         const stuck=a.stuckFrames||0;
         if(stuck>6){
-          const sign=(a.id&1)?1:-1;
+          const sign=((((stuck/25)|0)+(a.id&1))&1)?1:-1;
           const ang=Math.min(2.8,(stuck-6)*0.09)*sign;
           const c=Math.cos(ang),s=Math.sin(ang);
           const rx=hx*c - hz*s;
@@ -2528,7 +2567,7 @@ function updateArtists(dt){
       let hx=toX/d, hz=toZ/d;
       const stuck=a.stuckFrames||0;
       if(stuck>6){
-        const sign=(a.id&1)?1:-1;
+        const sign=((((stuck/25)|0)+(a.id&1))&1)?1:-1;
         const ang=Math.min(2.8,(stuck-6)*0.09)*sign;
         const c=Math.cos(ang),s=Math.sin(ang);
         const rx=hx*c - hz*s;
@@ -3330,12 +3369,19 @@ function tick(){
   const frameMs=now-last;
   const dt=Math.min(0.05,frameMs/1000);
   _frameMs=frameMs;
-  _frameMsAvg=_frameMsAvg*0.9+frameMs*0.1;
-  if(frameMs>_frameMsMax) _frameMsMax=frameMs;
+  // Ignore frame gaps > 500ms in the max/avg trackers — those are
+  // the browser tab being backgrounded, the phone screen locking,
+  // or an OS alert, not actual in-game jank. Including them makes
+  // the on-screen maxMs shoot up to 25s+ after you check a
+  // notification, which is confusing rather than useful.
+  if(frameMs<500){
+    _frameMsAvg=_frameMsAvg*0.9+frameMs*0.1;
+    if(frameMs>_frameMsMax) _frameMsMax=frameMs;
+  }
   // Decay the displayed max-ms every 3s so it reflects recent spikes
   // rather than the single worst frame since page load.
   _maxReset+=frameMs;
-  if(_maxReset>3000){_maxReset=0;_frameMsMax=frameMs}
+  if(_maxReset>3000){_maxReset=0;_frameMsMax=Math.min(frameMs,60)}
   last=now;
   const nowS=now/1000;
   try{
