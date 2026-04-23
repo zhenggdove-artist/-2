@@ -2400,6 +2400,7 @@ function buildCharacterInstance(tint,isArtist){
   if(!charGLTF) return null;
   const root=SkeletonUtils.clone(charGLTF.scene);
   root.scale.setScalar(100); // Mixamo 0.01 undo
+  const materialEntries=[];
   root.traverse(o=>{
     if(o.isMesh){
       o.frustumCulled=false;
@@ -2412,6 +2413,16 @@ function buildCharacterInstance(tint,isArtist){
             cm.color.multiply(tint);
           }
           if('envMapIntensity' in cm) cm.envMapIntensity=0.5;
+          materialEntries.push({
+            material:cm,
+            color:cm.color?.clone?.()||null,
+            emissive:cm.emissive?.clone?.()||null,
+            emissiveIntensity:('emissiveIntensity' in cm)?cm.emissiveIntensity:null,
+            roughness:('roughness' in cm)?cm.roughness:null,
+            metalness:('metalness' in cm)?cm.metalness:null,
+            opacity:('opacity' in cm)?cm.opacity:null,
+            transparent:('transparent' in cm)?cm.transparent:null,
+          });
           return cm;
         });
         o.material=Array.isArray(o.material)?cloned:cloned[0];
@@ -2444,7 +2455,7 @@ function buildCharacterInstance(tint,isArtist){
   // artist spawn was because no clip was actually playing before the
   // first updateArtists tick called artistTransition.
   actIdle&&actIdle.play();
-  return {root,outer,mixer,actIdle,actWalk,actRun,actJump,actPaint,actPanicRun,halfH:(bbox.max.y-bbox.min.y)*0.5};
+  return {root,outer,mixer,actIdle,actWalk,actRun,actJump,actPaint,actPanicRun,halfH:(bbox.max.y-bbox.min.y)*0.5,materialEntries,isFrozenLook:false};
 }
 
 function buildPlayerInstance(){
@@ -2499,6 +2510,34 @@ function buildPlayerInstance(){
   }
   actIdle&&actIdle.play();
   return {root,outer,mixer,actIdle,actRun,actJump,actPunch,actKick,actPunchCombo,actFire,actThrowBomb,halfH:(bbox.max.y-bbox.min.y)*0.5};
+}
+
+function setArtistFrozenLook(inst,frozen){
+  if(!inst?.materialEntries || inst.isFrozenLook===frozen) return;
+  for(const entry of inst.materialEntries){
+    const m=entry.material;
+    if(!m) continue;
+    if(frozen){
+      if(m.color) m.color.set('#bfefff');
+      if(m.emissive) m.emissive.set('#7fd6ff');
+      if('emissiveIntensity' in m) m.emissiveIntensity=0.38;
+      if('roughness' in m) m.roughness=0.18;
+      if('metalness' in m) m.metalness=0.08;
+      if('transparent' in m) m.transparent=true;
+      if('opacity' in m) m.opacity=0.92;
+      m.needsUpdate=true;
+    }else{
+      if(m.color && entry.color) m.color.copy(entry.color);
+      if(m.emissive && entry.emissive) m.emissive.copy(entry.emissive);
+      if('emissiveIntensity' in m && entry.emissiveIntensity!==null) m.emissiveIntensity=entry.emissiveIntensity;
+      if('roughness' in m && entry.roughness!==null) m.roughness=entry.roughness;
+      if('metalness' in m && entry.metalness!==null) m.metalness=entry.metalness;
+      if('transparent' in m && entry.transparent!==null) m.transparent=entry.transparent;
+      if('opacity' in m && entry.opacity!==null) m.opacity=entry.opacity;
+      m.needsUpdate=true;
+    }
+  }
+  inst.isFrozenLook=frozen;
 }
 
 // Find a bone matching a regex (for hand attachment)
@@ -2558,7 +2597,7 @@ function updateSplash(dt){
 }
 
 // ===== Knockout burst particles =====
-const KO_MAX=720;
+const KO_MAX=480;
 const koGeo=new THREE.BufferGeometry();
 const koPos=new Float32Array(KO_MAX*3);
 const koVel=new Float32Array(KO_MAX*3);
@@ -2574,13 +2613,13 @@ koPoints.frustumCulled=false;
 scene.add(koPoints);
 let koCursor=0;
 const BURST_EFFECT_PRESETS={
-  amber:{colors:['#ffe46a','#ffd139','#fff4af'],count:32,speed:[1.0,2.6],up:[1.2,2.8],spread:0.85,size:0.14,shape:'ring'},
-  prism:{colors:['#ff6eb4','#ffd84d','#7cf0ff','#7cff8f','#c189ff'],count:44,speed:[1.2,3.2],up:[1.4,3.1],spread:1.0,size:0.17,shape:'confetti'},
-  petal:{colors:['#ff9ad5','#ffd1f0','#7cf0ff','#b5ffd9'],count:40,speed:[0.9,2.4],up:[1.7,2.7],spread:0.95,size:0.18,swirl:0.55,shape:'heart'},
-  star:{colors:['#fff8c1','#ffe46a','#ffd139','#ffffff'],count:36,speed:[1.4,3.8],up:[1.5,3.4],spread:0.75,size:0.15,spokes:5,shape:'star'},
-  fire:{colors:['#fff7c8','#ffb347','#ff6b1a','#ff2f00'],count:42,speed:[1.1,3.4],up:[1.6,3.8],spread:0.88,size:0.19,swirl:0.18,shape:'flame'},
-  ice:{colors:['#ffffff','#d8f5ff','#86dbff','#5ca8ff'],count:40,speed:[0.9,2.8],up:[1.3,2.7],spread:0.92,size:0.18,shape:'snowflake'},
-  tornado:{colors:['#fdf2ff','#ffd8ef','#b8ecff','#ffffff'],count:52,speed:[0.7,2.2],up:[2.0,4.4],spread:0.82,size:0.17,swirl:1.05,shape:'spiral'},
+  amber:{colors:['#ffe46a','#ffd139','#fff4af'],count:28,speed:[0.9,2.3],up:[1.1,2.5],spread:0.8,size:0.13,shape:'ring'},
+  prism:{colors:['#ff6eb4','#ffd84d','#7cf0ff','#7cff8f','#c189ff'],count:34,speed:[1.0,2.8],up:[1.2,2.8],spread:0.92,size:0.15,shape:'confetti'},
+  petal:{colors:['#ff9ad5','#ffd1f0','#ff6fae','#ffd7ea'],count:42,speed:[0.85,2.35],up:[1.6,2.5],spread:0.85,size:0.14,swirl:0.4,shape:'heart'},
+  star:{colors:['#fff8c1','#ffe46a','#ffd139','#fff2a8'],count:42,speed:[1.0,2.9],up:[1.4,2.9],spread:0.86,size:0.14,swirl:0.18,shape:'hexagram'},
+  fire:{colors:['#fff7c8','#ffb347','#ff6b1a','#ff2f00'],count:34,speed:[1.0,3.0],up:[1.4,3.4],spread:0.82,size:0.17,swirl:0.18,shape:'flame'},
+  ice:{colors:['#ffffff','#d8f5ff','#86dbff','#5ca8ff'],count:48,speed:[0.8,2.5],up:[1.2,2.5],spread:0.88,size:0.14,shape:'snowflake'},
+  tornado:{colors:['#fdf2ff','#ffd8ef','#b8ecff','#ffffff'],count:42,speed:[0.7,2.0],up:[1.8,3.8],spread:0.78,size:0.16,swirl:0.95,shape:'spiral'},
 };
 
 function sampleBurstPattern(shape,i,count){
@@ -2589,61 +2628,75 @@ function sampleBurstPattern(shape,i,count){
     const ang=t*Math.PI*2;
     const sx=16*Math.pow(Math.sin(ang),3);
     const sy=13*Math.cos(ang)-5*Math.cos(2*ang)-2*Math.cos(3*ang)-Math.cos(4*ang);
-    return {x:sx/18,y:(sy+17)/34,ring:0.65+Math.random()*0.28};
+    return {x:sx/18,z:(sy+17)/17-1.0,y:0.42+Math.random()*0.08,ring:0.74};
   }
-  if(shape==='star'){
+  if(shape==='hexagram'){
     const ang=t*Math.PI*2;
-    const outer=1.0;
-    const inner=0.42;
-    const starR=((i%2)===0?outer:inner)*(0.82+Math.random()*0.18);
-    return {x:Math.cos(ang)*starR,y:0.45+Math.random()*0.32,ring:starR};
+    const tri=((i%6)%3)/3*Math.PI*2;
+    const triSet=(i%6)<3 ? 0 : Math.PI;
+    const radius=0.92-(Math.floor(i/6)%2)*0.18;
+    const starAng=tri+triSet/3;
+    return {x:Math.cos(starAng)*radius,z:Math.sin(starAng)*radius,y:0.46+Math.random()*0.08,ring:radius};
   }
   if(shape==='snowflake'){
     const arm=((i%6)/6)*Math.PI*2;
-    const branch=0.35+Math.floor(i/6)%3*0.2;
-    const wiggle=((i%2)?1:-1)*(0.1+Math.random()*0.06);
-    return {x:Math.cos(arm)*branch-Math.sin(arm)*wiggle,y:0.35+branch*0.45,ring:branch};
+    const branchLevel=Math.floor(i/6)%4;
+    const branch=0.28+branchLevel*0.18;
+    const twig=((i%12)>=6 ? 0.18 : -0.18);
+    return {
+      x:Math.cos(arm)*branch + Math.cos(arm+twig)*0.18*(branchLevel>0 ? 1 : 0),
+      z:Math.sin(arm)*branch + Math.sin(arm+twig)*0.18*(branchLevel>0 ? 1 : 0),
+      y:0.4+Math.random()*0.08,
+      ring:branch
+    };
   }
   if(shape==='spiral'){
     const ang=t*Math.PI*4.5;
     const radius=0.16+t*0.88;
-    return {x:Math.cos(ang)*radius,y:0.2+t*0.95,ring:radius};
+    return {x:Math.cos(ang)*radius,z:Math.sin(ang)*radius,y:0.2+t*0.95,ring:radius};
   }
   if(shape==='flame'){
     const ang=(Math.random()-0.5)*0.9;
     const radius=0.12+Math.random()*0.28;
-    return {x:Math.sin(ang)*radius,y:0.35+Math.random()*0.9,ring:radius};
+    return {x:Math.sin(ang)*radius,z:(Math.random()-0.5)*0.16,y:0.35+Math.random()*0.9,ring:radius};
   }
   if(shape==='confetti'){
     const ang=Math.random()*Math.PI*2;
     const radius=0.18+Math.random()*0.82;
-    return {x:Math.cos(ang)*radius,y:Math.random()*0.9,ring:radius};
+    return {x:Math.cos(ang)*radius,z:Math.sin(ang)*radius,y:Math.random()*0.9,ring:radius};
   }
   const ang=t*Math.PI*2;
   const radius=0.45+Math.random()*0.4;
-  return {x:Math.cos(ang)*radius,y:0.25+Math.random()*0.45,ring:radius};
+  return {x:Math.cos(ang)*radius,z:Math.sin(ang)*radius,y:0.25+Math.random()*0.45,ring:radius};
 }
 
 function spawnKOBurst(x,y,z,effectId='amber'){
   const fx=BURST_EFFECT_PRESETS[effectId]||BURST_EFFECT_PRESETS.amber;
   const colors=fx.colors.map(c=>new THREE.Color(c));
+  const preLife=0.12;
   for(let i=0;i<fx.count;i++){
     const idx=koCursor;koCursor=(koCursor+1)%KO_MAX;
-    const ang=((fx.spokes ? (i%fx.spokes)/fx.spokes : Math.random())*Math.PI*2) + (Math.random()-0.5)*(fx.spokes?0.18:0.55);
     const pattern=sampleBurstPattern(fx.shape,i,fx.count);
-    const px=pattern.x*fx.spread;
-    const pz=(pattern.ring||0.4)*(Math.sin(ang)*0.7 + (Math.random()-0.5)*0.24);
-    koPos[idx*3]=x+px*0.28;
-    koPos[idx*3+1]=y+0.24+pattern.y*0.72;
-    koPos[idx*3+2]=z+pz*0.28;
+    const ang=Math.atan2(pattern.z||0,pattern.x||0);
+    koPos[idx*3]=x+(pattern.x||0)*0.22;
+    koPos[idx*3+1]=y+0.42+(pattern.y||0.4)*0.42;
+    koPos[idx*3+2]=z+(pattern.z||0)*0.22;
     const speed=fx.speed[0]+Math.random()*(fx.speed[1]-fx.speed[0]);
     const up=fx.up[0]+Math.random()*(fx.up[1]-fx.up[0]);
     const swirl=fx.swirl||0;
-    koVel[idx*3]=pattern.x*speed*0.65 + Math.cos(ang)*speed*0.35 + (-Math.sin(ang))*swirl;
-    koVel[idx*3+1]=up+pattern.y*0.45;
-    koVel[idx*3+2]=pz*speed*0.9 + Math.sin(ang)*speed*0.25 + (Math.cos(ang))*swirl;
-    koLife[idx]=0.42+Math.random()*0.42;
+    koVel[idx*3]=((pattern.x||0)*0.12);
+    koVel[idx*3+1]=0.06+Math.random()*0.05;
+    koVel[idx*3+2]=((pattern.z||0)*0.12);
+    koLife[idx]=preLife + 0.42+Math.random()*0.34;
     koAge[idx]=0;
+    if(!koPoints.userData.meta) koPoints.userData.meta=[];
+    koPoints.userData.meta[idx]={
+      burstAt:preLife,
+      vx:(pattern.x||0)*speed*0.55 + Math.cos(ang)*speed*0.28 + (-Math.sin(ang))*swirl,
+      vy:up+(pattern.y||0.4)*0.35,
+      vz:(pattern.z||0)*speed*0.55 + Math.sin(ang)*speed*0.28 + (Math.cos(ang))*swirl,
+      popped:false,
+    };
     const c=colors[(Math.random()*colors.length)|0];
     koCol[idx*3]=c.r;
     koCol[idx*3+1]=c.g;
@@ -2658,13 +2711,23 @@ function updateKOBursts(dt){
     if(koAge[i]>=koLife[i]) continue;
     anyActive=true;
     koAge[i]+=dt;
-    koVel[i*3+1]-=9*dt;
+    const meta=koPoints.userData.meta?.[i];
+    if(meta && !meta.popped && koAge[i]>=meta.burstAt){
+      meta.popped=true;
+      koVel[i*3]=meta.vx;
+      koVel[i*3+1]=meta.vy;
+      koVel[i*3+2]=meta.vz;
+    }
+    koVel[i*3+1]-=(meta && !meta.popped ? 2.2 : 9)*dt;
     koPos[i*3]+=koVel[i*3]*dt;
     koPos[i*3+1]+=koVel[i*3+1]*dt;
     koPos[i*3+2]+=koVel[i*3+2]*dt;
-    koVel[i*3]*=0.985;
-    koVel[i*3+2]*=0.985;
-    if(koAge[i]>=koLife[i]) koPos[i*3+1]=-9999;
+    koVel[i*3]*=(meta && !meta.popped)?0.9:0.985;
+    koVel[i*3+2]*=(meta && !meta.popped)?0.9:0.985;
+    if(koAge[i]>=koLife[i]){
+      koPos[i*3+1]=-9999;
+      if(meta) koPoints.userData.meta[i]=null;
+    }
   }
   if(anyActive){
     koGeo.attributes.position.needsUpdate=true;
@@ -3014,6 +3077,31 @@ function getCurrentPlayerAttackAction(){
   return I[def.action]||I.actPunch||null;
 }
 
+function startAttack(kind='punch'){
+  if(player.attackCooldown>0||player.attackT>=0||!player.inst) return false;
+  attackInputState.pendingTapAt=0;
+  const def=PLAYER_ATTACK_SEQUENCE.find(item=>item.id===kind)||PLAYER_ATTACK_SEQUENCE[0];
+  const I=player.inst;
+  const act=I[def.action]||I.actPunch||null;
+  player.attackT=0;
+  player.currentAttackAnim=def.id;
+  player.currentAttackDur=getPlayerAttackDuration(def);
+  player.specialAnim=def.id;
+  player.specialAnimT=player.currentAttackDur;
+  player.attackHit.clear();
+  attackBtn.classList.add('cooling');
+  if(act){
+    I.actIdle&&I.actIdle.fadeOut(0.05);
+    I.actRun&&I.actRun.fadeOut(0.05);
+    I.actJump&&I.actJump.fadeOut(0.05);
+    I.actPunch&&I.actPunch.fadeOut(0.05);
+    I.actKick&&I.actKick.fadeOut(0.05);
+    I.actPunchCombo&&I.actPunchCombo.fadeOut(0.05);
+    act.reset().fadeIn(0.05).play();
+  }
+  return true;
+}
+
 function attachPlayer(){
   const inst=buildPlayerInstance();
   if(!inst){setTimeout(attachPlayer,100);return}
@@ -3338,12 +3426,14 @@ function updateArtists(dt){
       if(!a.wasFrozen){
         a.wasFrozen=true;
         a.preIceState=a.state;
+        setArtistFrozenLook(a.inst,true);
         if(a.state!=='dying') artistTransition(a,'idle');
         spawnKOBurst(p.x,p.y+0.9,p.z,'ice');
       }
       continue;
     }else if(a.wasFrozen){
       a.wasFrozen=false;
+      setArtistFrozenLook(a.inst,false);
       if(a.state==='idle' && a.preIceState && a.preIceState!=='idle' && a.preIceState!=='dying'){
         artistTransition(a,a.preIceState);
       }
@@ -3728,12 +3818,21 @@ function setShopOpen(open){
 let lastSpecialBtnHTML='';
 let lastSpecialBtnCooling=null;
 let specialBtnRefreshAccumulator=0;
+const ATTACK_HOLD_MS=240;
+const ATTACK_DOUBLE_TAP_MS=220;
+const BURST_UNLOCK_ITEMS=[
+  {id:'amber',name:'AMBER',label:'Default',icon:'✦',unlockKills:0},
+  {id:'ice',name:'SNOWFLAKE',label:'10 KOs',icon:'❄',unlockKills:10},
+  {id:'star',name:'HEXAGRAM',label:'20 KOs',icon:'★',unlockKills:20},
+  {id:'petal',name:'HEART',label:'30 KOs',icon:'❤',unlockKills:30},
+];
+const attackInputState={isDown:false,pointerId:null,downAt:0,pendingTapAt:0};
 
 function specialCooldownRemaining(id){
   return Math.max(0,player.specialCooldowns?.[id]||0);
 }
 
-function findBurstItem(id){ return BURST_SHOP_ITEMS.find(item=>item.id===id)||BURST_SHOP_ITEMS[0]; }
+function findBurstItem(id){ return BURST_UNLOCK_ITEMS.find(item=>item.id===id)||BURST_UNLOCK_ITEMS[0]; }
 function findWeaponItem(id){ return WEAPON_SHOP_ITEMS.find(item=>item.id===id)||null; }
 function getSkillIcon(id,kind){
   if(kind==='burst') return findBurstItem(id)?.icon||'✦';
@@ -3772,11 +3871,32 @@ function syncShopIcons(){
 }
 
 function applyCheatInventory(){
-  purchasedBurstEffects=new Set(BURST_SHOP_ITEMS.map(item=>item.id));
+  purchasedBurstEffects=new Set(BURST_UNLOCK_ITEMS.map(item=>item.id));
   purchasedWeapons=new Set(WEAPON_SHOP_ITEMS.map(item=>item.id));
   if(!equippedWeapon) equippedWeapon='flame';
   cleanerUses=Math.max(cleanerUses,999);
   coinCount=Math.max(coinCount,999);
+}
+
+function syncBurstShopVisibility(){
+  const supported=new Set(BURST_UNLOCK_ITEMS.filter(item=>item.id!=='amber').map(item=>`buy-burst-${item.id}-btn`));
+  for(const [id,btn] of Object.entries(burstBuyButtons)){
+    const card=btn?.closest('.shop-card');
+    if(card) card.style.display=supported.has(`buy-burst-${id}-btn`) ? '' : 'none';
+  }
+}
+
+function unlockBurstEffectsByKills(){
+  let changed=false;
+  for(const item of BURST_UNLOCK_ITEMS){
+    if(item.id==='amber') continue;
+    if(killCount>=item.unlockKills && !purchasedBurstEffects.has(item.id)){
+      purchasedBurstEffects.add(item.id);
+      if(equippedBurstEffect==='amber') equippedBurstEffect=item.id;
+      changed=true;
+    }
+  }
+  if(changed) renderShopState();
 }
 
 function refreshSpecialButton(){
@@ -3815,7 +3935,7 @@ function renderLoadoutBar(){
       <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
     </div>`
   );
-  for(const item of BURST_SHOP_ITEMS){
+  for(const item of BURST_UNLOCK_ITEMS){
     if(!purchasedBurstEffects.has(item.id)) continue;
     const active=item.id===equippedBurstEffect?' active':'';
     parts.push(
@@ -3865,17 +3985,18 @@ function renderLoadoutBar(){
 function renderShopState(){
   if(debugCheatMode) applyCheatInventory();
   syncShopIcons();
+  syncBurstShopVisibility();
   if(buyCleanerBtn){
     buyCleanerBtn.disabled=!debugCheatMode&&coinCount<1;
     buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
   }
-  for(const item of BURST_SHOP_ITEMS){
+  for(const item of BURST_UNLOCK_ITEMS){
     if(item.id==='amber') continue;
     const btn=burstBuyButtons[item.id];
     if(!btn) continue;
     const owned=purchasedBurstEffects.has(item.id);
-    btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-    btn.textContent=owned ? (equippedBurstEffect===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+    btn.disabled=true;
+    btn.textContent=owned ? (equippedBurstEffect===item.id?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
   }
   for(const item of WEAPON_SHOP_ITEMS){
     const btn=weaponBuyButtons[item.id];
@@ -3973,13 +4094,11 @@ buyCleanerBtn?.addEventListener('click',()=>{
   cleanerUses+=3;
   renderShopState();
 });
-for(const item of BURST_SHOP_ITEMS){
+for(const item of BURST_UNLOCK_ITEMS){
   if(item.id==='amber') continue;
   burstBuyButtons[item.id]?.addEventListener('click',()=>{
-    if(purchasedBurstEffects.has(item.id)) return;
-    if(!spendCoins(item.cost)) return;
-    purchasedBurstEffects.add(item.id);
-    equippedBurstEffect=item.id;
+    if(!purchasedBurstEffects.has(item.id)) return;
+    equippedBurstEffect=(equippedBurstEffect===item.id && item.id!=='amber') ? 'amber' : item.id;
     renderShopState();
   });
 }
@@ -4078,6 +4197,33 @@ function updateSketch(dt,now){
 
 // ===== Input =====
 const keys={w:false,a:false,s:false,d:false,space:false,up:false,down:false,left:false,right:false};
+function handleAttackPress(pointerId=null){
+  if(attackInputState.isDown) return;
+  attackInputState.isDown=true;
+  attackInputState.pointerId=pointerId;
+  attackInputState.downAt=performance.now();
+}
+
+function handleAttackRelease(pointerId=null){
+  if(!attackInputState.isDown) return;
+  if(pointerId!==null && attackInputState.pointerId!==null && pointerId!==attackInputState.pointerId) return;
+  const heldMs=performance.now()-attackInputState.downAt;
+  attackInputState.isDown=false;
+  attackInputState.pointerId=null;
+  if(heldMs>=ATTACK_HOLD_MS){
+    attackInputState.pendingTapAt=0;
+    startAttack('kick');
+    return;
+  }
+  const now=performance.now();
+  if(attackInputState.pendingTapAt && now<=attackInputState.pendingTapAt){
+    attackInputState.pendingTapAt=0;
+    startAttack('combo');
+  }else{
+    attackInputState.pendingTapAt=now+ATTACK_DOUBLE_TAP_MS;
+  }
+}
+
 window.addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   if(k==='w')keys.w=true;
@@ -4089,7 +4235,7 @@ window.addEventListener('keydown',e=>{
   if(k==='arrowleft')keys.left=true;
   if(k==='arrowright')keys.right=true;
   if(k===' '||k==='spacebar'){keys.space=true;tryJump();e.preventDefault()}
-  if(k==='f'||k==='j'){tryAttack();e.preventDefault()}
+  if((k==='f'||k==='j') && !e.repeat){handleAttackPress();e.preventDefault()}
   if(k==='q'||k==='k'){useSpecialWeapon();e.preventDefault()}
   if(k==='e'||(k==='c'&&!e.shiftKey)){ if(currentCleanTarget) { cleanPillar(currentCleanTarget); e.preventDefault(); } }
   // Shift+X: toggle the debug coordinate readout. Updated in tick().
@@ -4118,6 +4264,7 @@ window.addEventListener('keyup',e=>{
   if(k==='arrowleft')keys.left=false;
   if(k==='arrowright')keys.right=false;
   if(k===' '||k==='spacebar')keys.space=false;
+  if(k==='f'||k==='j'){handleAttackRelease();e.preventDefault()}
 });
 
 // Joystick
@@ -4154,35 +4301,14 @@ let joyX=0,joyY=0;
 
 // Attack button
 const attackBtn=document.getElementById('attack-btn');
-attackBtn.addEventListener('pointerdown',e=>{e.preventDefault();tryAttack()});
+attackBtn.addEventListener('pointerdown',e=>{e.preventDefault();handleAttackPress(e.pointerId)});
+attackBtn.addEventListener('pointerup',e=>{e.preventDefault();handleAttackRelease(e.pointerId)});
+attackBtn.addEventListener('pointercancel',e=>{e.preventDefault();handleAttackRelease(e.pointerId)});
+attackBtn.addEventListener('pointerleave',e=>{ if(attackInputState.isDown) handleAttackRelease(e.pointerId); });
 
 // Jump button
 const jumpBtn=document.getElementById('jump-btn');
 if(jumpBtn) jumpBtn.addEventListener('pointerdown',e=>{e.preventDefault();tryJump()});
-
-function tryAttack(){
-  if(player.attackCooldown>0||player.attackT>=0) return;
-  const def=getPlayerAttackDef();
-  const act=getCurrentPlayerAttackAction();
-  player.attackT=0;
-  player.currentAttackAnim=def.id;
-  player.currentAttackDur=getPlayerAttackDuration(def);
-  player.specialAnim=def.id;
-  player.specialAnimT=player.currentAttackDur;
-  player.attackHit.clear();
-  player.attackVariantIndex=(player.attackVariantIndex+1)%PLAYER_ATTACK_SEQUENCE.length;
-  attackBtn.classList.add('cooling');
-  const I=player.inst;
-  if(I&&act){
-    I.actIdle&&I.actIdle.fadeOut(0.05);
-    I.actRun&&I.actRun.fadeOut(0.05);
-    I.actJump&&I.actJump.fadeOut(0.05);
-    I.actPunch&&I.actPunch.fadeOut(0.05);
-    I.actKick&&I.actKick.fadeOut(0.05);
-    I.actPunchCombo&&I.actPunchCombo.fadeOut(0.05);
-    act.reset().fadeIn(0.05).play();
-  }
-}
 
 function tryJump(){
   if(!player.inst||player.isAir) return;
@@ -4233,6 +4359,10 @@ function updateCam(){
 // ===== Player update =====
 function updatePlayer(dt){
   if(!player.inst)return;
+  if(!attackInputState.isDown && attackInputState.pendingTapAt && performance.now()>=attackInputState.pendingTapAt){
+    attackInputState.pendingTapAt=0;
+    startAttack('punch');
+  }
   // Build input direction in world space relative to camera
   const fwdX=-Math.sin(camYaw),fwdZ=-Math.cos(camYaw);
   const rightX=Math.cos(camYaw),rightZ=-Math.sin(camYaw);
@@ -4245,17 +4375,19 @@ function updatePlayer(dt){
   const il=Math.sqrt(ix*ix+iy*iy);
   if(il>1){ix/=il;iy/=il}
   const hasInput=(il>0.05);
+  const attackSlowMul=(attackInputState.isDown||player.attackT>=0)?0.8:1;
   // forward = away from camera; W (ky=-1) and joystick-up (joyY<0) should both move forward
   const mdx=-iy*fwdX+ix*rightX;
   const mdz=-iy*fwdZ+ix*rightZ;
   if(hasInput){
-    player.curSpeed=Math.min(PLAYER_MAX_SPEED,player.curSpeed+PLAYER_ACCEL*dt);
+    const targetSpeed=PLAYER_MAX_SPEED*attackSlowMul;
+    player.curSpeed=Math.min(targetSpeed,player.curSpeed+PLAYER_ACCEL*dt);
     player.yaw=Math.atan2(mdx,mdz);
   }else{
-    player.curSpeed=Math.max(0,player.curSpeed-PLAYER_DECEL*dt);
+    player.curSpeed=0;
   }
   // Speed multiplier when wading
-  const speedMul=player.inWater?WATER_SPEED_MULT:1;
+  const speedMul=(player.inWater?WATER_SPEED_MULT:1)*attackSlowMul;
   if(player.curSpeed>0){
     player.root.position.x+=mdx*player.curSpeed*speedMul*dt;
     player.root.position.z+=mdz*player.curSpeed*speedMul*dt;
@@ -4324,7 +4456,7 @@ function updatePlayer(dt){
   // Animation blending
   const I=player.inst;
   I.mixer.update(dt);
-  const moving=hasInput && player.curSpeed>0.12;
+  const moving=hasInput && player.curSpeed>0.08;
   const inOneShot=(player.attackT>=0 || player.specialAnimT>0);
   if(inOneShot){
     player.specialAnimT=Math.max(0,player.specialAnimT-dt);
@@ -4338,8 +4470,8 @@ function updatePlayer(dt){
     if(I.actRun && !I.actRun.isRunning()) I.actRun.reset().fadeIn(0.15).play();
   }else{
     if(I.actJump&&I.actJump.isRunning()) I.actJump.fadeOut(0.15);
-    if(I.actRun&&I.actRun.isRunning()) I.actRun.fadeOut(0.15);
-    if(I.actIdle&&!I.actIdle.isRunning()) I.actIdle.reset().fadeIn(0.15).play();
+    if(I.actRun&&I.actRun.isRunning()){ I.actRun.fadeOut(0.08); I.actRun.stop(); }
+    if(I.actIdle&&!I.actIdle.isRunning()) I.actIdle.reset().fadeIn(0.08).play();
   }
   if(!inOneShot){
     I.actPunch&&I.actPunch.isRunning()&&I.actPunch.fadeOut(0.08);
@@ -4403,7 +4535,7 @@ function killArtist(a){
   I.actPanicRun&&I.actPanicRun.fadeOut(0.2);
   I.actPaint&&I.actPaint.fadeOut(0.2);
   spawnKOBurst(a.inst.outer.position.x,a.inst.outer.position.y+0.25,a.inst.outer.position.z,equippedBurstEffect);
-  killCount++;updateKillUI();
+  killCount++;updateKillUI();unlockBurstEffectsByKills();
 }
 
 // ===== HUD / Timer / Game state =====
@@ -4764,7 +4896,7 @@ async function init(){
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
 
-  await Promise.all([loadCharacterTemplate(),loadPlayerAssets(),loadCoin(),loadPlayground()]);
+  await Promise.all([loadCharacterTemplate(),loadPlayerAssets(),loadPlayground()]);
   if(bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
     playableLayer=await detectPlayableLayer(p=>{
@@ -4791,8 +4923,29 @@ async function init(){
   startBtn.disabled=false;
   loadExtraCharacterClips().catch(e=>console.warn('[char] extra clip load failed',e));
   loadDeferredPlayerSkillClips();
+  loadCoin();
+  if(bvhReady){
+    Promise.resolve().then(async()=>{
+      try{
+        RIVERS=await detectRiverBounds();
+        RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
+        if(RIVERS&&RIVERS.length){
+          console.log('[river] detected:',RIVERS);
+          waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
+          placePlayerOnPlayableLayer();
+        }else{
+          console.warn('[river] no trench detected â€” playground may be flat');
+        }
+      }catch(e){
+        console.warn('[river] detection failed',e);
+      }
+    });
+  }else{
+    console.warn('[river] skipped â€” no BVH support');
+  }
   tick(); // begin rendering — intro is still on top
 
+  return;
   // River detection needs many raycasts. Only attempt when BVH is available.
   if(bvhReady){
     try{

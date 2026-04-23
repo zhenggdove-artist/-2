@@ -34,3 +34,8 @@ TODO:
 
 - Re-exported mainplayermodel/player_kick.glb, player_punchcombo.glb, and replaced player_jump.glb from the user's new FBX actions using armature-only GLB export so the files stay lightweight.
 - Updated player combat to rotate attacks in order: punch -> kick -> combo, with per-clip one-shot timing instead of a single fixed punch duration.
+
+- Replaced mainplayermodel/player_run.glb with a lightweight armature-only export from mainplayermodel/action/Fast Run.fbx so the player's run animation uses the new fast-run clip without increasing runtime asset cost.
+
+- Reworked player attack input toward tap/hold semantics: short tap schedules punch, long hold triggers kick, and a second quick tap upgrades the pending hit to combo. Also cut player speed by 20% while attacking/holding attack and snap run->idle immediately when movement input stops to reduce visible foot-sliding.
+- Converted burst FX progression from shop purchases to KO-based unlocks in code (10/20/30 kills for snowflake/hexagram/heart) and hid unsupported legacy burst shop cards. Startup now defers coin loading and schedules river scanning asynchronously instead of putting both on the critical path.
