@@ -2321,8 +2321,12 @@ function sanitizePlayerClip(clip,name){
   if(!clip) return null;
   const c=clip.clone();
   c.name=name||c.name||'player-clip';
+  c.tracks=c.tracks.filter(t=>{
+    if(!t.name||!t.name.endsWith('.position')) return true;
+    return !/hips|root|armature|mixamorig/i.test(t.name);
+  });
   const first=c.tracks[0]?.name||'?';
-  console.log('[clip]',c.name,'tracks:',c.tracks.length,'bound: raw','first:',first);
+  console.log('[clip]',c.name,'tracks:',c.tracks.length,'bound: player-local','first:',first);
   _clipDebug.clips[c.name]={tracks:c.tracks.length,bound:c.tracks.length,first};
   return c;
 }
