@@ -3526,7 +3526,7 @@ function pickSpawnPos(){
 
 function pickExitPos(fromPos){
   const b=getPlayableBounds();
-  const margin=4.5;
+  const margin=0.6;
   const px=fromPos?.x ?? b.centerX;
   const pz=fromPos?.z ?? b.centerZ;
   const dists=[
@@ -3537,12 +3537,12 @@ function pickExitPos(fromPos){
   ].sort((a,b2)=>a.dist-b2.dist);
   let x=px,z=pz;
   switch(dists[0].side){
-    case 'left': x=b.minX-margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
-    case 'right': x=b.maxX+margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
-    case 'top': z=b.minZ-margin; x=clamp(px,b.minX+1,b.maxX-1); break;
-    default: z=b.maxZ+margin; x=clamp(px,b.minX+1,b.maxX-1); break;
+    case 'left': x=b.minX+margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
+    case 'right': x=b.maxX-margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
+    case 'top': z=b.minZ+margin; x=clamp(px,b.minX+1,b.maxX-1); break;
+    default: z=b.maxZ-margin; x=clamp(px,b.minX+1,b.maxX-1); break;
   }
-  return new THREE.Vector3(x,getPlayableSurfaceY(clamp(x,b.minX,b.maxX),clamp(z,b.minZ,b.maxZ),0)+GROUND_Y_OFFSET,z);
+  return new THREE.Vector3(x,getPlayableSurfaceY(x,z,0)+GROUND_Y_OFFSET,z);
 }
 
 function pickRiverPoint(){
@@ -3982,24 +3982,14 @@ function updateArtists(dt){
       const lt=a.leaveTarget;
       const toX=lt.x-p.x, toZ=lt.z-p.z;
       const d=Math.sqrt(toX*toX+toZ*toZ);
-      const b=getPlayableBounds();
-      const outsideArena=p.x<b.minX-1.2||p.x>b.maxX+1.2||p.z<b.minZ-1.2||p.z>b.maxZ+1.2;
-      if(d<1 || outsideArena){
-        a.leaveTarget=pickExitPos(p);
-        a.stuckFrames=0;
+      if(d<0.95){
+        removeArtist(i);
+        continue;
       }
       let hx=toX/d, hz=toZ/d;
       const stuck=a.stuckFrames||0;
       if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
-      const speed=getArtistCruiseSpeed(a,ARTIST_WALK_SPEED)*1.18;
-      const beforeX=p.x, beforeZ=p.z;
-      p.x+=hx*speed*dt;
-      p.z+=hz*speed*dt;
-      a.inst.outer.rotation.y=Math.atan2(hx,hz);
-      const stepLen=Math.hypot(p.x-beforeX,p.z-beforeZ);
-      const wanted=speed*dt;
-      if(wanted>0.01 && stepLen<wanted*0.35) a.stuckFrames=(a.stuckFrames||0)+1;
-      else a.stuckFrames=Math.max(0,(a.stuckFrames||0)-2);
+      moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED)*1.08);
       if(stuck>80){
         // Can't reach the spawn point — just despawn.
         removeArtist(i);
