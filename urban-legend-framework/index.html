@@ -93,7 +93,7 @@
   /* ART WINS — fade to black cutscene when the bar fills */
   #art-wins{position:fixed;inset:0;z-index:700;display:flex;
     align-items:center;justify-content:center;flex-direction:column;gap:24px;
-    background:#000;opacity:0;pointer-events:none;
+    background:transparent;opacity:0;pointer-events:none;
     transition:opacity 2.2s ease}
   #art-wins.show{opacity:1;pointer-events:auto}
   #art-wins .aw-text{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
@@ -104,12 +104,11 @@
     color:transparent;-webkit-text-fill-color:transparent;
     animation:awShimmer 3s linear infinite;
     filter:drop-shadow(0 6px 20px rgba(0,0,0,0.9))}
-  #art-wins .aw-sub{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
-    color:#d8d8d8;letter-spacing:0.25em;font-size:clamp(11px,1.6vw,14px);opacity:0.7}
+  #art-wins .aw-sub{display:none}
   #art-wins .aw-btn{padding:12px 26px;border-radius:999px;border:1px solid rgba(255,255,255,0.72);
-    background:rgba(255,255,255,0.08);color:#fff;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    background:transparent;color:#fff;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
     font-size:14px;letter-spacing:0.25em;cursor:pointer;text-transform:uppercase;
-    box-shadow:0 8px 24px rgba(0,0,0,0.45)}
+    box-shadow:none}
   @keyframes awShimmer{from{background-position:0% 50%}to{background-position:300% 50%}}
   #kill-box{color:#ffcf5e}
   #coin-box{color:#FFD700}
@@ -2503,7 +2502,8 @@ const artists=[]; // {inst, state:'walk'|'paint'|'leave'|'idle'|'flee'|'dying', 
 let artistIdCounter=0;
 const ARTIST_TINT=new THREE.Color('#ffc8c8'); // subtle reddish tint
 const ARTIST_WALK_SPEED=2.8;
-const ARTIST_PAINT_TIME=7;          // sec to fully paint a pillar
+const ARTIST_FAR_WALK_MUL=0.5;      // beyond 10m from player, artists move at half walk speed
+const ARTIST_PAINT_TIME=10;         // sec to fully paint a pillar
 const ARTIST_SPAWN_BASE=2.2;        // base spawn interval (sec)
 const ARTIST_MAX_ALIVE=12;
 const ARTIST_FLEE_TRIGGER=3.0;      // player closer than this → flee
@@ -2769,6 +2769,15 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
   }
 }
 
+function getArtistCruiseSpeed(a,baseSpeed){
+  const p=a.inst?.outer?.position;
+  if(!p||!player.root) return baseSpeed;
+  const dx=p.x-player.root.position.x;
+  const dz=p.z-player.root.position.z;
+  if(dx*dx+dz*dz>ARTIST_FLEE_SAFE*ARTIST_FLEE_SAFE) return baseSpeed*ARTIST_FAR_WALK_MUL;
+  return baseSpeed;
+}
+
 function updateArtists(dt){
   const px=player.root.position.x, pz=player.root.position.z;
   for(let i=artists.length-1;i>=0;i--){
@@ -2838,7 +2847,7 @@ function updateArtists(dt){
         let hx=toX/dist, hz=toZ/dist;
         const stuck=a.stuckFrames||0;
         if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
-        moveArtist(a,dt,hx,hz,ARTIST_WALK_SPEED);
+        moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED));
         if(stuck>50){
           if(a.target&&a.target.claimedBy===a) a.target.claimedBy=null;
           a.target=null;
@@ -2945,7 +2954,7 @@ function updateArtists(dt){
       let hx=toX/d, hz=toZ/d;
       const stuck=a.stuckFrames||0;
       if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
-      moveArtist(a,dt,hx,hz,ARTIST_WALK_SPEED);
+      moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED));
       if(stuck>80){
         // Can't reach the spawn point — just despawn.
         removeArtist(i);
@@ -3131,6 +3140,7 @@ let cleanerUses=0;
 let purchasedBurstEffects=new Set(['amber']);
 let equippedBurstEffect='amber';
 let currentCleanTarget=null;
+let cleanPromptCooldown=0;
 const cleanBtn=document.getElementById('clean-btn');
 const shopBtn=document.getElementById('shop-btn');
 const shopPanel=document.getElementById('shop-panel');
@@ -3249,6 +3259,11 @@ function cleanPillar(p){
 }
 
 function updateCleanPrompt(){
+  if(cleanPromptCooldown>0){
+    cleanPromptCooldown--;
+    return;
+  }
+  cleanPromptCooldown=6; // ~10 checks/sec instead of every frame
   currentCleanTarget=null;
   if(gameState!=='playing' || cleanerUses<=0 || !player.root){
     cleanBtn.classList.add('hidden');
@@ -3673,7 +3688,7 @@ let gameState='intro'; // intro|playing|ended|artWins
 let gameTime=0;
 let killCount=0;
 let paintFillCount=0;
-const PAINT_FILL_GOAL=10;
+const PAINT_FILL_GOAL=15;
 const killEl=document.getElementById('kill-count');
 const timerEl=document.getElementById('timer-text');
 const timerBox=document.getElementById('timer-box');
@@ -3703,6 +3718,7 @@ function updatePaintBar(){
 function triggerArtWins(){
   gameState='artWins';
   // Kick off the fade-to-black + overlay reveal
+  fadeEl.classList.add('show');
   artWinsOverlay.classList.add('show');
   // Freeze artists where they are; no more spawns, no more movement.
   // The scene keeps rendering underneath the fade for a couple seconds
@@ -3774,6 +3790,7 @@ function startGame(){
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
+  fadeEl.classList.remove('show');
   artWinsOverlay.classList.remove('show');
   updateKillUI();updateCoinUI();updateTimerUI();updatePaintBar();
   // Try autoplay BGM
@@ -3826,6 +3843,7 @@ replayBtn.addEventListener('click',()=>{
   startGame();
 });
 artWinsRetryBtn?.addEventListener('click',()=>{
+  fadeEl.classList.remove('show');
   artWinsOverlay.classList.remove('show');
   resetWorld();
   startGame();

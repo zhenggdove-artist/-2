@@ -18,6 +18,8 @@ Progress:
 - Added a shop UI, equipment/loadout bar, and cleaner economy. Cleaners cost 1 coin for 3 uses and can remove nearby graffiti while reducing the paint bar by one filled pillar.
 - Added purchasable knockout burst effects (5 coins each) plus a default amber burst; equipped effect is switched from the new bottom-left loadout bar and plays on artist KO.
 - Added a retry button to the ART WINS overlay and a contextual CLEAN button / E key interaction near graffiti.
+- Tuned artists so painting takes 10 seconds, walk-speed halves when they are farther than 10m from the player, and ART WINS now requires 15 filled pillars.
+- Simplified the ART WINS overlay visuals to text-only over the existing fade layer and throttled clean-target scanning to reduce per-frame hitches.
 
 TODO:
 - Browser-test the new shop/clean/loadout flow and verify cleaner use, paint-bar reduction, and ART WINS retry behaviour end-to-end.
