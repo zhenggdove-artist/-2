@@ -1485,7 +1485,7 @@ function detectPillars(root){
       pos:new THREE.Vector3(p.center.x,0,p.center.z),
       topY:p.size.y,
       halfW:Math.max(p.size.x,p.size.z)*0.5,
-      mesh:p.mesh,graffiti:null,paintProgress:0,claimedBy:null
+      mesh:p.mesh,graffiti:null,paintProgress:0,claimedBy:null,synthetic:false
     });
   }
   if(!pillars.length){
@@ -1493,9 +1493,58 @@ function detectPillars(root){
     for(let i=0;i<8;i++){
       const a=(i/8)*Math.PI*2;
       const x=Math.cos(a)*12,z=Math.sin(a)*12;
-      pillars.push({pos:new THREE.Vector3(x,0,z),topY:4,halfW:0.7,mesh:null,graffiti:null,paintProgress:0,claimedBy:null});
+      pillars.push({pos:new THREE.Vector3(x,0,z),topY:4,halfW:0.7,mesh:null,graffiti:null,paintProgress:0,claimedBy:null,synthetic:true});
     }
   }
+}
+
+function scanPillarsFromGeometry(sampleCount=16){
+  if(!playableLayer||!playgroundRoot) return [];
+  const cy=playableLayer.y+1.2;
+  const center=new THREE.Vector3(playableLayer.centerX,cy,playableLayer.centerZ);
+  const ray=new THREE.Raycaster();
+  ray.firstHitOnly=false;
+  ray.far=Math.max(8,worldBoundR*1.1);
+  const found=[];
+  const sampleOffsets=[0,0.5];
+  for(const offset of sampleOffsets){
+    for(let i=0;i<sampleCount;i++){
+      const ang=((i+offset)/sampleCount)*Math.PI*2;
+      const dir=new THREE.Vector3(Math.cos(ang),0,Math.sin(ang));
+      const origin=center.clone().addScaledVector(dir,1.0);
+      ray.set(origin,dir);
+      const hits=ray.intersectObject(playgroundRoot,true);
+      for(const hit of hits){
+        const normal=worldFaceNormal(hit);
+        if(!normal||Math.abs(normal.y)>0.58) continue;
+        if(hit.distance<1.2) continue;
+        if(Math.abs(hit.point.y-cy)>2.2) continue;
+        const pos=hit.point.clone().addScaledVector(normal,-0.42);
+        const groundY=rayGroundY(pos.x,pos.z,playableLayer.y,playableLayer.tolerance+1.0);
+        if(groundY===null) continue;
+        pos.y=groundY;
+        const duplicate=found.some(p=>p.pos.distanceTo(pos)<1.35);
+        if(duplicate) break;
+        found.push({
+          pos,
+          topY:4.2,
+          halfW:0.72,
+          mesh:hit.object,
+          graffiti:null,
+          paintProgress:0,
+          claimedBy:null,
+          synthetic:false,
+        });
+        break;
+      }
+    }
+  }
+  found.sort((a,b)=>{
+    const aa=Math.atan2(a.pos.z-playableLayer.centerZ,a.pos.x-playableLayer.centerX);
+    const bb=Math.atan2(b.pos.z-playableLayer.centerZ,b.pos.x-playableLayer.centerX);
+    return aa-bb;
+  });
+  return found;
 }
 
 function getPlayableBounds(){
@@ -1643,6 +1692,17 @@ function refreshPlayablePillars(){
   if(keep.length){
     pillars.length=0;
     pillars.push(...keep);
+  }
+  const shouldRescan = pillars.length<=8 || pillars.every(p=>p.synthetic);
+  if(shouldRescan){
+    const scanned=scanPillarsFromGeometry(18);
+    if(scanned.length>=6){
+      pillars.length=0;
+      pillars.push(...scanned);
+      console.log('[pillars] rescanned from geometry:',pillars.length);
+    }else{
+      console.warn('[pillars] geometry rescan found too few pillars:',scanned.length);
+    }
   }
 }
 
@@ -2297,7 +2357,7 @@ function attachPlayer(){
 }
 
 // ===== Artists =====
-const artists=[]; // {inst, state:'walk'|'paint'|'dying'|'dead', target pillar, paintT, deathT, id}
+const artists=[]; // {inst, state:'walk'|'paint'|'leave'|'idle'|'flee'|'dying', target pillar, paintT, deathT, id}
 let artistIdCounter=0;
 const ARTIST_TINT=new THREE.Color('#ffc8c8'); // subtle reddish tint
 const ARTIST_WALK_SPEED=2.8;
@@ -2344,6 +2404,76 @@ function pickFreePillar(){
   return free[Math.floor(Math.random()*free.length)];
 }
 
+function assignArtistTarget(a){
+  const target=pickFreePillar();
+  if(!target) return null;
+  target.claimedBy=a;
+  a.target=target;
+  a.leaveTarget=null;
+  a.paintT=0;
+  return target;
+}
+
+function scoreArtistDirection(a,hx,hz,step=1.6){
+  const p=a.inst.outer.position;
+  const nx=p.x+hx*step;
+  const nz=p.z+hz*step;
+  const b=getPlayableBounds();
+  const edgeDist=Math.min(nx-(b.minX+0.35), (b.maxX-0.35)-nx, nz-(b.minZ+0.35), (b.maxZ-0.35)-nz);
+  let score=edgeDist*4;
+  if(playableLayer){
+    const s=findNearestPlayableSample(nx,nz);
+    if(s){
+      const dx=s.x-nx,dz=s.z-nz;
+      score-=Math.sqrt(dx*dx+dz*dz)*1.2;
+    }
+  }
+  for(let i=0;i<pillars.length;i++){
+    const pil=pillars[i];
+    if(a.target&&pil===a.target) continue;
+    const dx=pil.pos.x-nx,dz=pil.pos.z-nz;
+    const d=Math.sqrt(dx*dx+dz*dz);
+    const margin=(pil.halfW||0.7)+0.8;
+    if(d<margin) score-=(margin-d)*6;
+  }
+  return score;
+}
+
+function steerArtistDirection(a,hx,hz,stuck){
+  if(stuck<=6) return {hx,hz};
+  if((a.escapeTimer||0)<=0){
+    const leftX=-hz, leftZ=hx;
+    const rightX=hz, rightZ=-hx;
+    const leftScore=scoreArtistDirection(a,leftX,leftZ);
+    const rightScore=scoreArtistDirection(a,rightX,rightZ);
+    a.escapeSign=leftScore>=rightScore?1:-1;
+    a.escapeTimer=20;
+  }else{
+    a.escapeTimer--;
+  }
+  const ang=Math.min(1.45,0.55+(stuck-6)*0.045)*a.escapeSign;
+  const c=Math.cos(ang),s=Math.sin(ang);
+  return {
+    hx:hx*c - hz*s,
+    hz:hx*s + hz*c,
+  };
+}
+
+function ensureArtistAction(a){
+  const I=a.inst;
+  if(!I) return;
+  const want=
+    a.state==='paint' ? I.actPaint :
+    a.state==='flee' ? (I.actRun||I.actWalk) :
+    a.state==='dying' ? null :
+    a.state==='idle' ? I.actIdle :
+    (I.actWalk||I.actIdle);
+  if(!want) return;
+  if(want.isRunning&&want.isRunning()) return;
+  const fade=(a.state==='flee')?0.12:0.18;
+  want.reset().fadeIn(fade).play();
+}
+
 function spawnArtist(){
   if(!charGLTF) return;
   if(artists.length>=ARTIST_MAX_ALIVE) return;
@@ -2364,8 +2494,10 @@ function spawnArtist(){
     groundY:pos.y,
     lastMoveX:pos.x,lastMoveZ:pos.z,
     stuckFrames:0,
-    steerBias:0,        // accumulated steer offset when scraping a wall
-    targetRetarget:0,   // cooldown before the walk branch picks a new pillar
+    steerBias:0,
+    targetRetarget:0,
+    escapeTimer:0,
+    escapeSign:0,
   };
   target.claimedBy=artist;
   artists.push(artist);
@@ -2401,6 +2533,30 @@ function artistTransition(a,newState){
     if(I.actWalk){
       I.actWalk.reset().fadeIn(0.2).play();
       if(I.actWalk.timeScale!==undefined) I.actWalk.timeScale=1;
+    }
+  }else if(newState==='leave'){
+    I.root.rotation.x=0;
+    I.outer && (I.outer.rotation.x=0);
+    if(I.actPaint){I.actPaint.fadeOut(0.15); I.actPaint.stop();}
+    I.actPanicRun&&I.actPanicRun.fadeOut(0.12);
+    if(I.actRun){I.actRun.fadeOut(0.15); if(I.actRun.timeScale!==undefined) I.actRun.timeScale=1}
+    I.actIdle&&I.actIdle.fadeOut(0.15);
+    if(I.actWalk){
+      I.actWalk.reset().fadeIn(0.15).play();
+      if(I.actWalk.timeScale!==undefined) I.actWalk.timeScale=1;
+    }else if(I.actIdle){
+      I.actIdle.reset().fadeIn(0.15).play();
+    }
+  }else if(newState==='idle'){
+    I.root.rotation.x=0;
+    I.outer && (I.outer.rotation.x=0);
+    if(I.actPaint){I.actPaint.fadeOut(0.15); I.actPaint.stop();}
+    I.actPanicRun&&I.actPanicRun.fadeOut(0.12);
+    I.actWalk&&I.actWalk.fadeOut(0.15);
+    if(I.actRun){I.actRun.fadeOut(0.15); if(I.actRun.timeScale!==undefined) I.actRun.timeScale=1}
+    if(I.actIdle){
+      I.actIdle.reset().fadeIn(0.15).play();
+      if(I.actIdle.timeScale!==undefined) I.actIdle.timeScale=1;
     }
   }else if(newState==='paint'){
     I.root.rotation.x=0;
@@ -2455,6 +2611,7 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
   // angle persist long enough for them to escape.
   const stepLen=Math.hypot(p.x-beforeX,p.z-beforeZ);
   const wanted=speed*dt;
+  a.lastStepLen=stepLen;
   if(wanted>0.01 && stepLen<wanted*0.35){
     a.stuckFrames=(a.stuckFrames||0)+1;
   }else{
@@ -2476,6 +2633,7 @@ function updateArtists(dt){
     const a=artists[i];
     const p=a.inst.outer.position;
     a.inst.mixer.update(dt);
+    ensureArtistAction(a);
 
     // Ground stick + water state for non-dying artists.
     // Use hybrid stand-Y with the artist's CURRENT Y as the
@@ -2513,12 +2671,9 @@ function updateArtists(dt){
 
     if(a.state==='walk'){
       if(!a.target){
-        a.target=pickFreePillar();
-        if(a.target) a.target.claimedBy=a;
-        else{
-          a.state='leave';
+        if(!assignArtistTarget(a)){
           a.leaveTarget=pickSpawnPos();
-          artistTransition(a,'walk');
+          artistTransition(a,'leave');
           continue;
         }
       }
@@ -2540,30 +2695,19 @@ function updateArtists(dt){
         // unreachable from this side.
         let hx=toX/dist, hz=toZ/dist;
         const stuck=a.stuckFrames||0;
-        if(stuck>6){
-          const sign=((((stuck/25)|0)+(a.id&1))&1)?1:-1;
-          // Ramp up to ~160° so a really stuck artist can reverse out
-        // of a corner, not just scrape sideways along the wall that
-        // blocked them. 0.09 rad per stuck frame → hits the cap at
-        // ~35 stuck frames (~0.6s).
-        const ang=Math.min(2.8,(stuck-6)*0.09)*sign;
-          const c=Math.cos(ang),s=Math.sin(ang);
-          const rx=hx*c - hz*s;
-          const rz=hx*s + hz*c;
-          hx=rx; hz=rz;
-        }
+        if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
         moveArtist(a,dt,hx,hz,ARTIST_WALK_SPEED);
         if(stuck>50){
           if(a.target&&a.target.claimedBy===a) a.target.claimedBy=null;
           a.target=null;
           a.stuckFrames=0;
+          a.escapeTimer=0;
         }
       }
     }else if(a.state==='paint'){
       if(!a.target){
-        a.state='leave';
         a.leaveTarget=pickSpawnPos();
-        artistTransition(a,'walk');
+        artistTransition(a,'leave');
         continue;
       }
       a.paintT+=dt;
@@ -2605,11 +2749,16 @@ function updateArtists(dt){
           paintFillCount++;
           updatePaintBar();
         }
-        a.state='leave';
         pillar.claimedBy=null;
         a.target=null;
-        artistTransition(a,'walk');
-        a.leaveTarget=pickSpawnPos();
+        const dx=player.root.position.x-p.x, dz=player.root.position.z-p.z;
+        const playerFar=(dx*dx+dz*dz)>(ARTIST_FLEE_SAFE*ARTIST_FLEE_SAFE);
+        if(playerFar && assignArtistTarget(a)){
+          artistTransition(a,'walk');
+        }else{
+          a.leaveTarget=pickSpawnPos();
+          artistTransition(a,'leave');
+        }
       }
     }else if(a.state==='flee'){
       // Fleeing: run directly away from the player until safe.
@@ -2620,15 +2769,11 @@ function updateArtists(dt){
       const dx=p.x-px, dz=p.z-pz;
       const distSq=dx*dx+dz*dz;
       if(distSq>ARTIST_FLEE_SAFE*ARTIST_FLEE_SAFE){
-        a.target=pickFreePillar();
-        if(a.target){
-          a.target.claimedBy=a;
-          a.paintT=0;
+        if(assignArtistTarget(a)){
           artistTransition(a,'walk');
         }else{
           a.leaveTarget=pickSpawnPos();
-          a.state='leave';
-          artistTransition(a,'walk');
+          artistTransition(a,'leave');
         }
       }else{
         const d=Math.max(0.001,Math.sqrt(distSq));
@@ -2644,21 +2789,7 @@ function updateArtists(dt){
           const margin=(pil.halfW||0.7)+0.8;
           if(pdx*pdx+pdz*pdz<margin*margin){nearPillar=true;break}
         }
-        // Trigger a 180° about-face on either kind of bump. Hold
-        // the flipped direction for ~35 frames so the artist
-        // actually clears the obstacle instead of immediately
-        // flipping back toward it.
-        if((a.fleeFlipHold||0)<=0 && (stuck>3 || nearPillar)){
-          a.fleeFlipHold=35;
-          a.fleeFlipX=-hx;
-          a.fleeFlipZ=-hz;
-          a.stuckFrames=0;
-        }
-        if((a.fleeFlipHold||0)>0){
-          a.fleeFlipHold--;
-          hx=a.fleeFlipX;
-          hz=a.fleeFlipZ;
-        }
+        if(stuck>3 || nearPillar) ({hx,hz}=steerArtistDirection(a,hx,hz,Math.max(10,stuck+8)));
         moveArtist(a,dt,hx,hz,ARTIST_WALK_SPEED*ARTIST_FLEE_SPEED_MUL);
       }
     }else if(a.state==='leave'){
@@ -2671,14 +2802,7 @@ function updateArtists(dt){
       }
       let hx=toX/d, hz=toZ/d;
       const stuck=a.stuckFrames||0;
-      if(stuck>6){
-        const sign=((((stuck/25)|0)+(a.id&1))&1)?1:-1;
-        const ang=Math.min(2.8,(stuck-6)*0.09)*sign;
-        const c=Math.cos(ang),s=Math.sin(ang);
-        const rx=hx*c - hz*s;
-        const rz=hx*s + hz*c;
-        hx=rx; hz=rz;
-      }
+      if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
       moveArtist(a,dt,hx,hz,ARTIST_WALK_SPEED);
       if(stuck>80){
         // Can't reach the spawn point — just despawn.
