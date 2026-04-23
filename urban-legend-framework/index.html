@@ -1747,24 +1747,78 @@ function makeGraffitiTexture(seed){
   return {tex,render};
 }
 
-// Build a decal that actually conforms to the pillar's skin.
-// Strategy (this revision): cast a ray from the artist's eye height
-// toward the pillar — whatever the artist would visually be facing.
-// We use the resulting hit's mesh, point, and face normal as the
-// authoritative surface. This avoids relying on the heuristic-detected
-// pillar.mesh being correct (it often was just one fragment of a
-// larger structure mesh and DecalGeometry would silently empty).
+function meshTriCount(mesh){
+  const g=mesh&&mesh.geometry;
+  if(!g||!g.attributes||!g.attributes.position) return 0;
+  return g.index?g.index.count/3:g.attributes.position.count/3;
+}
+
+function worldFaceNormal(hit){
+  if(!hit||!hit.face||!hit.object) return null;
+  const n=hit.face.normal.clone();
+  n.applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld));
+  return n.normalize();
+}
+
+function castGraffitiSurface(pillar,artistPos,surfaceNormal,cy,halfExt){
+  const targets=[];
+  if(pillar.mesh) targets.push(pillar.mesh);
+  else if(playgroundRoot) targets.push(playgroundRoot);
+  if(!targets.length) return null;
+
+  const center=new THREE.Vector3(pillar.pos.x||0,cy,pillar.pos.z||0);
+  const ray=new THREE.Raycaster();
+  const rayRadius=Math.min(Math.max(halfExt,0.45),1.8);
+  ray.far=rayRadius+3.0;
+  ray.firstHitOnly=false;
+
+  const side=surfaceNormal.clone();
+  side.y=0;
+  if(side.lengthSq()<1e-6){
+    side.set(artistPos.x-center.x,0,artistPos.z-center.z);
+  }
+  if(side.lengthSq()<1e-6) side.set(1,0,0);
+  side.normalize();
+
+  // Try several chest-height rays from just outside the pillar toward
+  // its center. This hits the real visible skin even when the detected
+  // pillar is part of a merged playground mesh.
+  const heights=[cy,cy+0.35,cy-0.35];
+  const offsets=[0,0.35,-0.35];
+  for(const h of heights){
+    for(const off of offsets){
+      const tangent=new THREE.Vector3(-side.z,0,side.x).multiplyScalar(off);
+      const origin=center.clone()
+        .addScaledVector(side,rayRadius+1.2)
+        .add(tangent);
+      origin.y=h;
+      const dir=center.clone().sub(origin);
+      if(dir.lengthSq()<1e-6) continue;
+      dir.normalize();
+      ray.set(origin,dir);
+      const hits=targets[0]===playgroundRoot
+        ? ray.intersectObject(playgroundRoot,true)
+        : ray.intersectObject(targets[0],false);
+      for(const hit of hits){
+        const n=worldFaceNormal(hit);
+        if(!n||Math.abs(n.y)>0.62) continue; // reject floors/ceilings
+        if(hit.distance<0.05) continue;
+        const horiz=Math.hypot(hit.point.x-(pillar.pos.x||0),hit.point.z-(pillar.pos.z||0));
+        if(horiz>rayRadius+0.85) continue; // avoid background walls in merged meshes
+        return {hit,normal:n};
+      }
+    }
+  }
+  return null;
+}
+
+// Build graffiti on the actual pillar skin. We first raycast onto the
+// real playground mesh and use that hit point + face normal. Small
+// target meshes get DecalGeometry baked to the surface; large merged
+// meshes use a plane but it is still flush with the raycast hit point,
+// not a floating bbox guess.
 function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   if(pillar.graffiti) return pillar.graffiti;
-
-  // Pure bbox-based placement. Every previous raycast-based strategy
-  // failed on the user's playground because (a) many pillars share a
-  // single merged mesh whose bbox engulfs the artist, so raycasts
-  // from artist outward never hit the skin from the inside, and (b)
-  // the playgroundRoot fallback kept grabbing background walls. Now
-  // we just use each pillar's OWN pos + halfW (set by detectPillars
-  // from per-pillar bbox) + the mesh's Y range so every pillar in
-  // the pillars[] array gets its own tag on its own geometry.
 
   const dir=new THREE.Vector3(artistFacing.x,0,artistFacing.z);
   if(dir.lengthSq()<1e-6) dir.set(1,0,0);
@@ -1776,16 +1830,7 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   surfaceNormal.y=0;
   surfaceNormal.normalize();
 
-  // Figure out where on the pillar to place the plane.
-  //   X/Z: pillar centre shifted outward by halfW along the normal.
-  //   Y:   1.2m ABOVE the ground below the pillar (chest-height).
-  //        We used to use the pillar mesh's bbox Y midpoint, but
-  //        the bbox often includes the arch/roof above the pillar
-  //        proper, so the midpoint was way up in the air — that's
-  //        the "floating graffiti" the user keeps seeing.
   let halfExt=Math.max(0.4,pillar.halfW||0.7);
-  let cx=pillar.pos.x||0;
-  let cz=pillar.pos.z||0;
   let groundBeneath=pillar.pos.y;
   if(!Number.isFinite(groundBeneath)) groundBeneath=0;
   let cy=groundBeneath+1.2;
@@ -1797,8 +1842,6 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       // Single-pillar mesh (not a merged row): trust its real centre
       // and tight half-extent. Merged rows keep pillar.pos instead.
       if(bw<3 && bd<3){
-        cx=(bb.min.x+bb.max.x)*0.5;
-        cz=(bb.min.z+bb.max.z)*0.5;
         halfExt=Math.max(0.35,Math.min(bw,bd)*0.5+0.02);
         // Tight mesh's Y centre is usually safe too.
         cy=(bb.min.y+bb.max.y)*0.5;
@@ -1810,28 +1853,49 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
     }
   }
 
-  const surfacePt=new THREE.Vector3(
-    cx+surfaceNormal.x*halfExt,
-    cy,
-    cz+surfaceNormal.z*halfExt
-  );
+  const surface=castGraffitiSurface(pillar,artistPos,surfaceNormal,cy,halfExt);
+  if(!surface){
+    console.warn('[graffiti] no wall surface hit for pillar',pillar.pos);
+    return null;
+  }
+  const surfacePt=surface.hit.point.clone();
+  const hitNormal=surface.normal.clone();
 
   const seed=Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999);
   const {tex,render}=makeGraffitiTexture(seed);
   const planeH=1.4,planeW=1.1;
-  const geo=new THREE.PlaneGeometry(planeW,planeH);
   const mat=new THREE.MeshBasicMaterial({
     map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
     polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
   });
-  const mesh=new THREE.Mesh(geo,mat);
-  mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
-  mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
+  let mesh=null;
+  const triCount=meshTriCount(surface.hit.object);
+  if(triCount>0&&triCount<=18000){
+    const projector=new THREE.Object3D();
+    projector.position.copy(surfacePt);
+    projector.lookAt(surfacePt.clone().add(hitNormal));
+    try{
+      const geo=new DecalGeometry(surface.hit.object,surfacePt,projector.rotation,new THREE.Vector3(planeW,planeH,0.35));
+      if(geo.attributes.position&&geo.attributes.position.count>0){
+        mesh=new THREE.Mesh(geo,mat);
+      }else{
+        geo.dispose();
+      }
+    }catch(e){
+      console.warn('[graffiti] decal failed, using flush plane',e&&e.message);
+    }
+  }
+  if(!mesh){
+    const geo=new THREE.PlaneGeometry(planeW,planeH);
+    mesh=new THREE.Mesh(geo,mat);
+    mesh.position.copy(surfacePt).addScaledVector(hitNormal,0.018);
+    mesh.lookAt(mesh.position.x+hitNormal.x,mesh.position.y+hitNormal.y,mesh.position.z+hitNormal.z);
+  }
   mesh.renderOrder=3;
 
   scene.add(mesh);
   pillar.graffiti=mesh;
-  pillar.graffitiSide=surfaceNormal.clone();
+  pillar.graffitiSide=hitNormal.clone();
   pillar.graffitiRender=render;
   pillar.graffitiProgress=0;
   render(0.02);
@@ -2057,6 +2121,7 @@ function rewireArtistActions(){
     // Re-apply current state so the new clip actually plays.
     if(a.state==='paint'&&I.actPaint){I.actPaint.reset().fadeIn(0.2).play()}
     else if(a.state==='walk'&&I.actWalk){I.actWalk.reset().fadeIn(0.2).play()}
+    else if(a.state==='flee'&&I.actRun){I.actRun.reset().fadeIn(0.15).play()}
     else if(I.actIdle){I.actIdle.reset().fadeIn(0.2).play()}
   }
 }

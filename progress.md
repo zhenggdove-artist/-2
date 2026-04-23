@@ -8,7 +8,10 @@ Progress:
 - Updated late-load artist rewiring so existing artists also receive the real paint animation clip.
 - Ran node --check on the module script successfully after edits.
 - Ran the develop-web-game Playwright client against a local http.server. It entered gameplay and produced screenshots without console error artifacts; screenshots were cleaned up afterward.
+- User reported artists still T-posing/sliding and paint not playing. Root cause found: the first Blender batch left old actions in bpy.data, so the exported GLBs could contain previous clips and load the wrong first animation.
+- Re-exported artist_idle.glb, artist_walk.glb, and paint.glb from a clean Blender scene per file. Each GLB now contains exactly one animation.
+- Replaced bbox-only graffiti placement with a wall-surface raycast. Small meshes use DecalGeometry; large merged meshes use a plane flush to the hit point and normal.
+- Browser probe confirmed idle/walk/paint clips all bind 130/130 tracks after the clean GLB export.
 
 TODO:
-- Browser-test a full gameplay run and confirm Shift+X shows artist-idle, artist-walk, and paint with bound track counts instead of ?.
-- If visual retargeting still looks wrong, inspect the converted GLB animation node names and compare the first few track names against character.glb bones.
+- Browser-test a full live artist painting cycle visually after deployment, especially graffiti attachment on the real hosted playground model.
