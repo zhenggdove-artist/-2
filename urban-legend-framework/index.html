@@ -1777,28 +1777,36 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   surfaceNormal.normalize();
 
   // Figure out where on the pillar to place the plane.
-  // X/Z: pillar centre shifted outward by halfW along the normal.
-  // Y:   middle of the pillar mesh's bbox if we have the mesh;
-  //      otherwise pillar.pos.y + topY*0.45 as a last resort.
+  //   X/Z: pillar centre shifted outward by halfW along the normal.
+  //   Y:   1.2m ABOVE the ground below the pillar (chest-height).
+  //        We used to use the pillar mesh's bbox Y midpoint, but
+  //        the bbox often includes the arch/roof above the pillar
+  //        proper, so the midpoint was way up in the air — that's
+  //        the "floating graffiti" the user keeps seeing.
   let halfExt=Math.max(0.4,pillar.halfW||0.7);
   let cx=pillar.pos.x||0;
   let cz=pillar.pos.z||0;
-  let cy=(pillar.pos.y||0)+(pillar.topY||2.5)*0.45;
+  let groundBeneath=pillar.pos.y;
+  if(!Number.isFinite(groundBeneath)) groundBeneath=0;
+  let cy=groundBeneath+1.2;
   if(pillar.mesh){
     const bb=new THREE.Box3().setFromObject(pillar.mesh);
     if(isFinite(bb.min.x)){
-      // Use mesh centre instead of pillar.pos.x/z only when the
-      // mesh is genuinely narrow (single pillar); for a merged row,
-      // the mesh centre is useless and pillar.pos (which is the
-      // detectPillars-captured center) stays correct.
       const bw=(bb.max.x-bb.min.x);
       const bd=(bb.max.z-bb.min.z);
-      if(bw<4 && bd<4){
+      // Single-pillar mesh (not a merged row): trust its real centre
+      // and tight half-extent. Merged rows keep pillar.pos instead.
+      if(bw<3 && bd<3){
         cx=(bb.min.x+bb.max.x)*0.5;
         cz=(bb.min.z+bb.max.z)*0.5;
-        halfExt=Math.max(0.35,Math.min(bw,bd)*0.5+0.05);
+        halfExt=Math.max(0.35,Math.min(bw,bd)*0.5+0.02);
+        // Tight mesh's Y centre is usually safe too.
+        cy=(bb.min.y+bb.max.y)*0.5;
+      }else{
+        // Merged — pin Y to "ground + 1.2" but clamp into the
+        // bbox so we never float above it or sink below it.
+        cy=Math.max(bb.min.y+0.4,Math.min(bb.max.y-0.4,groundBeneath+1.2));
       }
-      cy=(bb.min.y+bb.max.y)*0.5;
     }
   }
 
@@ -1840,18 +1848,30 @@ let clipArtistIdle=null,clipArtistWalk=null;
 let extraCharacterClipsPromise=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
 
-// Set of every bone name in the GLB skeleton. Populated right after
-// charGLTF loads, used by sanitizeClip to resolve each FBX/GLB track
-// to an actual bone regardless of which Mixamo-prefix variant the
-// export used. Previous "detect one prefix, apply everywhere"
-// approach failed whenever a clip's tracks and the GLB's bones
-// happened to use DIFFERENT prefix variants (mixamorig: vs
-// mixamorig1: vs none).
+// Set of every bone name in the GLB skeleton, plus a "tail → full"
+// map so we can match a track regardless of which prefix variant it
+// was exported with. The user's playground skeleton uses
+// "mixamorigHips" (no colon/underscore) while Mixamo FBX files
+// export "mixamorig:Hips"; previous attempts missed this exact
+// variant and all FBX clips silently bound 0 tracks → T-pose.
 const _boneNames=new Set();
+const _boneByTail=new Map();
+function stripBonePrefix(n){
+  // Drop any mixamorig-style prefix with optional number + optional
+  // colon/underscore separator. Covers "mixamorig:", "mixamorig1:",
+  // "mixamorig_", "mixamorigHips" (no separator at all), etc.
+  return n.replace(/^mixamorig\d*[:_]?/i,'');
+}
 function collectBoneNames(scene){
   _boneNames.clear();
+  _boneByTail.clear();
   if(!scene) return;
-  scene.traverse(o=>{if(o.isBone&&o.name) _boneNames.add(o.name)});
+  scene.traverse(o=>{
+    if(!o.isBone||!o.name) return;
+    _boneNames.add(o.name);
+    const tail=stripBonePrefix(o.name);
+    if(!_boneByTail.has(tail)) _boneByTail.set(tail,o.name);
+  });
 }
 // Debug snapshot that the Shift+X HUD reads — gives the user a
 // visual confirmation that clips actually bound instead of silently
@@ -1866,11 +1886,12 @@ function sanitizeClip(clip){
     return !/hips|root|armature|mixamorig/i.test(t.name);
   });
   // 2. Resolve each track's bone reference against the real skeleton.
-  //    Try the track name as-is, stripped, and with a few known
-  //    prefixes. First variant that matches an actual bone wins.
-  //    This handles every combination (prefixed GLB + prefixed FBX,
-  //    bare GLB + prefixed FBX, prefixed1 FBX vs prefixed GLB, etc.)
-  //    without having to guess up-front.
+  //    Strip whatever prefix the FBX track has, then look up the
+  //    GLB's actual bone name via the tail-name map that
+  //    collectBoneNames built. Matches regardless of prefix style
+  //    (mixamorig:, mixamorig1:, mixamorig_ , or "mixamorigHips"
+  //    with no separator at all — which is what the user's GLB
+  //    actually uses).
   let bound=0;
   for(const t of clip.tracks){
     if(!t.name) continue;
@@ -1879,17 +1900,9 @@ function sanitizeClip(clip){
     const bone=t.name.substring(0,dot);
     const prop=t.name.substring(dot);
     if(_boneNames.has(bone)){bound++;continue}
-    const stripped=bone.replace(/^mixamorig\d*:/i,'');
-    const tryNames=[
-      stripped,
-      'mixamorig:'+stripped,
-      'mixamorig1:'+stripped,
-      'mixamorig0:'+stripped,
-      'mixamorig2:'+stripped,
-    ];
-    for(const tn of tryNames){
-      if(_boneNames.has(tn)){t.name=tn+prop;bound++;break}
-    }
+    const tail=stripBonePrefix(bone);
+    const real=_boneByTail.get(tail);
+    if(real){t.name=real+prop;bound++}
   }
   const first=clip.tracks[0]?.name||'?';
   console.log('[clip]',clip.name,'tracks:',clip.tracks.length,'bound:',bound,'first:',first);
@@ -1898,12 +1911,53 @@ function sanitizeClip(clip){
 }
 
 async function loadFBXClip(path,name){
-  const fbx=await fbxLoader.loadAsync(path);
+  // Paths with Chinese folders + spaces in filenames (Breathing Idle.fbx)
+  // must be explicitly URL-encoded. Some browsers auto-encode, others
+  // don't — this guarantees both the 主角 directory and the space in
+  // "Breathing Idle.fbx" become valid URL octets. Without this the
+  // FBX fetch 404s silently and the clip is never created.
+  const encoded=path.split('/').map(encodeURIComponent).join('/');
+  console.log('[fbx] loading',name,'<-',encoded);
+  let fbx;
+  try{
+    fbx=await fbxLoader.loadAsync(encoded);
+  }catch(e){
+    console.warn('[fbx] load FAILED',name,e&&e.message);
+    return null;
+  }
   const src=fbx.animations&&fbx.animations[0];
-  if(!src) return null;
+  if(!src){
+    console.warn('[fbx] no animations inside',name);
+    return null;
+  }
   const clip=src.clone();
   clip.name=name;
   return sanitizeClip(clip);
+}
+
+async function loadGLBClip(path,name){
+  console.log('[glb-clip] loading',name,'<-',path);
+  let gltf;
+  try{
+    gltf=await loader.loadAsync(path);
+  }catch(e){
+    console.warn('[glb-clip] load FAILED',name,e&&e.message);
+    return null;
+  }
+  const src=gltf.animations&&gltf.animations[0];
+  if(!src){
+    console.warn('[glb-clip] no animations inside',name);
+    return null;
+  }
+  const clip=src.clone();
+  clip.name=name;
+  return sanitizeClip(clip);
+}
+
+async function loadAnimationClip(name,glbPath,fbxPath){
+  const glbClip=await loadGLBClip(glbPath,name);
+  if(glbClip) return glbClip;
+  return loadFBXClip(fbxPath,name);
 }
 
 async function loadCharacterTemplate(){
@@ -1947,50 +2001,62 @@ async function loadCharacterTemplate(){
 function loadExtraCharacterClips(){
   if(extraCharacterClipsPromise) return extraCharacterClipsPromise;
   extraCharacterClipsPromise=(async()=>{
-    const [panicRunClip,paintClip,artistIdleClip,artistWalkClip]=await Promise.all([
-      loadFBXClip('playermodel/主角/Running.fbx','panic-run').catch(()=>null),
-      loadFBXClip('playermodel/主角/painting.fbx','paint').catch(()=>null),
-      loadFBXClip('playermodel/主角/Breathing Idle.fbx','artist-idle').catch(()=>null),
-      loadFBXClip('playermodel/主角/Walking.fbx','artist-walk').catch(()=>null),
+    const [paintClip,artistIdleClip,artistWalkClip]=await Promise.all([
+      loadAnimationClip('paint','playermodel/paint.glb','playermodel/主角/painting.fbx').catch(()=>null),
+      loadAnimationClip('artist-idle','playermodel/artist_idle.glb','playermodel/主角/Breathing Idle.fbx').catch(()=>null),
+      loadAnimationClip('artist-walk','playermodel/artist_walk.glb','playermodel/主角/Walking.fbx').catch(()=>null),
     ]);
-    if(panicRunClip) clipPanicRun=panicRunClip;
     if(paintClip) clipPaint=paintClip;
     if(artistIdleClip) clipArtistIdle=artistIdleClip;
     if(artistWalkClip) clipArtistWalk=artistWalkClip;
     console.log('[char] extra clips ready',{
-      panicRun:!!panicRunClip,
       paint:!!paintClip,
       artistIdle:!!artistIdleClip,
       artistWalk:!!artistWalkClip,
     });
     // Re-arm any artists already alive that spawned before these
     // clips finished loading (first few spawns after intro). They
-    // currently have no-op actIdle/actWalk actions; rebuild them
-    // so they use the proper FBX clips.
+    // may still be using GLB fallback clips, including idle as the
+    // paint action; rebuild all artist-only actions so the newly
+    // loaded FBX clips take effect immediately.
     rewireArtistActions();
   })();
   return extraCharacterClipsPromise;
 }
 
-// Rebuild actIdle / actWalk on each live artist with whichever
-// clip is currently preferred (FBX if loaded, GLB fallback
-// otherwise). Called when the FBX clips finish loading late.
+// Rebuild artist actions with whichever clips are currently preferred
+// (FBX if loaded, GLB fallback otherwise). Called when FBX clips finish
+// loading late so already-spawned artists do not keep stale fallback
+// actions for idle/walk/paint.
 function rewireArtistActions(){
   for(const a of artists){
     if(!a.inst||!a.inst.mixer) continue;
     const I=a.inst;
     const idleClip=clipArtistIdle||clipIdle;
     const walkClip=clipArtistWalk||clipWalk;
+    const paintClip=clipPaint||clipIdle;
+    const replaceAction=(oldAction,clip,setup)=>{
+      if(oldAction) oldAction.stop();
+      if(!clip) return null;
+      const action=I.mixer.clipAction(clip);
+      setup&&setup(action);
+      return action;
+    };
     if(idleClip){
-      if(I.actIdle){I.actIdle.stop();I.mixer.uncacheAction(idleClip);}
-      I.actIdle=I.mixer.clipAction(idleClip);
+      I.actIdle=replaceAction(I.actIdle,idleClip);
     }
     if(walkClip){
-      if(I.actWalk){I.actWalk.stop();I.mixer.uncacheAction(walkClip);}
-      I.actWalk=I.mixer.clipAction(walkClip);
+      I.actWalk=replaceAction(I.actWalk,walkClip);
+    }
+    if(paintClip){
+      I.actPaint=replaceAction(I.actPaint,paintClip,action=>{
+        action.setLoop(THREE.LoopRepeat);
+        action.clampWhenFinished=false;
+      });
     }
     // Re-apply current state so the new clip actually plays.
-    if(a.state==='walk'&&I.actWalk){I.actWalk.reset().fadeIn(0.2).play()}
+    if(a.state==='paint'&&I.actPaint){I.actPaint.reset().fadeIn(0.2).play()}
+    else if(a.state==='walk'&&I.actWalk){I.actWalk.reset().fadeIn(0.2).play()}
     else if(I.actIdle){I.actIdle.reset().fadeIn(0.2).play()}
   }
 }
