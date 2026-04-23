@@ -68,3 +68,6 @@ TODO:
 - Added a simpler "air-wall first" safety approach by keeping all leave motion inside the same clamp system as every other movement state. This intentionally prefers boring but stable behaviour over cinematic exits.
 - Startup/perf tuning continued: mobile still uses lower pixel ratio, no antialiasing, water updates every other frame, and flower spawn/cap are reduced. `coin.glb` remains deferred off the startup critical path.
 - Narrow-view probe after the latest fixes still confirms the mobile control stack is separated (`SKILL` above `PUNCH`) and the intro progress text advances during streaming.
+- Mobile loadout toggle was moved farther right so it no longer overlaps the rainbow paint bar, and it is now a blue circular button using a clothing icon instead of text.
+- Artist population tuning was tightened to reduce both clutter and CPU cost: the live cap is now 5, and when the active count drops to 3 or below the spawn timer shortens so replacements appear quickly.
+- Performance was reduced more aggressively on mobile: the VHS/composer pass is skipped entirely during gameplay rendering, and heavy `coin.glb` loading is bypassed on mobile in favor of the lightweight fallback coin mesh.

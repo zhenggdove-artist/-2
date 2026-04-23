@@ -202,12 +202,12 @@
   .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
   #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
     max-width:min(78vw,520px);flex-wrap:wrap}
-  #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:18px;
-    border:2px solid rgba(255,245,173,0.82);background:linear-gradient(180deg,rgba(255,236,140,0.96),rgba(168,109,0,0.92));
-    color:#4b2e00;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(255,220,96,0.24);
+  #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:999px;
+    border:2px solid rgba(209,239,255,0.92);background:radial-gradient(circle at 30% 24%,rgba(237,250,255,0.98),rgba(108,193,255,0.92) 58%,rgba(14,103,196,0.96));
+    color:#08386f;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(123,207,255,0.2);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
     pointer-events:auto;cursor:pointer}
-  #loadout-toggle .lt-ico{display:block;font-size:18px;line-height:1;margin-bottom:2px}
+  #loadout-toggle .lt-ico{display:block;font-size:24px;line-height:54px;margin:0;text-align:center}
   .loadout-slot{width:70px;min-height:76px;padding:8px 6px;border-radius:18px;background:rgba(28,19,38,0.82);
     border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 20px rgba(0,0,0,0.28);color:#f7f0ff;
     font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
@@ -237,7 +237,7 @@
     #special-btn{right:24px;bottom:126px;width:78px;height:78px;z-index:17}
     #jump-btn{right:124px;bottom:36px}
     #attack-btn{right:24px;bottom:36px}
-    #loadout-toggle{display:block;left:10px;bottom:126px}
+    #loadout-toggle{display:block;left:42px;bottom:126px}
     #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:11px 10px 12px;
       border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
       backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
@@ -252,7 +252,7 @@
     .loadout-slot button{padding:5px 0;font-size:8px}
   }
   @media (max-width:420px){
-    #loadout-toggle{left:10px;bottom:126px;width:54px;height:54px}
+    #loadout-toggle{left:42px;bottom:126px;width:54px;height:54px}
     #loadout-bar{left:8px;right:8px;bottom:198px}
   }
 
@@ -436,7 +436,7 @@
 </div>
 
 <div id="loadout-bar"></div>
-<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico">✦</span>GEAR</button>
+<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico">👕</span></button>
 
 <div id="intro">
   <h1>DEFEND YOUR HOME</h1>
@@ -901,7 +901,8 @@ const composer=new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
 const vhsPass=new ShaderPass(VHSShader);
 composer.addPass(vhsPass);
-let vhsEnabled=true;
+let vhsEnabled=!IS_MOBILE_LAYOUT;
+vhsPass.enabled=vhsEnabled;
 window.addEventListener('keydown',e=>{
   if(e.shiftKey&&e.key==='V'){e.preventDefault();vhsEnabled=!vhsEnabled;vhsPass.enabled=vhsEnabled}
 });
@@ -3499,7 +3500,7 @@ const ARTIST_WALK_SPEED=1.96;
 const ARTIST_FAR_WALK_MUL=0.5;      // beyond 10m from player, artists move at half walk speed
 const ARTIST_PAINT_TIME=10;         // sec to fully paint a pillar
 const ARTIST_SPAWN_BASE=2.2;        // base spawn interval (sec)
-const ARTIST_MAX_ALIVE=12;
+const ARTIST_MAX_ALIVE=5;
 const ARTIST_FLEE_TRIGGER=3.0;      // player closer than this → flee
 const ARTIST_FLEE_SAFE=10.0;        // player farther than this → calm down, walk again
 const ARTIST_FLEE_SPEED_MUL=1.7;    // flee run speed multiplier
@@ -4079,6 +4080,9 @@ const COIN_VANISH_DUR=0.7; // seconds — rise + spin + fade
 
 async function loadCoin(){
   try{
+    if(IS_MOBILE_LAYOUT){
+      throw new Error('skip-heavy-coin-on-mobile');
+    }
     const gltf=await loader.loadAsync('coin.glb');
     coinModel=gltf.scene;
     coinModel.scale.setScalar(COIN_SCALE);
@@ -5040,9 +5044,12 @@ function updateSpawns(dt){
   spawnTimer-=dt;
   if(spawnTimer<=0){
     spawnArtist();
-    // Ramp: as killCount rises, spawn faster
-    const factor=Math.max(0.35, 1-killCount*0.006);
-    spawnTimer=ARTIST_SPAWN_BASE*factor*(0.7+Math.random()*0.7);
+    if(artists.length<=3){
+      spawnTimer=0.35+Math.random()*0.35;
+    }else{
+      const factor=Math.max(0.55, 1-killCount*0.004);
+      spawnTimer=ARTIST_SPAWN_BASE*factor*(0.85+Math.random()*0.45);
+    }
   }
 }
 
@@ -5334,8 +5341,12 @@ function tick(){
     updateCeilingOcclusion();
     updateDebugCoords();
 
-    vhsPass.uniforms.time.value=nowS;
-    composer.render();
+    if(IS_MOBILE_LAYOUT){
+      renderer.render(scene,camera);
+    }else{
+      vhsPass.uniforms.time.value=nowS;
+      composer.render();
+    }
   }catch(e){
     console.error('[tick] update failed:',e);
   }
