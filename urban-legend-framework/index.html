@@ -1884,13 +1884,44 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
       mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
       mesh.renderOrder=3;
     }
-  }else{
-    // No surface hit. The "forced fallback at pillar.pos" version
-    // produced floating ghost graffiti whenever detectPillars
-    // grabbed a merged multi-pillar mesh — pillar.pos ended up in
-    // the empty space between real pillars. Cleaner to return null
-    // and let the caller retry for a few frames; if nothing ever
-    // sticks, the pillar just doesn't get a tag. No more floaters.
+  }else if(pillar.mesh){
+    // Raycast sweep missed every angle/height. Most likely the
+    // artist is standing inside a merged multi-pillar mesh's bbox,
+    // so rays were casting FROM inside TO inside. Fallback: place
+    // the plane on the bbox face closest to the artist. That's
+    // still on (or very near) the pillar's real skin and avoids
+    // the "2 pillars work, 8 don't" issue that pure raycast had.
+    const bb=new THREE.Box3().setFromObject(pillar.mesh);
+    if(isFinite(bb.min.x)){
+      const ax=artistPos.x, az=artistPos.z;
+      // Which of the 4 XZ bbox faces is the artist closest to?
+      const dLeft=Math.abs(ax-bb.min.x);
+      const dRight=Math.abs(bb.max.x-ax);
+      const dFront=Math.abs(az-bb.min.z);
+      const dBack=Math.abs(bb.max.z-az);
+      const m=Math.min(dLeft,dRight,dFront,dBack);
+      let fx=0,fz=0,faceX=ax,faceZ=az;
+      if(m===dLeft){ fx=-1; faceX=bb.min.x; faceZ=Math.max(bb.min.z,Math.min(bb.max.z,az)); }
+      else if(m===dRight){ fx=1; faceX=bb.max.x; faceZ=Math.max(bb.min.z,Math.min(bb.max.z,az)); }
+      else if(m===dFront){ fz=-1; faceZ=bb.min.z; faceX=Math.max(bb.min.x,Math.min(bb.max.x,ax)); }
+      else{ fz=1; faceZ=bb.max.z; faceX=Math.max(bb.min.x,Math.min(bb.max.x,ax)); }
+      const surfaceNormal=new THREE.Vector3(fx,0,fz);
+      const faceY=Math.max(bb.min.y+0.6,Math.min(bb.max.y-0.4,(artistPos.y||0)+1.1));
+      const surfacePt=new THREE.Vector3(faceX,faceY,faceZ);
+      const planeH=1.4,planeW=1.1;
+      const geo=new THREE.PlaneGeometry(planeW,planeH);
+      const mat=new THREE.MeshBasicMaterial({
+        map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
+        polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
+      });
+      mesh=new THREE.Mesh(geo,mat);
+      mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
+      mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
+      mesh.renderOrder=3;
+      pillar.graffitiSide=surfaceNormal.clone();
+    }
+  }
+  if(!mesh){
     tex.dispose&&tex.dispose();
     return null;
   }
@@ -1946,6 +1977,10 @@ function sanitizeClip(clip){
     const stripped=t.name.replace(/^mixamorig\d*:/i,'');
     t.name=_mixamoPrefix+stripped;
   }
+  // Diagnostic: first track name post-sanitize, so "why is this
+  // character T-posing" becomes easy to spot in the console.
+  console.log('[clip]',clip.name,'tracks:',clip.tracks.length,
+    'first:',clip.tracks[0]?.name);
   return clip;
 }
 
@@ -2041,10 +2076,17 @@ function rewireArtistActions(){
   }
 }
 
+let _boneSampleLogged=false;
 function buildCharacterInstance(tint,isArtist){
   if(!charGLTF) return null;
   const root=SkeletonUtils.clone(charGLTF.scene);
   root.scale.setScalar(100); // Mixamo 0.01 undo
+  if(!_boneSampleLogged){
+    _boneSampleLogged=true;
+    const bones=[];
+    root.traverse(o=>{if(o.isBone&&bones.length<4) bones.push(o.name)});
+    console.log('[bones] sample:',bones,'prefix:',JSON.stringify(_mixamoPrefix));
+  }
   root.traverse(o=>{
     if(o.isMesh){
       o.frustumCulled=false;
@@ -2299,11 +2341,12 @@ function spawnArtist(){
 
 function artistTransition(a,newState){
   a.state=newState;
-  // Always reset stuck accumulation when we change what we're trying
-  // to do — otherwise a counter built up during a previous walk
-  // carries over into (say) the paint state and immediately makes
-  // the next walk look stuck.
+  // Always reset stuck accumulation AND any in-flight flee-flip
+  // when we change what we're trying to do — otherwise a counter
+  // built up during a previous walk carries over into (say) the
+  // paint state and immediately makes the next walk look stuck.
   a.stuckFrames=0;
+  a.fleeFlipHold=0;
   const I=a.inst;
   if(newState==='walk'){
     I.root.rotation.x=0;
@@ -2527,8 +2570,10 @@ function updateArtists(dt){
       }
     }else if(a.state==='flee'){
       // Fleeing: run directly away from the player until safe.
-      // If we grind into a wall, swing the heading sideways so we
-      // slip along it instead of pushing straight through the clamp.
+      // If we bump the map edge OR come too close to a pillar,
+      // snap a hard 180° turn and lock that direction for ~35
+      // frames (hard enough to clear the obstacle, not so long
+      // they run straight at the player).
       const dx=p.x-px, dz=p.z-pz;
       const distSq=dx*dx+dz*dz;
       if(distSq>ARTIST_FLEE_SAFE*ARTIST_FLEE_SAFE){
@@ -2546,13 +2591,30 @@ function updateArtists(dt){
         const d=Math.max(0.001,Math.sqrt(distSq));
         let hx=dx/d, hz=dz/d;
         const stuck=a.stuckFrames||0;
-        if(stuck>6){
-          const sign=((((stuck/25)|0)+(a.id&1))&1)?1:-1;
-          const ang=Math.min(2.8,(stuck-6)*0.09)*sign;
-          const c=Math.cos(ang),s=Math.sin(ang);
-          const rx=hx*c - hz*s;
-          const rz=hx*s + hz*c;
-          hx=rx; hz=rz;
+        // Pillar proximity check — even though the game has no
+        // physical collision on pillars, the artist "bumping" a
+        // pillar while fleeing reads as stuck to the player.
+        let nearPillar=false;
+        for(let pi=0;pi<pillars.length;pi++){
+          const pil=pillars[pi];
+          const pdx=pil.pos.x-p.x, pdz=pil.pos.z-p.z;
+          const margin=(pil.halfW||0.7)+0.8;
+          if(pdx*pdx+pdz*pdz<margin*margin){nearPillar=true;break}
+        }
+        // Trigger a 180° about-face on either kind of bump. Hold
+        // the flipped direction for ~35 frames so the artist
+        // actually clears the obstacle instead of immediately
+        // flipping back toward it.
+        if((a.fleeFlipHold||0)<=0 && (stuck>3 || nearPillar)){
+          a.fleeFlipHold=35;
+          a.fleeFlipX=-hx;
+          a.fleeFlipZ=-hz;
+          a.stuckFrames=0;
+        }
+        if((a.fleeFlipHold||0)>0){
+          a.fleeFlipHold--;
+          hx=a.fleeFlipX;
+          hz=a.fleeFlipZ;
         }
         moveArtist(a,dt,hx,hz,ARTIST_WALK_SPEED*ARTIST_FLEE_SPEED_MUL);
       }
