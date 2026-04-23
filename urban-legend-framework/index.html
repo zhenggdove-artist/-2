@@ -2321,7 +2321,10 @@ function sanitizePlayerClip(clip,name){
   if(!clip) return null;
   const c=clip.clone();
   c.name=name||c.name||'player-clip';
-  return sanitizeClip(c);
+  const first=c.tracks[0]?.name||'?';
+  console.log('[clip]',c.name,'tracks:',c.tracks.length,'bound: raw','first:',first);
+  _clipDebug.clips[c.name]={tracks:c.tracks.length,bound:c.tracks.length,first};
+  return c;
 }
 
 async function loadFBXClip(path,name){
@@ -3351,8 +3354,12 @@ function ensurePlayerIdleAction(I=player.inst,fade=0.08){
   const act=I?.actIdle;
   if(!act) return null;
   const weight=act.getEffectiveWeight?.() ?? act.weight ?? 0;
-  if(!act.isRunning?.() || weight<0.35){
+  if(!act.isRunning?.()){
     act.reset().fadeIn(fade).play();
+  }else if(weight<0.01){
+    act.enabled=true;
+    act.setEffectiveWeight?.(1);
+    act.fadeIn(fade);
   }else{
     act.enabled=true;
     act.fadeIn(fade);
@@ -3364,8 +3371,12 @@ function ensurePlayerRunAction(I=player.inst,fade=0.12){
   const act=I?.actRun;
   if(!act) return null;
   const weight=act.getEffectiveWeight?.() ?? act.weight ?? 0;
-  if(!act.isRunning?.() || weight<0.35){
+  if(!act.isRunning?.()){
     act.reset().fadeIn(fade).play();
+  }else if(weight<0.01){
+    act.enabled=true;
+    act.setEffectiveWeight?.(1);
+    act.fadeIn(fade);
   }else{
     act.enabled=true;
     act.fadeIn(fade);
