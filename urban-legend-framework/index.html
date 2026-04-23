@@ -106,6 +106,10 @@
     filter:drop-shadow(0 6px 20px rgba(0,0,0,0.9))}
   #art-wins .aw-sub{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
     color:#d8d8d8;letter-spacing:0.25em;font-size:clamp(11px,1.6vw,14px);opacity:0.7}
+  #art-wins .aw-btn{padding:12px 26px;border-radius:999px;border:1px solid rgba(255,255,255,0.72);
+    background:rgba(255,255,255,0.08);color:#fff;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-size:14px;letter-spacing:0.25em;cursor:pointer;text-transform:uppercase;
+    box-shadow:0 8px 24px rgba(0,0,0,0.45)}
   @keyframes awShimmer{from{background-position:0% 50%}to{background-position:300% 50%}}
   #kill-box{color:#ffcf5e}
   #coin-box{color:#FFD700}
@@ -146,6 +150,43 @@
     color:#fff;text-transform:uppercase;display:flex;align-items:center;justify-content:center;
     text-shadow:0 2px 2px rgba(0,0,0,0.4)}
   #jump-btn:active{transform:scale(0.92)}
+  #clean-btn{position:absolute;right:124px;bottom:112px;width:72px;height:72px;
+    border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
+    background:radial-gradient(circle at 30% 20%,#fffdf6 0%,#8ff3da 55%,#279b87 100%);
+    border:3px solid #fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),0 6px 14px rgba(39,155,135,0.45);
+    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
+    text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4)}
+  #clean-btn:active{transform:scale(0.93)}
+  #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:10px 18px;border-radius:999px;
+    border:1px solid rgba(255,255,255,0.72);background:rgba(39,18,41,0.72);color:#ffe48a;
+    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.22em;cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,0.35)}
+  #shop-panel{position:fixed;right:18px;top:144px;width:min(320px,calc(100vw - 36px));z-index:40;
+    border-radius:22px;background:linear-gradient(180deg,rgba(40,20,48,0.95),rgba(18,10,22,0.94));
+    border:1px solid rgba(255,255,255,0.16);box-shadow:0 18px 40px rgba(0,0,0,0.42);padding:16px 16px 14px;
+    color:#f7eaff;display:none}
+  #shop-panel.show{display:block}
+  #shop-panel h3{margin:0 0 6px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:20px;letter-spacing:0.18em;color:#ffd86b}
+  #shop-panel .shop-sub{font-size:12px;opacity:0.72;letter-spacing:0.08em;margin-bottom:10px}
+  #shop-close{position:absolute;right:12px;top:10px;border:none;background:transparent;color:#fff;font-size:22px;cursor:pointer}
+  .shop-card{padding:12px 12px 10px;border-radius:16px;background:rgba(255,255,255,0.06);margin-top:10px}
+  .shop-card h4{margin:0 0 4px;font-size:13px;letter-spacing:0.14em;color:#fff0bf}
+  .shop-card p{margin:0 0 8px;font-size:12px;line-height:1.35;opacity:0.78}
+  .shop-buy{width:100%;padding:10px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);
+    background:linear-gradient(90deg,#553c69,#392448);color:#fff;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-size:12px;letter-spacing:0.18em;cursor:pointer;text-transform:uppercase}
+  .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
+  #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
+    max-width:min(78vw,520px);flex-wrap:wrap}
+  .loadout-slot{width:70px;min-height:76px;padding:8px 6px;border-radius:18px;background:rgba(28,19,38,0.82);
+    border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 20px rgba(0,0,0,0.28);color:#f7f0ff;
+    font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
+  .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:0.12em;color:#ffe2f3}
+  .loadout-slot .slot-meta{opacity:0.68;font-size:10px}
+  .loadout-slot button{width:100%;padding:6px 0;border-radius:999px;border:1px solid rgba(255,255,255,0.16);
+    background:rgba(255,255,255,0.08);color:#fff;font-size:10px;letter-spacing:0.16em;cursor:pointer}
+  .loadout-slot.active{outline:2px solid rgba(255,227,134,0.78);transform:translateY(-2px)}
+  .loadout-slot.cleaner{width:92px}
 
   /* Intro overlay */
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
@@ -250,13 +291,44 @@
 <div id="art-wins">
   <div class="aw-text">ART WINS</div>
   <div class="aw-sub">YOUR HOME IS LOST TO THE PAINT</div>
+  <button class="aw-btn" id="art-wins-retry">RETRY</button>
 </div>
 
 <div id="game-controls">
   <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
+  <button id="clean-btn" class="hidden">CLEAN</button>
   <button id="jump-btn">JUMP</button>
   <button id="attack-btn">SWING</button>
 </div>
+
+<button id="shop-btn">SHOP</button>
+<div id="shop-panel">
+  <button id="shop-close" aria-label="Close shop">×</button>
+  <h3>SHOP</h3>
+  <div class="shop-sub">Spend coins on cleaners and knockout bursts.</div>
+  <div class="shop-card">
+    <h4>CLEANER · 1 COIN</h4>
+    <p>Buy 1 cleaner canister. Each canister gives 3 clean uses.</p>
+    <button class="shop-buy" id="buy-cleaner-btn">BUY CLEANER</button>
+  </div>
+  <div class="shop-card">
+    <h4>PRISM BURST · 5 COINS</h4>
+    <p>Multicolor confetti burst when an artist is knocked down.</p>
+    <button class="shop-buy" id="buy-burst-prism-btn">BUY PRISM</button>
+  </div>
+  <div class="shop-card">
+    <h4>PETAL BURST · 5 COINS</h4>
+    <p>Pink-and-cyan petal spiral with wider bloom.</p>
+    <button class="shop-buy" id="buy-burst-petal-btn">BUY PETAL</button>
+  </div>
+  <div class="shop-card">
+    <h4>STAR BURST · 5 COINS</h4>
+    <p>Golden star shower with sharp spokes and glitter.</p>
+    <button class="shop-buy" id="buy-burst-star-btn">BUY STAR</button>
+  </div>
+</div>
+
+<div id="loadout-bar"></div>
 
 <div id="intro">
   <h1>DEFEND YOUR HOME</h1>
@@ -2293,6 +2365,76 @@ function updateSplash(dt){
   if(anyActive){splashGeo.attributes.position.needsUpdate=true}
 }
 
+// ===== Knockout burst particles =====
+const KO_MAX=720;
+const koGeo=new THREE.BufferGeometry();
+const koPos=new Float32Array(KO_MAX*3);
+const koVel=new Float32Array(KO_MAX*3);
+const koLife=new Float32Array(KO_MAX);
+const koAge=new Float32Array(KO_MAX);
+const koCol=new Float32Array(KO_MAX*3);
+for(let i=0;i<KO_MAX;i++){koPos[i*3+1]=-9999;koLife[i]=0;koAge[i]=1}
+koGeo.setAttribute('position',new THREE.BufferAttribute(koPos,3));
+koGeo.setAttribute('color',new THREE.BufferAttribute(koCol,3));
+const koMat=new THREE.PointsMaterial({size:0.16,transparent:true,opacity:0.95,depthWrite:false,sizeAttenuation:true,vertexColors:true});
+const koPoints=new THREE.Points(koGeo,koMat);
+koPoints.frustumCulled=false;
+scene.add(koPoints);
+let koCursor=0;
+const BURST_EFFECT_PRESETS={
+  amber:{colors:['#ffe46a','#ffd139','#fff4af'],count:32,speed:[1.0,2.6],up:[1.2,2.8],spread:0.85,size:0.14},
+  prism:{colors:['#ff6eb4','#ffd84d','#7cf0ff','#7cff8f','#c189ff'],count:44,speed:[1.2,3.2],up:[1.4,3.1],spread:1.0,size:0.17},
+  petal:{colors:['#ff9ad5','#ffd1f0','#7cf0ff','#b5ffd9'],count:40,speed:[0.9,2.4],up:[1.7,2.7],spread:0.95,size:0.18,swirl:0.55},
+  star:{colors:['#fff8c1','#ffe46a','#ffd139','#ffffff'],count:36,speed:[1.4,3.8],up:[1.5,3.4],spread:0.75,size:0.15,spokes:5},
+};
+
+function spawnKOBurst(x,y,z,effectId='amber'){
+  const fx=BURST_EFFECT_PRESETS[effectId]||BURST_EFFECT_PRESETS.amber;
+  const colors=fx.colors.map(c=>new THREE.Color(c));
+  for(let i=0;i<fx.count;i++){
+    const idx=koCursor;koCursor=(koCursor+1)%KO_MAX;
+    const spokeBase=fx.spokes ? ((i%fx.spokes)/fx.spokes)*Math.PI*2 : Math.random()*Math.PI*2;
+    const ang=spokeBase + (Math.random()-0.5)*(fx.spokes?0.28:Math.PI*2);
+    const radius=0.08+Math.random()*0.18;
+    koPos[idx*3]=x+Math.cos(ang)*radius;
+    koPos[idx*3+1]=y+0.45+Math.random()*0.35;
+    koPos[idx*3+2]=z+Math.sin(ang)*radius;
+    const speed=fx.speed[0]+Math.random()*(fx.speed[1]-fx.speed[0]);
+    const up=fx.up[0]+Math.random()*(fx.up[1]-fx.up[0]);
+    const swirl=fx.swirl||0;
+    koVel[idx*3]=Math.cos(ang)*speed + (-Math.sin(ang))*swirl;
+    koVel[idx*3+1]=up;
+    koVel[idx*3+2]=Math.sin(ang)*speed + (Math.cos(ang))*swirl;
+    koLife[idx]=0.42+Math.random()*0.42;
+    koAge[idx]=0;
+    const c=colors[(Math.random()*colors.length)|0];
+    koCol[idx*3]=c.r;
+    koCol[idx*3+1]=c.g;
+    koCol[idx*3+2]=c.b;
+  }
+  koMat.size=fx.size||0.16;
+}
+
+function updateKOBursts(dt){
+  let anyActive=false;
+  for(let i=0;i<KO_MAX;i++){
+    if(koAge[i]>=koLife[i]) continue;
+    anyActive=true;
+    koAge[i]+=dt;
+    koVel[i*3+1]-=9*dt;
+    koPos[i*3]+=koVel[i*3]*dt;
+    koPos[i*3+1]+=koVel[i*3+1]*dt;
+    koPos[i*3+2]+=koVel[i*3+2]*dt;
+    koVel[i*3]*=0.985;
+    koVel[i*3+2]*=0.985;
+    if(koAge[i]>=koLife[i]) koPos[i*3+1]=-9999;
+  }
+  if(anyActive){
+    koGeo.attributes.position.needsUpdate=true;
+    koGeo.attributes.color.needsUpdate=true;
+  }
+}
+
 // ===== Player =====
 const player={
   root:new THREE.Group(),
@@ -2976,7 +3118,177 @@ function disposeCoin(grp){
 
 let coinCount=0;
 const coinCountEl=document.getElementById('coin-count');
-function updateCoinUI(){coinCountEl.textContent=coinCount}
+function updateCoinUI(){coinCountEl.textContent=coinCount;renderShopState()}
+
+const CLEAN_RANGE=2.25;
+const BURST_SHOP_ITEMS=[
+  {id:'amber',name:'AMBER',label:'Default',cost:0},
+  {id:'prism',name:'PRISM',label:'Prism',cost:5},
+  {id:'petal',name:'PETAL',label:'Petal',cost:5},
+  {id:'star',name:'STAR',label:'Star',cost:5},
+];
+let cleanerUses=0;
+let purchasedBurstEffects=new Set(['amber']);
+let equippedBurstEffect='amber';
+let currentCleanTarget=null;
+const cleanBtn=document.getElementById('clean-btn');
+const shopBtn=document.getElementById('shop-btn');
+const shopPanel=document.getElementById('shop-panel');
+const shopClose=document.getElementById('shop-close');
+const artWinsRetryBtn=document.getElementById('art-wins-retry');
+const loadoutBar=document.getElementById('loadout-bar');
+const buyCleanerBtn=document.getElementById('buy-cleaner-btn');
+const burstBuyButtons={
+  prism:document.getElementById('buy-burst-prism-btn'),
+  petal:document.getElementById('buy-burst-petal-btn'),
+  star:document.getElementById('buy-burst-star-btn'),
+};
+
+function setShopOpen(open){
+  if(!shopPanel) return;
+  shopPanel.classList.toggle('show',!!open);
+}
+
+function spendCoins(cost){
+  if(coinCount<cost) return false;
+  coinCount-=cost;
+  updateCoinUI();
+  return true;
+}
+
+function renderLoadoutBar(){
+  if(!loadoutBar) return;
+  const parts=[];
+  parts.push(
+    `<div class="loadout-slot cleaner">
+      <div class="slot-name">SOAP</div>
+      <div class="slot-meta">${cleanerUses} clean uses</div>
+      <button type="button" disabled>${cleanerUses>0?'READY':'EMPTY'}</button>
+    </div>`
+  );
+  for(const item of BURST_SHOP_ITEMS){
+    if(!purchasedBurstEffects.has(item.id)) continue;
+    const active=item.id===equippedBurstEffect?' active':'';
+    parts.push(
+      `<div class="loadout-slot${active}" data-burst-slot="${item.id}">
+        <div class="slot-name">${item.name}</div>
+        <div class="slot-meta">${item.label}</div>
+        <button type="button">${item.id===equippedBurstEffect?'EQUIPPED':'EQUIP'}</button>
+      </div>`
+    );
+  }
+  loadoutBar.innerHTML=parts.join('');
+  loadoutBar.querySelectorAll('[data-burst-slot]').forEach(el=>{
+    el.querySelector('button')?.addEventListener('click',()=>{
+      equippedBurstEffect=el.getAttribute('data-burst-slot');
+      renderLoadoutBar();
+      renderShopState();
+    });
+  });
+}
+
+function renderShopState(){
+  if(buyCleanerBtn){
+    buyCleanerBtn.disabled=coinCount<1;
+    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
+  }
+  for(const item of BURST_SHOP_ITEMS){
+    if(item.id==='amber') continue;
+    const btn=burstBuyButtons[item.id];
+    if(!btn) continue;
+    const owned=purchasedBurstEffects.has(item.id);
+    btn.disabled=owned||coinCount<item.cost;
+    btn.textContent=owned ? (equippedBurstEffect===item.id?'OWNED · EQUIPPED':'OWNED') : `BUY ${item.name}`;
+  }
+  renderLoadoutBar();
+}
+
+function resetShopState(){
+  cleanerUses=0;
+  purchasedBurstEffects=new Set(['amber']);
+  equippedBurstEffect='amber';
+  currentCleanTarget=null;
+  cleanBtn.classList.add('hidden');
+  setShopOpen(false);
+  renderShopState();
+}
+
+function disposeGraffiti(p){
+  if(!p||!p.graffiti) return;
+  scene.remove(p.graffiti);
+  p.graffiti.geometry&&p.graffiti.geometry.dispose&&p.graffiti.geometry.dispose();
+  if(p.graffiti.material){
+    p.graffiti.material.map&&p.graffiti.material.map.dispose&&p.graffiti.material.map.dispose();
+    p.graffiti.material.dispose&&p.graffiti.material.dispose();
+  }
+  p.graffiti=null;
+  p.graffitiRender=null;
+  p.graffitiProgress=0;
+  p.graffitiTries=0;
+}
+
+function cleanPillar(p){
+  if(!p||cleanerUses<=0) return false;
+  cleanerUses=Math.max(0,cleanerUses-1);
+  if(p.fillCounted){
+    p.fillCounted=false;
+    paintFillCount=Math.max(0,paintFillCount-1);
+    updatePaintBar();
+  }
+  p.paintProgress=0;
+  disposeGraffiti(p);
+  if(p.claimedBy&&p.claimedBy.state==='paint'){
+    p.claimedBy.target=null;
+    p.claimedBy.paintT=0;
+    p.claimedBy.leaveTarget=pickSpawnPos();
+    artistTransition(p.claimedBy,'leave');
+    p.claimedBy=null;
+  }
+  renderShopState();
+  return true;
+}
+
+function updateCleanPrompt(){
+  currentCleanTarget=null;
+  if(gameState!=='playing' || cleanerUses<=0 || !player.root){
+    cleanBtn.classList.add('hidden');
+    return;
+  }
+  let best=null;
+  let bestD=CLEAN_RANGE*CLEAN_RANGE;
+  const px=player.root.position.x, pz=player.root.position.z;
+  for(const p of pillars){
+    if(!p.graffiti) continue;
+    const dx=p.pos.x-px, dz=p.pos.z-pz;
+    const d=dx*dx+dz*dz;
+    if(d<bestD){bestD=d;best=p;}
+  }
+  currentCleanTarget=best;
+  cleanBtn.classList.toggle('hidden',!best);
+}
+
+shopBtn?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
+shopClose?.addEventListener('click',()=>setShopOpen(false));
+buyCleanerBtn?.addEventListener('click',()=>{
+  if(!spendCoins(1)) return;
+  cleanerUses+=3;
+  renderShopState();
+});
+for(const item of BURST_SHOP_ITEMS){
+  if(item.id==='amber') continue;
+  burstBuyButtons[item.id]?.addEventListener('click',()=>{
+    if(purchasedBurstEffects.has(item.id)) return;
+    if(!spendCoins(item.cost)) return;
+    purchasedBurstEffects.add(item.id);
+    equippedBurstEffect=item.id;
+    renderShopState();
+  });
+}
+cleanBtn?.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  if(currentCleanTarget) cleanPillar(currentCleanTarget);
+});
+renderShopState();
 
 function updateCoins(dt,now){
   for(let i=COINS_FLOATING.length-1;i>=0;i--){
@@ -3066,6 +3378,7 @@ window.addEventListener('keydown',e=>{
   if(k==='arrowright')keys.right=true;
   if(k===' '||k==='spacebar'){keys.space=true;tryJump();e.preventDefault()}
   if(k==='f'||k==='j'){tryAttack();e.preventDefault()}
+  if(k==='e'||k==='c'){ if(currentCleanTarget) { cleanPillar(currentCleanTarget); e.preventDefault(); } }
   // Shift+X: toggle the debug coordinate readout. Updated in tick().
   if(k==='x'&&e.shiftKey){
     const el=document.getElementById('debug-coords');
@@ -3315,6 +3628,7 @@ function updatePlayer(dt){
     player.attackCooldown=Math.max(0,player.attackCooldown-dt);
     if(player.attackCooldown===0) attackBtn.classList.remove('cooling');
   }
+  updateCleanPrompt();
 }
 
 function checkAttackHit(){
@@ -3349,6 +3663,7 @@ function killArtist(a){
   I.actRun&&I.actRun.fadeOut(0.2);
   I.actPanicRun&&I.actPanicRun.fadeOut(0.2);
   I.actPaint&&I.actPaint.fadeOut(0.2);
+  spawnKOBurst(a.inst.outer.position.x,a.inst.outer.position.y+0.25,a.inst.outer.position.z,equippedBurstEffect);
   killCount++;updateKillUI();
 }
 
@@ -3458,6 +3773,7 @@ startBtn.addEventListener('click',()=>{
 function startGame(){
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
+  resetShopState();
   artWinsOverlay.classList.remove('show');
   updateKillUI();updateCoinUI();updateTimerUI();updatePaintBar();
   // Try autoplay BGM
@@ -3509,6 +3825,11 @@ replayBtn.addEventListener('click',()=>{
   resetWorld();
   startGame();
 });
+artWinsRetryBtn?.addEventListener('click',()=>{
+  artWinsOverlay.classList.remove('show');
+  resetWorld();
+  startGame();
+});
 
 function resetWorld(){
   // Remove all artists
@@ -3542,6 +3863,8 @@ function resetWorld(){
   placePlayerOnPlayableLayer();player.curSpeed=0;
   player.vy=0;player.isAir=false;player.inWater=false;player.wasInWater=false;player.walkPhase=0;
   player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();
+  currentCleanTarget=null;
+  cleanBtn.classList.add('hidden');
   spawnTimer=1.5;
 }
 
@@ -3660,6 +3983,7 @@ function tick(){
     updateFlowers(nowS);
     updateWater(nowS);
     updateSplash(dt);
+    updateKOBursts(dt);
     updateCam();
     updateDebugCoords();
 
