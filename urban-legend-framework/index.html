@@ -2250,14 +2250,29 @@ async function loadCharacterTemplate(){
 
 async function loadPlayerAssets(){
   try{
-    const [baseGLTF,runGLTF,jumpGLTF,punchGLTF,fireGLTF,throwGLTF]=await Promise.all([
-      loader.loadAsync('mainplayermodel/player_main.glb'),
+    let baseGLTF=null;
+    if('caches' in window){
+      try{
+        const cache=await caches.open('ul-assets-v2');
+        let resp=await cache.match('mainplayermodel/player_main.glb');
+        if(!resp){
+          resp=await fetch('mainplayermodel/player_main.glb',{cache:'force-cache'});
+          if(resp&&resp.ok) cache.put('mainplayermodel/player_main.glb',resp.clone());
+        }
+        if(resp&&resp.ok){
+          const buf=await resp.arrayBuffer();
+          baseGLTF=await new Promise((res,rej)=>loader.parse(buf,'',res,rej));
+        }
+      }catch{}
+    }
+    const [runGLTF,jumpGLTF,punchGLTF,fireGLTF,throwGLTF]=await Promise.all([
       loader.loadAsync('mainplayermodel/player_run.glb'),
       loader.loadAsync('mainplayermodel/player_jump.glb'),
       loader.loadAsync('mainplayermodel/player_punch.glb'),
       loader.loadAsync('mainplayermodel/player_fire.glb'),
       loader.loadAsync('mainplayermodel/player_throwbomb.glb'),
     ]);
+    if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
     playerGLTF=baseGLTF;
     playerClipIdle=baseGLTF.animations[0]||null;
     playerClipRun=runGLTF.animations[0]||null;
@@ -2417,6 +2432,7 @@ function buildPlayerInstance(){
   root.updateMatrixWorld(true);
   bbox=new THREE.Box3().setFromObject(root);
   root.position.y-=bbox.min.y;
+  root.position.y+=PLAYER_MODEL_Y_OFFSET;
   const mixer=new THREE.AnimationMixer(root);
   const actIdle=playerClipIdle?mixer.clipAction(playerClipIdle):null;
   const actRun=playerClipRun?mixer.clipAction(playerClipRun):null;
@@ -2619,34 +2635,30 @@ function spawnFlameJet(){
     I.actFire.reset().fadeIn(0.05).play();
   }
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
-  const grp=new THREE.Group();
-  const layers=[
-    {r:0.58,l:3.6,c:'#ff6b1a',o:0.34,z:1.45},
-    {r:0.4,l:3.1,c:'#ffb347',o:0.46,z:1.22},
-    {r:0.23,l:2.5,c:'#fff2a8',o:0.72,z:1.02},
-  ];
-  for(const layer of layers){
-    const cone=new THREE.Mesh(
-      new THREE.ConeGeometry(layer.r,layer.l,18,1,true),
-      new THREE.MeshBasicMaterial({color:layer.c,transparent:true,opacity:layer.o,depthWrite:false,side:THREE.DoubleSide})
-    );
-    cone.rotation.x=Math.PI*0.5;
-    cone.position.z=layer.z;
-    grp.add(cone);
+  const count=120;
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(count*3);
+  const col=new Float32Array(count*3);
+  const vel=new Float32Array(count*3);
+  const colors=[new THREE.Color('#fff4b8'),new THREE.Color('#ffb347'),new THREE.Color('#ff5a1f')];
+  for(let i=0;i<count;i++){
+    const c=colors[i%colors.length];
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    pos[i*3]=0; pos[i*3+1]=0; pos[i*3+2]=0;
+    const spread=(Math.random()-0.5)*0.38;
+    const lift=(Math.random()-0.5)*0.28;
+    const speed=4.6+Math.random()*3.1;
+    vel[i*3]=fx*speed + (-fz)*spread;
+    vel[i*3+1]=lift;
+    vel[i*3+2]=fz*speed + fx*spread;
   }
-  for(let i=0;i<3;i++){
-    const ring=new THREE.Mesh(
-      new THREE.TorusGeometry(0.35+i*0.16,0.035,10,28),
-      new THREE.MeshBasicMaterial({color:i===0?'#fff0b8':(i===1?'#ff9b2f':'#ff5a1f'),transparent:true,opacity:0.5-i*0.1,depthWrite:false})
-    );
-    ring.rotation.y=Math.PI*0.5;
-    ring.position.z=0.65+i*0.58;
-    grp.add(ring);
-  }
-  grp.position.set(player.root.position.x+fx*0.95,player.root.position.y+1.1,player.root.position.z+fz*0.95);
-  grp.rotation.y=player.yaw;
-  scene.add(grp);
-  activeFlameJets.push({mesh:grp,life:0.42,maxLife:0.42,dirX:fx,dirZ:fz,hitTick:0});
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.24,transparent:true,opacity:0.9,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  points.position.set(player.root.position.x+fx*0.72,player.root.position.y+1.08,player.root.position.z+fz*0.72);
+  points.frustumCulled=false;
+  scene.add(points);
+  activeFlameJets.push({mesh:points,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,vel,count});
   forEachArtistInCone(player.root.position.x,player.root.position.z,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
 }
 
@@ -2686,7 +2698,7 @@ function spawnShadowClone(){
   root.position.set(player.root.position.x-fx*1.7,player.root.position.y,player.root.position.z-fz*1.7);
   root.rotation.y=player.root.rotation.y;
   scene.add(root);
-  activeClone={root,life:15,maxLife:15,pulse:0,speed:5.2,targetId:null,strikeCd:0,trailT:0};
+  activeClone={root,life:15,maxLife:15,pulse:0,speed:PLAYER_MAX_SPEED*0.5,targetId:null,strikeCd:0,trailT:0};
 }
 
 function dropBombTrap(){
@@ -2727,14 +2739,18 @@ function updateSpecialWeapons(dt,nowS){
     jet.life-=dt;
     const t=Math.max(0,jet.life/jet.maxLife);
     jet.hitTick+=dt;
-    jet.mesh.scale.set(0.9+0.5*(1-t),0.92+0.38*Math.sin(nowS*18),0.9+0.7*(1-t));
-    jet.mesh.children.forEach((c,idx)=>{
-      if(c.material) c.material.opacity=Math.max(0,(idx<3?(0.28+idx*0.18):(0.36-idx*0.04))*t);
-      if(idx>=3){
-        c.rotation.z+=dt*(2.4+idx);
-        c.scale.setScalar(0.9+Math.sin(nowS*12+idx)*0.14);
-      }
-    });
+    const arr=jet.mesh.geometry.attributes.position.array;
+    for(let p=0;p<jet.count;p++){
+      arr[p*3]+=jet.vel[p*3]*dt;
+      arr[p*3+1]+=jet.vel[p*3+1]*dt + Math.sin(nowS*22+p)*0.003;
+      arr[p*3+2]+=jet.vel[p*3+2]*dt;
+      jet.vel[p*3]*=0.972;
+      jet.vel[p*3+1]*=0.9;
+      jet.vel[p*3+2]*=0.972;
+    }
+    jet.mesh.geometry.attributes.position.needsUpdate=true;
+    jet.mesh.material.opacity=0.88*t;
+    jet.mesh.material.size=0.15+0.18*t;
     if(jet.hitTick>0.07){
       jet.hitTick=0;
       forEachArtistInCone(player.root.position.x,player.root.position.z,jet.dirX,jet.dirZ,6.1,Math.PI*0.48,a=>killArtist(a));
@@ -2897,6 +2913,7 @@ player.root.position.set(0,0,0);
 const PLAYER_MAX_SPEED=7.5;
 const PLAYER_ACCEL=22;
 const PLAYER_DECEL=26;
+const PLAYER_MODEL_Y_OFFSET=-0.52; // manual vertical tweak for the new player model
 const ATTACK_DUR=0.38;
 const ATTACK_COOLDOWN=0.5;
 const ATTACK_RANGE=2.6;
@@ -3714,14 +3731,16 @@ function renderLoadoutBar(){
   loadoutBar.innerHTML=parts.join('');
   loadoutBar.querySelectorAll('[data-burst-slot]').forEach(el=>{
     el.querySelector('button')?.addEventListener('click',()=>{
-      equippedBurstEffect=el.getAttribute('data-burst-slot');
+      const id=el.getAttribute('data-burst-slot');
+      equippedBurstEffect=(equippedBurstEffect===id && id!=='amber') ? 'amber' : id;
       renderLoadoutBar();
       renderShopState();
     });
   });
   loadoutBar.querySelectorAll('[data-weapon-slot]').forEach(el=>{
     el.querySelector('button')?.addEventListener('click',()=>{
-      equippedWeapon=el.getAttribute('data-weapon-slot');
+      const id=el.getAttribute('data-weapon-slot');
+      equippedWeapon=(equippedWeapon===id) ? null : id;
       refreshSpecialButton();
       renderLoadoutBar();
       renderShopState();
