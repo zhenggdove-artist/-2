@@ -25,6 +25,8 @@ Progress:
 - Added purchasable special gear: flamethrower, shadow clone, and bomb trap, plus a new special-skill button beside SWING and `Q/K` keyboard trigger.
 - Added Shift+C test mode: unlocks all bursts/weapons/cleaner uses, freezes the timer, suppresses ART WINS, and keeps the paint bar in test state.
 - Browser-tested with Playwright against a local http.server after load: shop scroll reached the bottom (`shopScroll` ~628), the bomb purchase button had a visible rect, loadout expanded to 11 slots under test mode, timer showed infinity, paint bar showed TEST, and there were no page/console errors.
+- Generated `mainplayermodel/player_main.glb`, `player_run.glb`, `player_jump.glb`, `player_punch.glb`, `player_fire.glb`, and `player_throwbomb.glb` from the user's FBX action set with Blender 4.3.
+- Switched the player loader to use the new `mainplayermodel` GLBs instead of `character.glb`, changed the attack button/text from SWING to PUNCH, and wired player punch/fire/throw-bomb one-shot animations into gameplay.
 
 TODO:
 - Tune the new special weapons if the user wants stronger or more tactical behavior; current versions prioritize low-risk implementation and stable frame-time.

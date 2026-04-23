@@ -317,7 +317,7 @@
   <button id="clean-btn" class="hidden">CLEAN</button>
   <button id="special-btn">SKILL</button>
   <button id="jump-btn">JUMP</button>
-  <button id="attack-btn">SWING</button>
+  <button id="attack-btn">PUNCH</button>
 </div>
 
 <button id="shop-btn">SHOP</button>
@@ -388,12 +388,12 @@
   <p>
     You are the keeper of this forgotten playground.<br>
     Insolent artists come to scrawl graffiti on your pillars.<br>
-    Strike them down with your stick. Their bodies bloom.<br>
+    Strike them down with your fists. Their bodies bloom.<br>
     Survive three minutes. Bring down one hundred, and a secret will reveal itself.
   </p>
   <button id="start-btn">BEGIN</button>
   <div class="tag" style="margin-top:8px;opacity:0.5;font-size:11px">
-    WASD / Joystick — move · Space / JUMP — jump · F / SWING — attack · Drag — camera
+    WASD / Joystick — move · Space / JUMP — jump · F / PUNCH — attack · Drag — camera
   </div>
 </div>
 
@@ -2095,6 +2095,8 @@ let clipIdle=null,clipWalk=null,clipRun=null,clipJump=null,clipPaint=null,clipPa
 let clipArtistIdle=null,clipArtistWalk=null;
 let extraCharacterClipsPromise=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
+let playerGLTF=null;
+let playerClipIdle=null,playerClipRun=null,playerClipJump=null,playerClipPunch=null,playerClipFire=null,playerClipThrowBomb=null;
 
 // Set of every bone name in the GLB skeleton, plus a "tail → full"
 // map so we can match a track regardless of which prefix variant it
@@ -2246,6 +2248,32 @@ async function loadCharacterTemplate(){
   }catch(e){console.error('[char] failed',e)}
 }
 
+async function loadPlayerAssets(){
+  try{
+    const [baseGLTF,runGLTF,jumpGLTF,punchGLTF,fireGLTF,throwGLTF]=await Promise.all([
+      loader.loadAsync('mainplayermodel/player_main.glb'),
+      loader.loadAsync('mainplayermodel/player_run.glb'),
+      loader.loadAsync('mainplayermodel/player_jump.glb'),
+      loader.loadAsync('mainplayermodel/player_punch.glb'),
+      loader.loadAsync('mainplayermodel/player_fire.glb'),
+      loader.loadAsync('mainplayermodel/player_throwbomb.glb'),
+    ]);
+    playerGLTF=baseGLTF;
+    playerClipIdle=baseGLTF.animations[0]||null;
+    playerClipRun=runGLTF.animations[0]||null;
+    playerClipJump=jumpGLTF.animations[0]||null;
+    playerClipPunch=punchGLTF.animations[0]||null;
+    playerClipFire=fireGLTF.animations[0]||null;
+    playerClipThrowBomb=throwGLTF.animations[0]||null;
+    console.log('[player] loaded mainplayermodel clips',{
+      idle:!!playerClipIdle,run:!!playerClipRun,jump:!!playerClipJump,
+      punch:!!playerClipPunch,fire:!!playerClipFire,throwbomb:!!playerClipThrowBomb
+    });
+  }catch(e){
+    console.error('[player] failed',e);
+  }
+}
+
 function loadExtraCharacterClips(){
   if(extraCharacterClipsPromise) return extraCharacterClipsPromise;
   extraCharacterClipsPromise=(async()=>{
@@ -2359,6 +2387,51 @@ function buildCharacterInstance(tint,isArtist){
   // first updateArtists tick called artistTransition.
   actIdle&&actIdle.play();
   return {root,outer,mixer,actIdle,actWalk,actRun,actJump,actPaint,actPanicRun,halfH:(bbox.max.y-bbox.min.y)*0.5};
+}
+
+function buildPlayerInstance(){
+  if(!playerGLTF) return null;
+  const root=SkeletonUtils.clone(playerGLTF.scene);
+  root.traverse(o=>{
+    if(o.isMesh){
+      o.frustumCulled=false;
+      if(o.material){
+        const mats=Array.isArray(o.material)?[...o.material]:[o.material];
+        const cloned=mats.map(m=>{
+          const cm=m.clone();
+          cm.side=THREE.DoubleSide;
+          if('envMapIntensity' in cm) cm.envMapIntensity=0.6;
+          return cm;
+        });
+        o.material=Array.isArray(o.material)?cloned:cloned[0];
+      }
+    }
+  });
+  const outer=new THREE.Group();
+  outer.add(root);
+  root.updateMatrixWorld(true);
+  let bbox=new THREE.Box3().setFromObject(root);
+  const rawH=Math.max(0.001,bbox.max.y-bbox.min.y);
+  const targetH=1.72;
+  root.scale.setScalar(targetH/rawH);
+  root.updateMatrixWorld(true);
+  bbox=new THREE.Box3().setFromObject(root);
+  root.position.y-=bbox.min.y;
+  const mixer=new THREE.AnimationMixer(root);
+  const actIdle=playerClipIdle?mixer.clipAction(playerClipIdle):null;
+  const actRun=playerClipRun?mixer.clipAction(playerClipRun):null;
+  const actJump=playerClipJump?mixer.clipAction(playerClipJump):null;
+  const actPunch=playerClipPunch?mixer.clipAction(playerClipPunch):null;
+  const actFire=playerClipFire?mixer.clipAction(playerClipFire):null;
+  const actThrowBomb=playerClipThrowBomb?mixer.clipAction(playerClipThrowBomb):null;
+  for(const act of [actJump,actPunch,actFire,actThrowBomb]){
+    if(act){
+      act.setLoop(THREE.LoopOnce);
+      act.clampWhenFinished=true;
+    }
+  }
+  actIdle&&actIdle.play();
+  return {root,outer,mixer,actIdle,actRun,actJump,actPunch,actFire,actThrowBomb,halfH:(bbox.max.y-bbox.min.y)*0.5};
 }
 
 // Find a bone matching a regex (for hand attachment)
@@ -2534,6 +2607,17 @@ function disposeSpecialVisual(obj){
 }
 
 function spawnFlameJet(){
+  const I=player.inst;
+  player.specialAnim='fire';
+  player.specialAnimT=Math.max(player.specialAnimT,0.52);
+  if(I?.actFire){
+    I.actIdle&&I.actIdle.fadeOut(0.05);
+    I.actRun&&I.actRun.fadeOut(0.05);
+    I.actJump&&I.actJump.fadeOut(0.05);
+    I.actPunch&&I.actPunch.fadeOut(0.05);
+    I.actThrowBomb&&I.actThrowBomb.fadeOut(0.05);
+    I.actFire.reset().fadeIn(0.05).play();
+  }
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
   const grp=new THREE.Group();
   const layers=[
@@ -2607,6 +2691,17 @@ function spawnShadowClone(){
 
 function dropBombTrap(){
   if(activeBombs.length>=5 && !debugCheatMode) return false;
+  const I=player.inst;
+  player.specialAnim='throwbomb';
+  player.specialAnimT=Math.max(player.specialAnimT,0.62);
+  if(I?.actThrowBomb){
+    I.actIdle&&I.actIdle.fadeOut(0.05);
+    I.actRun&&I.actRun.fadeOut(0.05);
+    I.actJump&&I.actJump.fadeOut(0.05);
+    I.actPunch&&I.actPunch.fadeOut(0.05);
+    I.actFire&&I.actFire.fadeOut(0.05);
+    I.actThrowBomb.reset().fadeIn(0.05).play();
+  }
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
   const group=new THREE.Group();
   const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),new THREE.MeshStandardMaterial({color:'#1f1f2e',metalness:0.35,roughness:0.6,emissive:'#6a2020',emissiveIntensity:0.4}));
@@ -2783,12 +2878,12 @@ const player={
   vel:new THREE.Vector3(),
   curSpeed:0,
   yaw:0, // facing yaw
-  club:null,
-  clubPivot:null,
   attackT:-1, // >=0 while swinging
   attackCooldown:0,
   specialCooldowns:{flame:0,clone:0,bomb:0},
   attackHit:new Set(), // artist ids already hit this swing
+  specialAnimT:0,
+  specialAnim:'none',
   vy:0,            // vertical velocity (jumping)
   isAir:false,     // true while jumping/falling
   groundY:0,       // last sampled ground height
@@ -2811,33 +2906,10 @@ const GRAVITY=22;
 const WATER_SPEED_MULT=0.8;
 
 function attachPlayer(){
-  const inst=buildCharacterInstance(new THREE.Color('#ffffff'));
+  const inst=buildPlayerInstance();
   if(!inst){setTimeout(attachPlayer,100);return}
   player.inst=inst;
   player.root.add(inst.outer);
-
-  // Club: held at right side of player, swings forward when attacking.
-  // Pivot at the "shoulder" position; club mesh extends along pivot's local +Z (forward).
-  // Swing rotates the pivot around its local X axis to bring the club from down-back to forward.
-  const clubPivot=new THREE.Group();
-  clubPivot.position.set(0.45,1.15,0.0); // right of pelvis, around chest height
-  player.root.add(clubPivot);
-  const clubMesh=new THREE.Group();
-  // Shaft along +Z so X-rotation of pivot swings tip forward/up
-  const shaftGeo=new THREE.CylinderGeometry(0.045,0.06,1.1,10);
-  shaftGeo.rotateX(Math.PI/2); // align cylinder's length to +Z
-  shaftGeo.translate(0,0,0.55);
-  const shaft=new THREE.Mesh(shaftGeo,new THREE.MeshStandardMaterial({color:'#7a4a2a',roughness:0.7}));
-  const headGeo=new THREE.SphereGeometry(0.13,12,8);
-  const head=new THREE.Mesh(headGeo,new THREE.MeshStandardMaterial({color:'#5a3520',roughness:0.55,metalness:0.2}));
-  head.position.set(0,0,1.1);
-  clubMesh.add(shaft,head);
-  // Rest pose: pointing slightly down and back
-  clubPivot.rotation.x=0.6; // tilted down at rest (tip toward ground-back)
-  clubPivot.add(clubMesh);
-  player.club=clubMesh;
-  player.clubPivot=clubPivot;
-  player.clubRestX=0.6;
 }
 
 // ===== Artists =====
@@ -3958,8 +4030,17 @@ if(jumpBtn) jumpBtn.addEventListener('pointerdown',e=>{e.preventDefault();tryJum
 function tryAttack(){
   if(player.attackCooldown>0||player.attackT>=0) return;
   player.attackT=0;
+  player.specialAnim='punch';
+  player.specialAnimT=ATTACK_DUR;
   player.attackHit.clear();
   attackBtn.classList.add('cooling');
+  const I=player.inst;
+  if(I?.actPunch){
+    I.actIdle&&I.actIdle.fadeOut(0.05);
+    I.actRun&&I.actRun.fadeOut(0.05);
+    I.actJump&&I.actJump.fadeOut(0.05);
+    I.actPunch.reset().fadeIn(0.05).play();
+  }
 }
 
 function tryJump(){
@@ -3969,8 +4050,10 @@ function tryJump(){
   const I=player.inst;
   if(I.actJump){
     I.actIdle&&I.actIdle.fadeOut(0.05);
-    I.actWalk&&I.actWalk.fadeOut(0.05);
     I.actRun&&I.actRun.fadeOut(0.05);
+    I.actPunch&&I.actPunch.fadeOut(0.05);
+    I.actFire&&I.actFire.fadeOut(0.05);
+    I.actThrowBomb&&I.actThrowBomb.fadeOut(0.05);
     I.actJump.reset().fadeIn(0.05).play();
   }
 }
@@ -4099,45 +4182,38 @@ function updatePlayer(dt){
   const I=player.inst;
   I.mixer.update(dt);
   const moving=player.curSpeed>0.15;
-  if(player.isAir && I.actJump){
+  const inOneShot=(player.attackT>=0 || player.specialAnimT>0);
+  if(inOneShot){
+    player.specialAnimT=Math.max(0,player.specialAnimT-dt);
+    if(player.specialAnimT===0) player.specialAnim='none';
+  }else if(player.isAir && I.actJump){
     if(I.actIdle&&I.actIdle.isRunning()) I.actIdle.fadeOut(0.1);
-    if(I.actWalk&&I.actWalk.isRunning()) I.actWalk.fadeOut(0.1);
     if(I.actRun&&I.actRun.isRunning()) I.actRun.fadeOut(0.1);
   }else if(moving){
     if(I.actJump&&I.actJump.isRunning()) I.actJump.fadeOut(0.15);
     if(I.actIdle&&I.actIdle.isRunning()) I.actIdle.fadeOut(0.15);
-    const useRun=(player.curSpeed>PLAYER_MAX_SPEED*0.6 && I.actRun);
-    if(useRun){
-      if(I.actWalk&&I.actWalk.isRunning()) I.actWalk.fadeOut(0.15);
-      if(!I.actRun.isRunning()) I.actRun.reset().fadeIn(0.15).play();
-    }else if(I.actWalk){
-      if(I.actRun&&I.actRun.isRunning()) I.actRun.fadeOut(0.15);
-      if(!I.actWalk.isRunning()) I.actWalk.reset().fadeIn(0.15).play();
-    }
+    if(I.actRun && !I.actRun.isRunning()) I.actRun.reset().fadeIn(0.15).play();
   }else{
     if(I.actJump&&I.actJump.isRunning()) I.actJump.fadeOut(0.15);
-    if(I.actWalk&&I.actWalk.isRunning()) I.actWalk.fadeOut(0.15);
     if(I.actRun&&I.actRun.isRunning()) I.actRun.fadeOut(0.15);
     if(I.actIdle&&!I.actIdle.isRunning()) I.actIdle.reset().fadeIn(0.15).play();
+  }
+  if(!inOneShot){
+    I.actPunch&&I.actPunch.isRunning()&&I.actPunch.fadeOut(0.08);
+    I.actFire&&I.actFire.isRunning()&&I.actFire.fadeOut(0.08);
+    I.actThrowBomb&&I.actThrowBomb.isRunning()&&I.actThrowBomb.fadeOut(0.08);
   }
 
   // Attack timing
   if(player.attackT>=0){
     player.attackT+=dt;
-    const t=clamp(player.attackT/ATTACK_DUR,0,1);
-    // Swing arc: from rest (down-back, ~+0.6) to forward-down (~-1.4) and back
-    const restX=player.clubRestX||0.6;
-    const swing=Math.sin(t*Math.PI); // 0..1..0
-    if(player.clubPivot){
-      player.clubPivot.rotation.x=restX-swing*2.0;
-    }
     if(player.attackT>=0.08 && player.attackT<=ATTACK_DUR*0.75){
       checkAttackHit();
     }
     if(player.attackT>=ATTACK_DUR){
       player.attackT=-1;
       player.attackCooldown=ATTACK_COOLDOWN;
-      if(player.clubPivot) player.clubPivot.rotation.x=restX;
+      if(I?.actPunch&&I.actPunch.isRunning()) I.actPunch.fadeOut(0.08);
     }
   }
   if(player.attackCooldown>0){
@@ -4299,6 +4375,8 @@ function startGame(){
   player.specialCooldowns.flame=0;
   player.specialCooldowns.clone=0;
   player.specialCooldowns.bomb=0;
+  player.specialAnim='none';
+  player.specialAnimT=0;
   fadeEl.classList.remove('show');
   artWinsOverlay.classList.remove('show');
   updateKillUI();updateCoinUI();updateTimerUI();updatePaintBar();
@@ -4390,6 +4468,7 @@ function resetWorld(){
   placePlayerOnPlayableLayer();player.curSpeed=0;
   player.vy=0;player.isAir=false;player.inWater=false;player.wasInWater=false;player.walkPhase=0;
   player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();
+  player.specialAnim='none';player.specialAnimT=0;
   player.specialCooldowns.flame=0;player.specialCooldowns.clone=0;player.specialCooldowns.bomb=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
@@ -4538,7 +4617,7 @@ async function init(){
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
 
-  await Promise.all([loadCharacterTemplate(),loadCoin(),loadPlayground()]);
+  await Promise.all([loadCharacterTemplate(),loadPlayerAssets(),loadCoin(),loadPlayground()]);
   if(bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
     playableLayer=await detectPlayableLayer(p=>{
