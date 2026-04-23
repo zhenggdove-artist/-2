@@ -23,7 +23,10 @@
     --ok:#9be08c;
   }
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;
-    font-family:"Trebuchet MS",sans-serif;color:#fff}
+    font-family:"Trebuchet MS",sans-serif;color:#fff;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 
   #title{position:absolute;top:2vh;left:50%;transform:translateX(-50%);
@@ -231,7 +234,10 @@
     #art-wins .aw-btn{font-size:12px}
     #shop-btn{top:104px;right:14px;padding:9px 16px}
     #shop-panel{top:150px;right:10px;width:min(310px,calc(100vw - 20px));max-height:calc(100vh - 170px)}
-    #loadout-toggle{display:block}
+    #special-btn{right:24px;bottom:126px;width:78px;height:78px;z-index:17}
+    #jump-btn{right:124px;bottom:36px}
+    #attack-btn{right:24px;bottom:36px}
+    #loadout-toggle{display:block;left:10px;bottom:126px}
     #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:11px 10px 12px;
       border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
       backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
@@ -258,6 +264,12 @@
     text-shadow:0 2px 10px rgba(255,100,160,0.5)}
   #intro p{font-size:clamp(13px,2vw,16px);line-height:1.7;max-width:640px;letter-spacing:1px;opacity:0.92}
   #intro .tag{color:#ffe3a0;font-size:clamp(12px,1.8vw,14px);letter-spacing:3px;opacity:0.75}
+  #intro-progress{width:min(340px,78vw);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  #intro-progress-text{font-size:12px;letter-spacing:0.22em;color:#ffe7a5;opacity:0.82}
+  #intro-progress-track{width:100%;height:10px;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,0.24);
+    background:rgba(255,255,255,0.08);box-shadow:inset 0 2px 8px rgba(0,0,0,0.35)}
+  #intro-progress-fill{width:0%;height:100%;border-radius:999px;background:linear-gradient(90deg,#ff8fb8,#ffd86b,#9be08c);
+    box-shadow:0 0 18px rgba(255,216,107,0.4);transition:width .2s ease}
   #intro button{padding:12px 40px;border-radius:999px;border:2px solid #ffaed4;
     background:linear-gradient(135deg,#c03870,#7555a8);color:#fff;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:18px;letter-spacing:3px;
@@ -436,6 +448,10 @@
     Survive three minutes. Bring down one hundred, and a secret will reveal itself.
   </p>
   <button id="start-btn">BEGIN</button>
+  <div id="intro-progress">
+    <div id="intro-progress-text">LOADING 0%</div>
+    <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
+  </div>
   <div class="tag" style="margin-top:8px;opacity:0.5;font-size:11px">
     WASD / Joystick — move · Space / JUMP — jump · F / PUNCH — attack · Drag — camera
   </div>
@@ -809,9 +825,10 @@ function makePlant(seedText){
 
 // ===== Renderer / Scene / Camera =====
 const canvas=document.getElementById('c');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+const IS_MOBILE_LAYOUT=window.matchMedia('(max-width:640px),(pointer:coarse)').matches;
+const renderer=new THREE.WebGLRenderer({canvas,antialias:!IS_MOBILE_LAYOUT});
 renderer.setSize(W(),H());
-renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,IS_MOBILE_LAYOUT?1:1.35));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
@@ -1721,7 +1738,7 @@ function restoreCeilingOcclusion(){
 function updateCeilingOcclusion(){
   ceilingOcclusionCooldown=Math.max(0,ceilingOcclusionCooldown-1);
   if(ceilingOcclusionCooldown>0) return;
-  ceilingOcclusionCooldown=2;
+  ceilingOcclusionCooldown=IS_MOBILE_LAYOUT?4:2;
   restoreCeilingOcclusion();
   if(!playgroundRoot||!player?.root) return;
   const target=new THREE.Vector3(player.root.position.x,player.root.position.y+1.35,player.root.position.z);
@@ -3507,6 +3524,27 @@ function pickSpawnPos(){
   return new THREE.Vector3(x,getPlayableSurfaceY(x,z,0)+GROUND_Y_OFFSET,z);
 }
 
+function pickExitPos(fromPos){
+  const b=getPlayableBounds();
+  const margin=4.5;
+  const px=fromPos?.x ?? b.centerX;
+  const pz=fromPos?.z ?? b.centerZ;
+  const dists=[
+    {side:'left',dist:Math.abs(px-b.minX)},
+    {side:'right',dist:Math.abs(b.maxX-px)},
+    {side:'top',dist:Math.abs(pz-b.minZ)},
+    {side:'bottom',dist:Math.abs(b.maxZ-pz)},
+  ].sort((a,b2)=>a.dist-b2.dist);
+  let x=px,z=pz;
+  switch(dists[0].side){
+    case 'left': x=b.minX-margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
+    case 'right': x=b.maxX+margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
+    case 'top': z=b.minZ-margin; x=clamp(px,b.minX+1,b.maxX-1); break;
+    default: z=b.maxZ+margin; x=clamp(px,b.minX+1,b.maxX-1); break;
+  }
+  return new THREE.Vector3(x,getPlayableSurfaceY(clamp(x,b.minX,b.maxX),clamp(z,b.minZ,b.maxZ),0)+GROUND_Y_OFFSET,z);
+}
+
 function pickRiverPoint(){
   if(!RIVERS.length) return null;
   const region=RIVERS[Math.floor(Math.random()*RIVERS.length)];
@@ -3820,7 +3858,7 @@ function updateArtists(dt){
     if(a.state==='walk'){
       if(!a.target){
         if(!assignArtistTarget(a)){
-          a.leaveTarget=pickSpawnPos();
+          a.leaveTarget=pickExitPos(p);
           artistTransition(a,'leave');
           continue;
         }
@@ -3854,7 +3892,7 @@ function updateArtists(dt){
       }
     }else if(a.state==='paint'){
       if(!a.target){
-        a.leaveTarget=pickSpawnPos();
+        a.leaveTarget=pickExitPos(p);
         artistTransition(a,'leave');
         continue;
       }
@@ -3904,7 +3942,7 @@ function updateArtists(dt){
         if(playerFar && assignArtistTarget(a)){
           artistTransition(a,'walk');
         }else{
-          a.leaveTarget=pickSpawnPos();
+          a.leaveTarget=pickExitPos(p);
           artistTransition(a,'leave');
         }
       }
@@ -3920,7 +3958,7 @@ function updateArtists(dt){
         if(assignArtistTarget(a)){
           artistTransition(a,'walk');
         }else{
-          a.leaveTarget=pickSpawnPos();
+          a.leaveTarget=pickExitPos(p);
           artistTransition(a,'leave');
         }
       }else{
@@ -3944,14 +3982,24 @@ function updateArtists(dt){
       const lt=a.leaveTarget;
       const toX=lt.x-p.x, toZ=lt.z-p.z;
       const d=Math.sqrt(toX*toX+toZ*toZ);
-      if(d<1){
-        removeArtist(i);
-        continue;
+      const b=getPlayableBounds();
+      const outsideArena=p.x<b.minX-1.2||p.x>b.maxX+1.2||p.z<b.minZ-1.2||p.z>b.maxZ+1.2;
+      if(d<1 || outsideArena){
+        a.leaveTarget=pickExitPos(p);
+        a.stuckFrames=0;
       }
       let hx=toX/d, hz=toZ/d;
       const stuck=a.stuckFrames||0;
       if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
-      moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED));
+      const speed=getArtistCruiseSpeed(a,ARTIST_WALK_SPEED)*1.18;
+      const beforeX=p.x, beforeZ=p.z;
+      p.x+=hx*speed*dt;
+      p.z+=hz*speed*dt;
+      a.inst.outer.rotation.y=Math.atan2(hx,hz);
+      const stepLen=Math.hypot(p.x-beforeX,p.z-beforeZ);
+      const wanted=speed*dt;
+      if(wanted>0.01 && stepLen<wanted*0.35) a.stuckFrames=(a.stuckFrames||0)+1;
+      else a.stuckFrames=Math.max(0,(a.stuckFrames||0)-2);
       if(stuck>80){
         // Can't reach the spawn point — just despawn.
         removeArtist(i);
@@ -3999,7 +4047,7 @@ function spawnFlowerAt(x,z){
   // Grow a small cluster of 3 plants per kill, scattered slightly
   // around the death spot for a "bloom" rather than a single stalk.
   const gY=getGroundY(x,z,0)+GROUND_Y_OFFSET;
-  for(let i=0;i<3;i++){
+  for(let i=0;i<(IS_MOBILE_LAYOUT?2:3);i++){
     const seed='flower_'+x.toFixed(2)+'_'+z.toFixed(2)+'_'+i+'_'+Math.random();
     const grp=makePlant(seed);
     const angle=Math.random()*Math.PI*2;
@@ -4011,7 +4059,7 @@ function spawnFlowerAt(x,z){
     registerGrowingFlower(grp);
   }
   // Cap total flowers to keep memory bounded over a long game
-  while(flowerGroup.children.length>120){
+  while(flowerGroup.children.length>(IS_MOBILE_LAYOUT?84:120)){
     const old=flowerGroup.children[0];
     flowerGroup.remove(old);
     old.traverse(o=>{
@@ -4434,7 +4482,7 @@ function cleanPillar(p){
   if(p.claimedBy&&p.claimedBy.state==='paint'){
     p.claimedBy.target=null;
     p.claimedBy.paintT=0;
-    p.claimedBy.leaveTarget=pickSpawnPos();
+    p.claimedBy.leaveTarget=pickExitPos(p.claimedBy.inst?.outer?.position||p.pos);
     artistTransition(p.claimedBy,'leave');
     p.claimedBy=null;
   }
@@ -4613,6 +4661,15 @@ function handleAttackRelease(pointerId=null){
     startAttack('combo');
   }else{
     attackInputState.pendingTapAt=now+ATTACK_DOUBLE_TAP_MS;
+  }
+}
+
+function scheduleDeferredCoinLoad(delay=1800){
+  const run=()=>{ if(!coinModel) loadCoin(); };
+  if(typeof window.requestIdleCallback==='function'){
+    window.setTimeout(()=>window.requestIdleCallback(run,{timeout:2400}),delay);
+  }else{
+    window.setTimeout(run,delay);
   }
 }
 
@@ -5031,6 +5088,8 @@ function updateFlowers(now){
 // ===== Intro / Start / End / Leaderboard =====
 const intro=document.getElementById('intro');
 const startBtn=document.getElementById('start-btn');
+const introProgressText=document.getElementById('intro-progress-text');
+const introProgressFill=document.getElementById('intro-progress-fill');
 const endOverlay=document.getElementById('end-overlay');
 const endScore=document.getElementById('end-score');
 const leaderboardList=document.getElementById('leaderboard-list');
@@ -5038,6 +5097,12 @@ const nameInput=document.getElementById('name-input');
 const submitBtn=document.getElementById('submit-btn');
 const replayBtn=document.getElementById('replay-btn');
 const fadeEl=document.getElementById('fade');
+
+function setIntroProgress(pct,label='LOADING'){
+  const clamped=Math.max(0,Math.min(100,Math.round(pct)));
+  if(introProgressText) introProgressText.textContent=`${label} ${clamped}%`;
+  if(introProgressFill) introProgressFill.style.width=`${clamped}%`;
+}
 
 startBtn.addEventListener('click',()=>{
   intro.classList.add('hidden');
@@ -5213,6 +5278,7 @@ function updateDebugCoords(){
 
 // ===== Main loop =====
 let last=performance.now();
+let tickCounter=0;
 // Rolling perf counters — printed every ~30s while playing so that if
 // the game locks up or the tab dies, the console history shows the
 // trend (frame time, entity counts, cache growth) right up to it.
@@ -5220,6 +5286,7 @@ let _perfSince=0,_perfFrames=0,_perfMaxMs=0;
 let _maxReset=0;
 function tick(){
   requestAnimationFrame(tick);
+  tickCounter++;
   const now=performance.now();
   const frameMs=now-last;
   const dt=Math.min(0.05,frameMs/1000);
@@ -5270,7 +5337,7 @@ function tick(){
     }
 
     updateFlowers(nowS);
-    updateWater(nowS);
+    if(!IS_MOBILE_LAYOUT || (tickCounter%2===0)) updateWater(nowS);
     updateSplash(dt);
     updateKOBursts(dt);
     updateCam();
@@ -5290,16 +5357,19 @@ async function init(){
   startBtn.disabled=true;
   const origLabel=startBtn.textContent;
   startBtn.textContent='LOADING…';
+  setIntroProgress(3,'BOOT');
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
   // computeBoundsTree runs on its geometry right after load.
   await setupBVH();
+  setIntroProgress(14,'BOOT');
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
 
   await Promise.all([loadPlayerAssets(),loadPlayground()]);
+  setIntroProgress(58,'ASSETS');
   if(false && bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
     playableLayer=await detectPlayableLayer(p=>{
@@ -5322,12 +5392,15 @@ async function init(){
   }
   attachPlayer();
   placePlayerOnPlayableLayer();
+  setIntroProgress(70,'READY');
   startBtn.textContent=origLabel;
   startBtn.disabled=false;
+  setIntroProgress(74,'READY');
   loadDeferredPlayerSkillClips();
-  loadCoin();
+  scheduleDeferredCoinLoad();
   loadCharacterTemplate()
     .then(()=>loadExtraCharacterClips())
+    .then(()=>setIntroProgress(82,'STREAM'))
     .catch(e=>console.warn('[char] background load failed',e));
   if(bvhReady){
     Promise.resolve().then(async()=>{
@@ -5344,6 +5417,7 @@ async function init(){
           if(gameState==='intro') placePlayerOnPlayableLayer();
           console.log('[floor] selected layer:',playableLayer,'indexCells=',playableLayer.sampleIndex?playableLayer.sampleIndex.grid.size:0);
         }
+        setIntroProgress(90,'STREAM');
       }catch(e){
         console.warn('[floor] detection failed',e);
       }finally{}
@@ -5354,6 +5428,7 @@ async function init(){
           console.log('[river] detected:',RIVERS);
           waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
           placePlayerOnPlayableLayer();
+          setIntroProgress(100,'READY');
         }else{
           console.warn('[river] no trench detected â€” playground may be flat');
         }
@@ -5397,11 +5472,18 @@ init();
 
 window.addEventListener('resize',()=>{
   renderer.setSize(W(),H());
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,IS_MOBILE_LAYOUT?1:1.35));
   composer.setSize(W(),H());
   camera.aspect=W()/H();
   camera.updateProjectionMatrix();
   vhsPass.uniforms.resolution.value.set(W(),H());
 });
+
+document.addEventListener('selectstart',e=>{
+  if(e.target?.closest?.('input,textarea')) return;
+  e.preventDefault();
+});
+document.addEventListener('contextmenu',e=>e.preventDefault());
 
 // Debug: press P to log pillar count
 window.addEventListener('keydown',e=>{
