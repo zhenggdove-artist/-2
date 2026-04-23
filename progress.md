@@ -20,6 +20,12 @@ Progress:
 - Added a retry button to the ART WINS overlay and a contextual CLEAN button / E key interaction near graffiti.
 - Tuned artists so painting takes 10 seconds, walk-speed halves when they are farther than 10m from the player, and ART WINS now requires 15 filled pillars.
 - Simplified the ART WINS overlay visuals to text-only over the existing fade layer and throttled clean-target scanning to reduce per-frame hitches.
+- Added a scrollable shop panel so lower cards are reachable on smaller screens.
+- Expanded purchasable KO burst effects with fire, ice, and tornado variants and exposed them in the loadout bar.
+- Added purchasable special gear: flamethrower, shadow clone, and bomb trap, plus a new special-skill button beside SWING and `Q/K` keyboard trigger.
+- Added Shift+C test mode: unlocks all bursts/weapons/cleaner uses, freezes the timer, suppresses ART WINS, and keeps the paint bar in test state.
+- Browser-tested with Playwright against a local http.server after load: shop scroll reached the bottom (`shopScroll` ~628), the bomb purchase button had a visible rect, loadout expanded to 11 slots under test mode, timer showed infinity, paint bar showed TEST, and there were no page/console errors.
 
 TODO:
-- Browser-test the new shop/clean/loadout flow and verify cleaner use, paint-bar reduction, and ART WINS retry behaviour end-to-end.
+- Tune the new special weapons if the user wants stronger or more tactical behavior; current versions prioritize low-risk implementation and stable frame-time.
+- If needed, clean up a few mojibake shop labels caused by the source file's mixed encoding history.

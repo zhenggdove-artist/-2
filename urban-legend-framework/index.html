@@ -156,6 +156,16 @@
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
     text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4)}
   #clean-btn:active{transform:scale(0.93)}
+  #special-btn{position:absolute;right:214px;bottom:42px;width:72px;height:72px;
+    border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
+    background:radial-gradient(circle at 30% 20%,#fff7ec 0%,#ffca72 55%,#de6f18 100%);
+    border:3px solid #fff;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.42),0 6px 14px rgba(222,111,24,0.45);
+    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.16em;color:#fff;
+    text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-align:center;
+    text-shadow:0 2px 2px rgba(0,0,0,0.4);padding:8px}
+  #special-btn:active{transform:scale(0.93)}
+  #special-btn.cooling{opacity:0.58;filter:saturate(0.7) grayscale(0.15)}
   #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:10px 18px;border-radius:999px;
     border:1px solid rgba(255,255,255,0.72);background:rgba(39,18,41,0.72);color:#ffe48a;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.22em;cursor:pointer;
@@ -163,10 +173,11 @@
   #shop-panel{position:fixed;right:18px;top:144px;width:min(320px,calc(100vw - 36px));z-index:40;
     border-radius:22px;background:linear-gradient(180deg,rgba(40,20,48,0.95),rgba(18,10,22,0.94));
     border:1px solid rgba(255,255,255,0.16);box-shadow:0 18px 40px rgba(0,0,0,0.42);padding:16px 16px 14px;
-    color:#f7eaff;display:none}
+    color:#f7eaff;display:none;max-height:calc(100vh - 164px);overflow-y:auto;overscroll-behavior:contain}
   #shop-panel.show{display:block}
   #shop-panel h3{margin:0 0 6px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:20px;letter-spacing:0.18em;color:#ffd86b}
   #shop-panel .shop-sub{font-size:12px;opacity:0.72;letter-spacing:0.08em;margin-bottom:10px}
+  #shop-panel .shop-section{margin-top:14px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.24em;color:#ffc7e2}
   #shop-close{position:absolute;right:12px;top:10px;border:none;background:transparent;color:#fff;font-size:22px;cursor:pointer}
   .shop-card{padding:12px 12px 10px;border-radius:16px;background:rgba(255,255,255,0.06);margin-top:10px}
   .shop-card h4{margin:0 0 4px;font-size:13px;letter-spacing:0.14em;color:#fff0bf}
@@ -186,6 +197,7 @@
     background:rgba(255,255,255,0.08);color:#fff;font-size:10px;letter-spacing:0.16em;cursor:pointer}
   .loadout-slot.active{outline:2px solid rgba(255,227,134,0.78);transform:translateY(-2px)}
   .loadout-slot.cleaner{width:92px}
+  .loadout-slot .slot-kind{font-size:9px;opacity:0.58;letter-spacing:0.18em}
 
   /* Intro overlay */
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
@@ -296,6 +308,7 @@
 <div id="game-controls">
   <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
   <button id="clean-btn" class="hidden">CLEAN</button>
+  <button id="special-btn">SKILL</button>
   <button id="jump-btn">JUMP</button>
   <button id="attack-btn">SWING</button>
 </div>
@@ -304,7 +317,9 @@
 <div id="shop-panel">
   <button id="shop-close" aria-label="Close shop">×</button>
   <h3>SHOP</h3>
-  <div class="shop-sub">Spend coins on cleaners and knockout bursts.</div>
+  <div class="shop-sub">Spend coins on cleaners, bursts, and special gear.</div>
+  <div class="shop-section">UTILITY</div>
+  <div class="shop-section">KO BURSTS</div>
   <div class="shop-card">
     <h4>CLEANER · 1 COIN</h4>
     <p>Buy 1 cleaner canister. Each canister gives 3 clean uses.</p>
@@ -324,6 +339,37 @@
     <h4>STAR BURST · 5 COINS</h4>
     <p>Golden star shower with sharp spokes and glitter.</p>
     <button class="shop-buy" id="buy-burst-star-btn">BUY STAR</button>
+  </div>
+  <div class="shop-card">
+    <h4>FIRE BURST - 5 COINS</h4>
+    <p>Orange flame tongues and hot cinders when an artist is knocked down.</p>
+    <button class="shop-buy" id="buy-burst-fire-btn">BUY FIRE</button>
+  </div>
+  <div class="shop-card">
+    <h4>ICE BURST - 5 COINS</h4>
+    <p>Blue-white frost shards and cold sparkles.</p>
+    <button class="shop-buy" id="buy-burst-ice-btn">BUY ICE</button>
+  </div>
+  <div class="shop-card">
+    <h4>TORNADO BURST - 5 COINS</h4>
+    <p>Spiral gusts that corkscrew upward before fading.</p>
+    <button class="shop-buy" id="buy-burst-tornado-btn">BUY TORNADO</button>
+  </div>
+  <div class="shop-section">SPECIAL GEAR</div>
+  <div class="shop-card">
+    <h4>FLAMETHROWER - 10 COINS</h4>
+    <p>Short-range fire jet. Cooldown 1 second.</p>
+    <button class="shop-buy" id="buy-weapon-flame-btn">BUY FLAME</button>
+  </div>
+  <div class="shop-card">
+    <h4>SHADOW CLONE - 10 COINS</h4>
+    <p>Summon a decoy for 15 seconds. Cooldown 25 seconds.</p>
+    <button class="shop-buy" id="buy-weapon-clone-btn">BUY CLONE</button>
+  </div>
+  <div class="shop-card">
+    <h4>BOMB - 10 COINS</h4>
+    <p>Drop traps. Artists that step on one explode and burn for 5 seconds. Cooldown 3 seconds, max 5 active.</p>
+    <button class="shop-buy" id="buy-weapon-bomb-btn">BUY BOMB</button>
   </div>
 </div>
 
@@ -2385,6 +2431,9 @@ const BURST_EFFECT_PRESETS={
   prism:{colors:['#ff6eb4','#ffd84d','#7cf0ff','#7cff8f','#c189ff'],count:44,speed:[1.2,3.2],up:[1.4,3.1],spread:1.0,size:0.17},
   petal:{colors:['#ff9ad5','#ffd1f0','#7cf0ff','#b5ffd9'],count:40,speed:[0.9,2.4],up:[1.7,2.7],spread:0.95,size:0.18,swirl:0.55},
   star:{colors:['#fff8c1','#ffe46a','#ffd139','#ffffff'],count:36,speed:[1.4,3.8],up:[1.5,3.4],spread:0.75,size:0.15,spokes:5},
+  fire:{colors:['#fff7c8','#ffb347','#ff6b1a','#ff2f00'],count:42,speed:[1.1,3.4],up:[1.6,3.8],spread:0.88,size:0.19,swirl:0.18},
+  ice:{colors:['#ffffff','#d8f5ff','#86dbff','#5ca8ff'],count:40,speed:[0.9,2.8],up:[1.3,2.7],spread:0.92,size:0.18},
+  tornado:{colors:['#fdf2ff','#ffd8ef','#b8ecff','#ffffff'],count:52,speed:[0.7,2.2],up:[2.0,4.4],spread:0.82,size:0.17,swirl:1.05},
 };
 
 function spawnKOBurst(x,y,z,effectId='amber'){
@@ -2434,6 +2483,210 @@ function updateKOBursts(dt){
   }
 }
 
+function getForwardXZ(yaw){
+  return {x:Math.sin(yaw),z:Math.cos(yaw)};
+}
+
+function forEachArtistInCone(originX,originZ,dirX,dirZ,range,arc,fn){
+  for(const a of artists){
+    if(a.state==='dying'||a.state==='dead') continue;
+    const ax=a.inst.outer.position.x, az=a.inst.outer.position.z;
+    const dx=ax-originX, dz=az-originZ;
+    const dist=Math.sqrt(dx*dx+dz*dz);
+    if(dist>range) continue;
+    const nx=dx/Math.max(0.001,dist), nz=dz/Math.max(0.001,dist);
+    const dot=clamp(dirX*nx+dirZ*nz,-1,1);
+    if(Math.acos(dot)>arc*0.5) continue;
+    fn(a,dist);
+  }
+}
+
+function disposeSpecialVisual(obj){
+  if(!obj) return;
+  scene.remove(obj);
+  obj.traverse?.(o=>{
+    if(o.isMesh){
+      o.geometry?.dispose?.();
+      const mats=Array.isArray(o.material)?o.material:[o.material];
+      mats?.forEach(m=>m?.dispose?.());
+    }
+  });
+}
+
+function spawnFlameJet(){
+  const {x:fx,z:fz}=getForwardXZ(player.yaw);
+  const grp=new THREE.Group();
+  const cone=new THREE.Mesh(
+    new THREE.ConeGeometry(0.45,2.8,12,1,true),
+    new THREE.MeshBasicMaterial({color:'#ff9c2f',transparent:true,opacity:0.62,depthWrite:false,side:THREE.DoubleSide})
+  );
+  cone.rotation.x=Math.PI*0.5;
+  cone.position.z=1.2;
+  grp.add(cone);
+  const core=new THREE.Mesh(
+    new THREE.ConeGeometry(0.2,2.2,10,1,true),
+    new THREE.MeshBasicMaterial({color:'#fff2a8',transparent:true,opacity:0.75,depthWrite:false,side:THREE.DoubleSide})
+  );
+  core.rotation.x=Math.PI*0.5;
+  core.position.z=0.95;
+  grp.add(core);
+  grp.position.set(player.root.position.x+fx*0.95,player.root.position.y+1.1,player.root.position.z+fz*0.95);
+  grp.rotation.y=player.yaw;
+  scene.add(grp);
+  activeFlameJets.push({mesh:grp,life:0.28,maxLife:0.28,dirX:fx,dirZ:fz});
+  forEachArtistInCone(player.root.position.x,player.root.position.z,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
+}
+
+function spawnShadowClone(){
+  if(activeClone?.root) disposeSpecialVisual(activeClone.root);
+  const root=new THREE.Group();
+  if(player.inst?.outer){
+    const clone=player.inst.outer.clone(true);
+    clone.traverse(o=>{
+      if(o.isMesh){
+        o.material=(Array.isArray(o.material)?o.material:[o.material]).map(m=>{
+          const c=m.clone();
+          c.transparent=true;
+          c.opacity=0.48;
+          if(c.color) c.color.offsetHSL(0.12,0.08,0.08);
+          if(c.emissive) c.emissive.setHex(0x6d48ff);
+          if('emissiveIntensity' in c) c.emissiveIntensity=0.55;
+          c.depthWrite=false;
+          return c;
+        });
+      }
+    });
+    root.add(clone);
+  }else{
+    const ghost=new THREE.Mesh(new THREE.CapsuleGeometry(0.28,1.0,4,10),new THREE.MeshBasicMaterial({color:'#8f6fff',transparent:true,opacity:0.5,depthWrite:false}));
+    ghost.position.y=0.9;
+    root.add(ghost);
+  }
+  const halo=new THREE.Mesh(new THREE.TorusGeometry(0.6,0.07,8,28),new THREE.MeshBasicMaterial({color:'#dcb8ff',transparent:true,opacity:0.42,depthWrite:false}));
+  halo.rotation.x=Math.PI*0.5;
+  halo.position.y=0.08;
+  root.add(halo);
+  const {x:fx,z:fz}=getForwardXZ(player.yaw);
+  root.position.set(player.root.position.x-fx*1.7,player.root.position.y,player.root.position.z-fz*1.7);
+  root.rotation.y=player.root.rotation.y;
+  scene.add(root);
+  activeClone={root,life:15,maxLife:15,pulse:0};
+}
+
+function dropBombTrap(){
+  if(activeBombs.length>=5 && !debugCheatMode) return false;
+  const {x:fx,z:fz}=getForwardXZ(player.yaw);
+  const group=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),new THREE.MeshStandardMaterial({color:'#1f1f2e',metalness:0.35,roughness:0.6,emissive:'#6a2020',emissiveIntensity:0.4}));
+  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.18,8),new THREE.MeshBasicMaterial({color:'#ffd36b'}));
+  fuse.position.y=0.22;
+  group.add(body,fuse);
+  group.position.set(player.root.position.x+fx*1.1,Math.max(player.root.position.y+0.24,getPlayableSurfaceY(player.root.position.x,player.root.position.z,player.root.position.y)+0.24),player.root.position.z+fz*1.1);
+  scene.add(group);
+  activeBombs.push({group,armed:0,burning:0,burnRadius:1.8,triggered:false,hit:new Set()});
+  return true;
+}
+
+function updateSpecialWeapons(dt,nowS){
+  for(const id of Object.keys(player.specialCooldowns)){
+    if(debugCheatMode) player.specialCooldowns[id]=0;
+    else player.specialCooldowns[id]=Math.max(0,player.specialCooldowns[id]-dt);
+  }
+  for(let i=activeFlameJets.length-1;i>=0;i--){
+    const jet=activeFlameJets[i];
+    jet.life-=dt;
+    const t=Math.max(0,jet.life/jet.maxLife);
+    jet.mesh.scale.setScalar(0.85+0.5*(1-t));
+    jet.mesh.children.forEach((c,idx)=>{ if(c.material) c.material.opacity=(idx===0?0.58:0.72)*t; });
+    if(jet.life<=0){
+      disposeSpecialVisual(jet.mesh);
+      activeFlameJets.splice(i,1);
+    }
+  }
+  if(activeClone){
+    activeClone.life-=dt;
+    activeClone.pulse+=dt;
+    activeClone.root.position.y=player.groundY+GROUND_Y_OFFSET+Math.sin(nowS*3.4)*0.05;
+    activeClone.root.rotation.y+=dt*0.6;
+    if(activeClone.pulse>0.8){
+      activeClone.pulse=0;
+      spawnKOBurst(activeClone.root.position.x,activeClone.root.position.y+1.0,activeClone.root.position.z,'prism');
+      for(const a of artists){
+        if(a.state==='dying'||a.state==='dead') continue;
+        const dx=a.inst.outer.position.x-activeClone.root.position.x;
+        const dz=a.inst.outer.position.z-activeClone.root.position.z;
+        if(dx*dx+dz*dz<2.2*2.2) killArtist(a);
+      }
+    }
+    if(activeClone.life<=0){
+      disposeSpecialVisual(activeClone.root);
+      activeClone=null;
+    }
+  }
+  for(let i=activeBombs.length-1;i>=0;i--){
+    const bomb=activeBombs[i];
+    bomb.armed+=dt;
+    bomb.group.rotation.y+=dt*2.5;
+    if(!bomb.triggered){
+      const pulse=1+Math.sin(nowS*7+bomb.group.position.x)*0.08;
+      bomb.group.scale.setScalar(pulse);
+      for(const a of artists){
+        if(a.state==='dying'||a.state==='dead') continue;
+        const dx=a.inst.outer.position.x-bomb.group.position.x;
+        const dz=a.inst.outer.position.z-bomb.group.position.z;
+        if(dx*dx+dz*dz<1.1*1.1){
+          bomb.triggered=true;
+          bomb.burning=5;
+          spawnKOBurst(bomb.group.position.x,bomb.group.position.y+0.3,bomb.group.position.z,'fire');
+          killArtist(a);
+          break;
+        }
+      }
+    }else{
+      bomb.burning-=dt;
+      const flameScale=1+Math.sin(nowS*10+bomb.group.position.z)*0.12;
+      bomb.group.scale.set(flameScale,0.6+flameScale*0.45,flameScale);
+      bomb.group.children.forEach(child=>{
+        if(child.material?.color) child.material.color.set(child===bomb.group.children[0] ? '#ff7b22' : '#fff0b0');
+        if(child.material?.emissive) child.material.emissive.setHex(0xff5a00);
+      });
+      for(const a of artists){
+        if(a.state==='dying'||a.state==='dead'||bomb.hit.has(a.id)) continue;
+        const dx=a.inst.outer.position.x-bomb.group.position.x;
+        const dz=a.inst.outer.position.z-bomb.group.position.z;
+        if(dx*dx+dz*dz<bomb.burnRadius*bomb.burnRadius){
+          bomb.hit.add(a.id);
+          killArtist(a);
+        }
+      }
+      if(bomb.burning<=0){
+        disposeSpecialVisual(bomb.group);
+        activeBombs.splice(i,1);
+      }
+    }
+  }
+  refreshSpecialButton();
+}
+
+function useSpecialWeapon(){
+  if(gameState!=='playing' || !equippedWeapon || !purchasedWeapons.has(equippedWeapon)&&!debugCheatMode) return false;
+  if(!debugCheatMode && specialCooldownRemaining(equippedWeapon)>0) return false;
+  if(debugCheatMode) applyCheatInventory();
+  if(equippedWeapon==='flame'){
+    spawnFlameJet();
+  }else if(equippedWeapon==='clone'){
+    spawnShadowClone();
+  }else if(equippedWeapon==='bomb'){
+    if(!dropBombTrap()) return false;
+  }else{
+    return false;
+  }
+  if(!debugCheatMode) player.specialCooldowns[equippedWeapon]=SPECIAL_COOLDOWNS[equippedWeapon]||0;
+  refreshSpecialButton();
+  renderLoadoutBar();
+  return true;
+}
+
 // ===== Player =====
 const player={
   root:new THREE.Group(),
@@ -2445,6 +2698,7 @@ const player={
   clubPivot:null,
   attackT:-1, // >=0 while swinging
   attackCooldown:0,
+  specialCooldowns:{flame:0,clone:0,bomb:0},
   attackHit:new Set(), // artist ids already hit this swing
   vy:0,            // vertical velocity (jumping)
   isAir:false,     // true while jumping/falling
@@ -3135,13 +3389,29 @@ const BURST_SHOP_ITEMS=[
   {id:'prism',name:'PRISM',label:'Prism',cost:5},
   {id:'petal',name:'PETAL',label:'Petal',cost:5},
   {id:'star',name:'STAR',label:'Star',cost:5},
+  {id:'fire',name:'FIRE',label:'Flame',cost:5},
+  {id:'ice',name:'ICE',label:'Frost',cost:5},
+  {id:'tornado',name:'TWISTER',label:'Spiral',cost:5},
 ];
+const WEAPON_SHOP_ITEMS=[
+  {id:'flame',name:'FLAME',label:'1s cd',cost:10},
+  {id:'clone',name:'CLONE',label:'15s decoy',cost:10},
+  {id:'bomb',name:'BOMB',label:'trap x5',cost:10},
+];
+const SPECIAL_COOLDOWNS={flame:1,clone:25,bomb:3};
 let cleanerUses=0;
 let purchasedBurstEffects=new Set(['amber']);
 let equippedBurstEffect='amber';
+let purchasedWeapons=new Set();
+let equippedWeapon=null;
+let debugCheatMode=false;
 let currentCleanTarget=null;
 let cleanPromptCooldown=0;
+let activeClone=null;
+const activeBombs=[];
+const activeFlameJets=[];
 const cleanBtn=document.getElementById('clean-btn');
+const specialBtn=document.getElementById('special-btn');
 const shopBtn=document.getElementById('shop-btn');
 const shopPanel=document.getElementById('shop-panel');
 const shopClose=document.getElementById('shop-close');
@@ -3152,6 +3422,14 @@ const burstBuyButtons={
   prism:document.getElementById('buy-burst-prism-btn'),
   petal:document.getElementById('buy-burst-petal-btn'),
   star:document.getElementById('buy-burst-star-btn'),
+  fire:document.getElementById('buy-burst-fire-btn'),
+  ice:document.getElementById('buy-burst-ice-btn'),
+  tornado:document.getElementById('buy-burst-tornado-btn'),
+};
+const weaponBuyButtons={
+  flame:document.getElementById('buy-weapon-flame-btn'),
+  clone:document.getElementById('buy-weapon-clone-btn'),
+  bomb:document.getElementById('buy-weapon-bomb-btn'),
 };
 
 function setShopOpen(open){
@@ -3159,7 +3437,34 @@ function setShopOpen(open){
   shopPanel.classList.toggle('show',!!open);
 }
 
+function specialCooldownRemaining(id){
+  return Math.max(0,player.specialCooldowns?.[id]||0);
+}
+
+function applyCheatInventory(){
+  purchasedBurstEffects=new Set(BURST_SHOP_ITEMS.map(item=>item.id));
+  purchasedWeapons=new Set(WEAPON_SHOP_ITEMS.map(item=>item.id));
+  if(!equippedWeapon) equippedWeapon='flame';
+  cleanerUses=Math.max(cleanerUses,999);
+  coinCount=Math.max(coinCount,999);
+}
+
+function refreshSpecialButton(){
+  if(!specialBtn) return;
+  if(debugCheatMode) applyCheatInventory();
+  if(!equippedWeapon){
+    specialBtn.textContent='SKILL';
+    specialBtn.classList.add('cooling');
+    return;
+  }
+  const item=WEAPON_SHOP_ITEMS.find(w=>w.id===equippedWeapon);
+  const cd=specialCooldownRemaining(equippedWeapon);
+  specialBtn.textContent=(cd>0 && !debugCheatMode) ? `${item?.name||'SKILL'} ${cd.toFixed(1)}s` : (item?.name||'SKILL');
+  specialBtn.classList.toggle('cooling',cd>0 && !debugCheatMode);
+}
+
 function spendCoins(cost){
+  if(debugCheatMode) return true;
   if(coinCount<cost) return false;
   coinCount-=cost;
   updateCoinUI();
@@ -3168,12 +3473,14 @@ function spendCoins(cost){
 
 function renderLoadoutBar(){
   if(!loadoutBar) return;
+  if(debugCheatMode) applyCheatInventory();
   const parts=[];
   parts.push(
     `<div class="loadout-slot cleaner">
+      <div class="slot-kind">UTILITY</div>
       <div class="slot-name">SOAP</div>
-      <div class="slot-meta">${cleanerUses} clean uses</div>
-      <button type="button" disabled>${cleanerUses>0?'READY':'EMPTY'}</button>
+      <div class="slot-meta">${debugCheatMode?'∞':cleanerUses} clean uses</div>
+      <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
     </div>`
   );
   for(const item of BURST_SHOP_ITEMS){
@@ -3181,9 +3488,23 @@ function renderLoadoutBar(){
     const active=item.id===equippedBurstEffect?' active':'';
     parts.push(
       `<div class="loadout-slot${active}" data-burst-slot="${item.id}">
+        <div class="slot-kind">BURST</div>
         <div class="slot-name">${item.name}</div>
         <div class="slot-meta">${item.label}</div>
         <button type="button">${item.id===equippedBurstEffect?'EQUIPPED':'EQUIP'}</button>
+      </div>`
+    );
+  }
+  for(const item of WEAPON_SHOP_ITEMS){
+    if(!purchasedWeapons.has(item.id)) continue;
+    const active=item.id===equippedWeapon?' active':'';
+    const cd=specialCooldownRemaining(item.id);
+    parts.push(
+      `<div class="loadout-slot${active}" data-weapon-slot="${item.id}">
+        <div class="slot-kind">GEAR</div>
+        <div class="slot-name">${item.name}</div>
+        <div class="slot-meta">${debugCheatMode?'∞ ready':(cd>0?cd.toFixed(1)+'s':item.label)}</div>
+        <button type="button">${item.id===equippedWeapon?'EQUIPPED':'EQUIP'}</button>
       </div>`
     );
   }
@@ -3195,11 +3516,20 @@ function renderLoadoutBar(){
       renderShopState();
     });
   });
+  loadoutBar.querySelectorAll('[data-weapon-slot]').forEach(el=>{
+    el.querySelector('button')?.addEventListener('click',()=>{
+      equippedWeapon=el.getAttribute('data-weapon-slot');
+      refreshSpecialButton();
+      renderLoadoutBar();
+      renderShopState();
+    });
+  });
 }
 
 function renderShopState(){
+  if(debugCheatMode) applyCheatInventory();
   if(buyCleanerBtn){
-    buyCleanerBtn.disabled=coinCount<1;
+    buyCleanerBtn.disabled=!debugCheatMode&&coinCount<1;
     buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
   }
   for(const item of BURST_SHOP_ITEMS){
@@ -3207,9 +3537,17 @@ function renderShopState(){
     const btn=burstBuyButtons[item.id];
     if(!btn) continue;
     const owned=purchasedBurstEffects.has(item.id);
-    btn.disabled=owned||coinCount<item.cost;
-    btn.textContent=owned ? (equippedBurstEffect===item.id?'OWNED · EQUIPPED':'OWNED') : `BUY ${item.name}`;
+    btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
+    btn.textContent=owned ? (equippedBurstEffect===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
   }
+  for(const item of WEAPON_SHOP_ITEMS){
+    const btn=weaponBuyButtons[item.id];
+    if(!btn) continue;
+    const owned=purchasedWeapons.has(item.id);
+    btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
+    btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+  }
+  refreshSpecialButton();
   renderLoadoutBar();
 }
 
@@ -3217,6 +3555,15 @@ function resetShopState(){
   cleanerUses=0;
   purchasedBurstEffects=new Set(['amber']);
   equippedBurstEffect='amber';
+  purchasedWeapons=new Set();
+  equippedWeapon=null;
+  debugCheatMode=false;
+  if(activeClone?.root) scene.remove(activeClone.root);
+  activeClone=null;
+  for(const jet of activeFlameJets) scene.remove(jet.mesh);
+  activeFlameJets.length=0;
+  for(const bomb of activeBombs) scene.remove(bomb.group);
+  activeBombs.length=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
   setShopOpen(false);
@@ -3238,8 +3585,8 @@ function disposeGraffiti(p){
 }
 
 function cleanPillar(p){
-  if(!p||cleanerUses<=0) return false;
-  cleanerUses=Math.max(0,cleanerUses-1);
+  if(!p||(!debugCheatMode&&cleanerUses<=0)) return false;
+  if(!debugCheatMode) cleanerUses=Math.max(0,cleanerUses-1);
   if(p.fillCounted){
     p.fillCounted=false;
     paintFillCount=Math.max(0,paintFillCount-1);
@@ -3265,7 +3612,7 @@ function updateCleanPrompt(){
   }
   cleanPromptCooldown=6; // ~10 checks/sec instead of every frame
   currentCleanTarget=null;
-  if(gameState!=='playing' || cleanerUses<=0 || !player.root){
+  if(gameState!=='playing' || (!debugCheatMode&&cleanerUses<=0) || !player.root){
     cleanBtn.classList.add('hidden');
     return;
   }
@@ -3299,9 +3646,22 @@ for(const item of BURST_SHOP_ITEMS){
     renderShopState();
   });
 }
+for(const item of WEAPON_SHOP_ITEMS){
+  weaponBuyButtons[item.id]?.addEventListener('click',()=>{
+    if(purchasedWeapons.has(item.id)) return;
+    if(!spendCoins(item.cost)) return;
+    purchasedWeapons.add(item.id);
+    equippedWeapon=item.id;
+    renderShopState();
+  });
+}
 cleanBtn?.addEventListener('pointerdown',e=>{
   e.preventDefault();
   if(currentCleanTarget) cleanPillar(currentCleanTarget);
+});
+specialBtn?.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  useSpecialWeapon();
 });
 renderShopState();
 
@@ -3393,11 +3753,20 @@ window.addEventListener('keydown',e=>{
   if(k==='arrowright')keys.right=true;
   if(k===' '||k==='spacebar'){keys.space=true;tryJump();e.preventDefault()}
   if(k==='f'||k==='j'){tryAttack();e.preventDefault()}
-  if(k==='e'||k==='c'){ if(currentCleanTarget) { cleanPillar(currentCleanTarget); e.preventDefault(); } }
+  if(k==='q'||k==='k'){useSpecialWeapon();e.preventDefault()}
+  if(k==='e'||(k==='c'&&!e.shiftKey)){ if(currentCleanTarget) { cleanPillar(currentCleanTarget); e.preventDefault(); } }
   // Shift+X: toggle the debug coordinate readout. Updated in tick().
   if(k==='x'&&e.shiftKey){
     const el=document.getElementById('debug-coords');
     if(el) el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none';
+    e.preventDefault();
+  }
+  if(k==='c'&&e.shiftKey){
+    debugCheatMode=!debugCheatMode;
+    if(debugCheatMode) applyCheatInventory();
+    updateCoinUI();
+    renderShopState();
+    updatePaintBar();
     e.preventDefault();
   }
 });
@@ -3698,6 +4067,11 @@ const artWinsOverlay=document.getElementById('art-wins');
 
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
+  if(debugCheatMode){
+    timerEl.textContent='∞:∞∞';
+    timerBox.classList.remove('warn');
+    return;
+  }
   const r=Math.max(0,GAME_DURATION-gameTime);
   const m=Math.floor(r/60);
   const s=Math.floor(r%60);
@@ -3707,10 +4081,10 @@ function updateTimerUI(){
 
 function updatePaintBar(){
   if(!paintBarFill) return;
-  const pct=Math.min(100,(paintFillCount/PAINT_FILL_GOAL)*100);
+  const pct=debugCheatMode ? 0 : Math.min(100,(paintFillCount/PAINT_FILL_GOAL)*100);
   paintBarFill.style.height=pct+'%';
-  paintBarLabel.textContent=paintFillCount+'/'+PAINT_FILL_GOAL;
-  if(paintFillCount>=PAINT_FILL_GOAL && gameState==='playing'){
+  paintBarLabel.textContent=debugCheatMode ? 'TEST' : (paintFillCount+'/'+PAINT_FILL_GOAL);
+  if(!debugCheatMode && paintFillCount>=PAINT_FILL_GOAL && gameState==='playing'){
     triggerArtWins();
   }
 }
@@ -3790,6 +4164,9 @@ function startGame(){
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
+  player.specialCooldowns.flame=0;
+  player.specialCooldowns.clone=0;
+  player.specialCooldowns.bomb=0;
   fadeEl.classList.remove('show');
   artWinsOverlay.classList.remove('show');
   updateKillUI();updateCoinUI();updateTimerUI();updatePaintBar();
@@ -3881,6 +4258,7 @@ function resetWorld(){
   placePlayerOnPlayableLayer();player.curSpeed=0;
   player.vy=0;player.isAir=false;player.inWater=false;player.wasInWater=false;player.walkPhase=0;
   player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();
+  player.specialCooldowns.flame=0;player.specialCooldowns.clone=0;player.specialCooldowns.bomb=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
   spawnTimer=1.5;
@@ -3971,14 +4349,15 @@ function tick(){
   const nowS=now/1000;
   try{
     if(gameState==='playing'){
-      gameTime+=dt;
+      if(!debugCheatMode) gameTime+=dt;
       updateTimerUI();
       updatePlayer(dt);
       updateSpawns(dt);
       updateArtists(dt);
       updateCoins(dt,nowS);
+      updateSpecialWeapons(dt,nowS);
       updateSketch(dt,nowS);
-      if(gameTime>=GAME_DURATION){
+      if(!debugCheatMode && gameTime>=GAME_DURATION){
         endGame();
       }
       _perfFrames++;
