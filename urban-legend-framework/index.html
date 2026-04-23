@@ -872,6 +872,7 @@ let groundLoaded=false;
 let worldBoundR=40; // playable radius estimated from playground bbox
 const GROUND_Y_OFFSET=0.05; // small lift to avoid z-fighting with floor
 let playgroundRoot=null;
+let playgroundBounds=null;
 const groundMeshes=[];
 const ceilingOcclusionRay=new THREE.Raycaster();
 const ceilingOccludedMeshes=new Set();
@@ -1552,6 +1553,7 @@ async function loadPlayground(){
     root.position.z-=cz;
     root.position.y-=bbox2.min.y;
     root.updateMatrixWorld(true);
+    playgroundBounds=new THREE.Box3().setFromObject(root);
 
     root.traverse(o=>{
       if(o.isMesh){
@@ -1820,6 +1822,16 @@ function getPlayableBounds(){
       centerZ:playableLayer.centerZ,
     };
   }
+  if(playgroundBounds){
+    return {
+      minX:playgroundBounds.min.x,
+      maxX:playgroundBounds.max.x,
+      minZ:playgroundBounds.min.z,
+      maxZ:playgroundBounds.max.z,
+      centerX:(playgroundBounds.min.x+playgroundBounds.max.x)*0.5,
+      centerZ:(playgroundBounds.min.z+playgroundBounds.max.z)*0.5,
+    };
+  }
   return {
     minX:-worldBoundR,maxX:worldBoundR,
     minZ:-worldBoundR,maxZ:worldBoundR,
@@ -1974,7 +1986,9 @@ function placePlayerOnPlayableLayer(){
   const nearest=findBestPlayableSample({targetX:b.centerX,targetZ,preferDry:true,preferHigh:true});
   const x=nearest?nearest.x:b.centerX;
   const z=nearest?nearest.z:targetZ;
-  const y=nearest?nearest.y:getPlayableSurfaceY(x,z,playableLayer?playableLayer.y:0);
+  const y=nearest
+    ? nearest.y
+    : (rayGroundY(x,z,playableLayer?playableLayer.y:0,playableLayer?playableLayer.tolerance+2.5:6) ?? getPlayableSurfaceY(x,z,playableLayer?playableLayer.y:0));
   player.root.position.set(x,y+GROUND_Y_OFFSET,z);
   player.groundY=y;
   player.yaw=0;
@@ -2390,7 +2404,7 @@ async function loadCharacterTemplate(){
 async function loadPlayerAssets(){
   try{
     const loadTex=path=>new Promise(res=>textureLoader.load(path,tex=>res(tex),undefined,()=>res(null)));
-    const PLAYER_ANIM_REV='2026-04-24c';
+    const PLAYER_ANIM_REV='2026-04-24d';
     let baseGLTF=null;
     if('caches' in window){
       try{
@@ -2406,7 +2420,8 @@ async function loadPlayerAssets(){
         }
       }catch{}
     }
-    const [runGLTF,jumpGLTF,punchGLTF,kickGLTF,punchComboGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
+    const [idleGLTF,runGLTF,jumpGLTF,punchGLTF,kickGLTF,punchComboGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
+      loader.loadAsync(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_jump.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_punch.glb?v=${PLAYER_ANIM_REV}`),
@@ -2424,7 +2439,7 @@ async function loadPlayerAssets(){
     if(baseTex) baseTex.colorSpace=THREE.SRGBColorSpace;
     playerTextureSet={base:baseTex,normal:normalTex,rough:roughTex,metal:metalTex};
     playerGLTF=baseGLTF;
-    playerClipIdle=baseGLTF.animations[0]||null;
+    playerClipIdle=idleGLTF.animations[0]||baseGLTF.animations[0]||null;
     playerClipRun=runGLTF.animations[0]||null;
     playerClipJump=jumpGLTF.animations[0]||null;
     const rawPunchClip=punchGLTF.animations[0]||null;
@@ -2631,6 +2646,14 @@ function buildPlayerInstance(){
   const actFire=playerClipFire?mixer.clipAction(playerClipFire):null;
   const actThrowBomb=playerClipThrowBomb?mixer.clipAction(playerClipThrowBomb):null;
   const actClean=playerClipClean?mixer.clipAction(playerClipClean):null;
+  if(actIdle){
+    actIdle.setLoop(THREE.LoopRepeat);
+    actIdle.clampWhenFinished=false;
+  }
+  if(actRun){
+    actRun.setLoop(THREE.LoopRepeat);
+    actRun.clampWhenFinished=false;
+  }
   for(const act of [actJump,actPunch,actKick,actPunchCombo,actFire,actThrowBomb,actClean]){
     if(act){
       act.setLoop(THREE.LoopOnce);
@@ -4686,7 +4709,7 @@ function updatePlayer(dt){
     stopPlayerOneShotActions(I);
     if(I.actJump&&I.actJump.isRunning()) I.actJump.fadeOut(0.15);
     if(I.actRun&&I.actRun.isRunning()){ I.actRun.fadeOut(0.08); I.actRun.stop(); }
-    if(I.actIdle) I.actIdle.reset().fadeIn(0.08).play();
+    if(I.actIdle && !I.actIdle.isRunning()) I.actIdle.reset().fadeIn(0.08).play();
   }
   if(!inOneShot){
     I.actPunch&&I.actPunch.isRunning()&&I.actPunch.fadeOut(0.08);
@@ -5118,7 +5141,7 @@ async function init(){
   if(bvhReady) groundRaycaster.firstHitOnly=true;
 
   await Promise.all([loadCharacterTemplate(),loadPlayerAssets(),loadPlayground()]);
-  if(bvhReady){
+  if(false && bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
     playableLayer=await detectPlayableLayer(p=>{
       const pct=Math.floor(p*100);
@@ -5147,6 +5170,29 @@ async function init(){
   loadCoin();
   if(bvhReady){
     Promise.resolve().then(async()=>{
+      try{
+        startBtn.textContent='SCANNING FLOORSâ€¦';
+        const scannedLayer=await detectPlayableLayer(p=>{
+          if(startBtn.disabled) return;
+          const pct=Math.floor(p*100);
+          startBtn.textContent='SCANNING FLOORSâ€¦ '+pct+'%';
+        });
+        if(scannedLayer){
+          playableLayer=scannedLayer;
+          worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
+          liftCeilingGeometry(playgroundRoot,playableLayer.ceilingY,5);
+          groundYCache.clear();
+          collectGroundMeshes(playgroundRoot);
+          playableLayer.sampleIndex=buildPlayableSampleIndex(playableLayer);
+          refreshPlayablePillars();
+          if(gameState==='intro') placePlayerOnPlayableLayer();
+          console.log('[floor] selected layer:',playableLayer,'indexCells=',playableLayer.sampleIndex?playableLayer.sampleIndex.grid.size:0);
+        }
+      }catch(e){
+        console.warn('[floor] detection failed',e);
+      }finally{
+        if(gameState==='intro') startBtn.textContent=origLabel;
+      }
       try{
         RIVERS=await detectRiverBounds();
         RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
