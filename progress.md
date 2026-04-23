@@ -71,3 +71,6 @@ TODO:
 - Mobile loadout toggle was moved farther right so it no longer overlaps the rainbow paint bar, and it is now a blue circular button using a clothing icon instead of text.
 - Artist population tuning was tightened to reduce both clutter and CPU cost: the live cap is now 5, and when the active count drops to 3 or below the spawn timer shortens so replacements appear quickly.
 - Performance was reduced more aggressively on mobile: the VHS/composer pass is skipped entirely during gameplay rendering, and heavy `coin.glb` loading is bypassed on mobile in favor of the lightweight fallback coin mesh.
+- User rejected the previous visual downgrade. Restored the original post-process / scene presentation by re-enabling the composer+VHS render path on mobile again and restoring normal `coin.glb` loading; kept only the functional mobile UI position fix for the loadout button.
+- Loadout toggle icon is now a simple pure-white shirt silhouette (mask-based icon), with no text or interior detail, while staying in the moved-right blue circular button position.
+- Attack movement slowdown was relaxed from 10% back to 20% so the player can keep drifting in the pressed direction during punch/skill actions as requested.

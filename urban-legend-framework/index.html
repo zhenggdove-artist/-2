@@ -207,7 +207,11 @@
     color:#08386f;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(123,207,255,0.2);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
     pointer-events:auto;cursor:pointer}
-  #loadout-toggle .lt-ico{display:block;font-size:24px;line-height:54px;margin:0;text-align:center}
+  #loadout-toggle .lt-ico{display:block;width:24px;height:24px;margin:15px auto 0;background:#fff;
+    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;
+    -webkit-mask-size:contain;mask-size:contain;
+    -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path fill='black' d='M22 10h20l8 9 10 5-7 14-7-3v19H18V35l-7 3-7-14 10-5 8-9z'/></svg>");
+    mask-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path fill='black' d='M22 10h20l8 9 10 5-7 14-7-3v19H18V35l-7 3-7-14 10-5 8-9z'/></svg>\")}
   .loadout-slot{width:70px;min-height:76px;padding:8px 6px;border-radius:18px;background:rgba(28,19,38,0.82);
     border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 20px rgba(0,0,0,0.28);color:#f7f0ff;
     font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
@@ -436,7 +440,7 @@
 </div>
 
 <div id="loadout-bar"></div>
-<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico">👕</span></button>
+<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico" aria-hidden="true"></span></button>
 
 <div id="intro">
   <h1>DEFEND YOUR HOME</h1>
@@ -826,9 +830,9 @@ function makePlant(seedText){
 // ===== Renderer / Scene / Camera =====
 const canvas=document.getElementById('c');
 const IS_MOBILE_LAYOUT=window.matchMedia('(max-width:640px),(pointer:coarse)').matches;
-const renderer=new THREE.WebGLRenderer({canvas,antialias:!IS_MOBILE_LAYOUT});
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setSize(W(),H());
-renderer.setPixelRatio(Math.min(window.devicePixelRatio,IS_MOBILE_LAYOUT?1:1.35));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
@@ -901,7 +905,7 @@ const composer=new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
 const vhsPass=new ShaderPass(VHSShader);
 composer.addPass(vhsPass);
-let vhsEnabled=!IS_MOBILE_LAYOUT;
+let vhsEnabled=true;
 vhsPass.enabled=vhsEnabled;
 window.addEventListener('keydown',e=>{
   if(e.shiftKey&&e.key==='V'){e.preventDefault();vhsEnabled=!vhsEnabled;vhsPass.enabled=vhsEnabled}
@@ -4080,9 +4084,6 @@ const COIN_VANISH_DUR=0.7; // seconds — rise + spin + fade
 
 async function loadCoin(){
   try{
-    if(IS_MOBILE_LAYOUT){
-      throw new Error('skip-heavy-coin-on-mobile');
-    }
     const gltf=await loader.loadAsync('coin.glb');
     coinModel=gltf.scene;
     coinModel.scale.setScalar(COIN_SCALE);
@@ -4831,7 +4832,7 @@ function updatePlayer(dt){
   const il=Math.sqrt(ix*ix+iy*iy);
   if(il>1){ix/=il;iy/=il}
   const hasInput=(il>0.05);
-  const attackSlowMul=(attackInputState.isDown||player.attackT>=0||player.specialAnimT>0||player.pendingSpecialAction)?0.1:1;
+  const attackSlowMul=(attackInputState.isDown||player.attackT>=0||player.specialAnimT>0||player.pendingSpecialAction)?0.2:1;
   // forward = away from camera; W (ky=-1) and joystick-up (joyY<0) should both move forward
   const mdx=-iy*fwdX+ix*rightX;
   const mdz=-iy*fwdZ+ix*rightZ;
@@ -5341,12 +5342,8 @@ function tick(){
     updateCeilingOcclusion();
     updateDebugCoords();
 
-    if(IS_MOBILE_LAYOUT){
-      renderer.render(scene,camera);
-    }else{
-      vhsPass.uniforms.time.value=nowS;
-      composer.render();
-    }
+    vhsPass.uniforms.time.value=nowS;
+    composer.render();
   }catch(e){
     console.error('[tick] update failed:',e);
   }
