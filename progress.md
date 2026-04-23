@@ -39,3 +39,8 @@ TODO:
 
 - Reworked player attack input toward tap/hold semantics: short tap schedules punch, long hold triggers kick, and a second quick tap upgrades the pending hit to combo. Also cut player speed by 20% while attacking/holding attack and snap run->idle immediately when movement input stops to reduce visible foot-sliding.
 - Converted burst FX progression from shop purchases to KO-based unlocks in code (10/20/30 kills for snowflake/hexagram/heart) and hid unsupported legacy burst shop cards. Startup now defers coin loading and schedules river scanning asynchronously instead of putting both on the critical path.
+- Added lightweight `mainplayermodel/player_clean.glb` from `action/Clean.fbx`, wired clean requests to play the clean animation first, and included `actClean` in the one-shot reset logic so the player returns to idle instead of freezing on a tail frame.
+- Tightened the single-tap punch subclip further so only the middle "real" punch section remains, and generalized player one-shot playback so throw-bomb can be sped up safely.
+- Changed bomb behavior so the throw animation plays at 1.7x speed, the bomb object appears only after the animation completes, it auto-detonates after 10 seconds, and the blast uses a 5x5-area mushroom cloud particle effect.
+- Added localStorage caches for playable-layer and river detection to reduce repeat startup scan time. A fresh Playwright smoke run still found `#start-btn` disabled after the client's 5s click timeout, so first-load startup is better but not solved yet.
+- Added camera-to-player roof occlusion fading: overhead ceiling meshes that block the camera ray now fade to semi-transparent and restore automatically when the line of sight clears.
