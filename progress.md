@@ -47,3 +47,7 @@ TODO:
 - Replaced the unstable built-in player idle with a lightweight `mainplayermodel/player_idle.glb` exported from `action/Idle.fbx`, and stopped re-resetting idle every frame so the player no longer T-poses/shivers while standing still.
 - Moved both floor scanning and artist-template loading off the initial blocking path. Current browser probe shows `#start-btn` returns to `BEGIN` and becomes enabled within ~3 seconds on first load instead of staying stuck disabled.
 - Player textures are now loaded in the background after the base player model/animations, so the game can enter sooner and the mesh gets detailed materials once they finish.
+- Replaced the player idle source again using `mainplayermodel/action/Neutral Idle.fbx` exported as a lighter `player_idle.glb`, and sanitized player clips with the same hip/root position-track stripping used for artists. This is aimed at the stop->sink->T-pose hitch when switching from run to idle.
+- Added stronger idle/run recovery helpers so stopping movement no longer depends only on `isRunning()`; if idle is technically running but at near-zero weight, it now gets faded back in instead of leaving the player with no meaningful clip influence.
+- Reduced mid-game overhead further by updating KO burst particles only for active particle indices instead of scanning the full `KO_MAX` pool every frame, and throttled the roof-occlusion raycast to every few frames.
+- Ice block visuals now use a 3D hexagonal prism silhouette instead of a cube.
