@@ -1754,181 +1754,76 @@ function makeGraffitiTexture(seed){
 // authoritative surface. This avoids relying on the heuristic-detected
 // pillar.mesh being correct (it often was just one fragment of a
 // larger structure mesh and DecalGeometry would silently empty).
-const _gfxRay=new THREE.Raycaster();
 function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   if(pillar.graffiti) return pillar.graffiti;
-  const seed=Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999);
-  const {tex,render}=makeGraffitiTexture(seed);
 
-  // direction from artist toward pillar (world-space)
+  // Pure bbox-based placement. Every previous raycast-based strategy
+  // failed on the user's playground because (a) many pillars share a
+  // single merged mesh whose bbox engulfs the artist, so raycasts
+  // from artist outward never hit the skin from the inside, and (b)
+  // the playgroundRoot fallback kept grabbing background walls. Now
+  // we just use each pillar's OWN pos + halfW (set by detectPillars
+  // from per-pillar bbox) + the mesh's Y range so every pillar in
+  // the pillars[] array gets its own tag on its own geometry.
+
   const dir=new THREE.Vector3(artistFacing.x,0,artistFacing.z);
   if(dir.lengthSq()<1e-6) dir.set(1,0,0);
   dir.normalize();
 
-  let mesh=null;
-  let hit=null;
-  // Sweep a small cone of directions × heights. pillar.mesh pass uses
-  // firstHitOnly=true (pillars are vertical so the first hit IS the
-  // skin) — 3× faster with BVH. The playgroundRoot fallback keeps
-  // firstHitOnly=false because THAT one might poke through a floor
-  // before a wall, and we need to walk past it.
-  //
-  // 3 angles × 2 heights against pillar.mesh = 6 rays; 3×1 against
-  // playground = 3 rays. Down from 20+ before.
-  const prev=_gfxRay.firstHitOnly;
-  const _sweep=new THREE.Vector3();
-  const _origin=new THREE.Vector3();
-  const tryRay=(target,heights,angles,far,skipHorizontal)=>{
-    for(let i=0;i<heights.length;i++){
-      const dy=heights[i];
-      _origin.set(artistPos.x,(artistPos.y||0)+dy,artistPos.z);
-      for(let j=0;j<angles.length;j++){
-        const ang=angles[j];
-        const c=Math.cos(ang),s=Math.sin(ang);
-        _sweep.set(dir.x*c - dir.z*s, 0, dir.x*s + dir.z*c).normalize();
-        _gfxRay.set(_origin,_sweep);
-        _gfxRay.far=far;
-        const hits=_gfxRay.intersectObject(target,true);
-        for(let k=0;k<hits.length;k++){
-          const h=hits[k];
-          if(!h.face||!h.object||!h.object.geometry) continue;
-          if(skipHorizontal){
-            const n=h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
-            if(Math.abs(n.y)>0.6) continue;
-          }
-          return h;
-        }
-      }
-    }
-    return null;
-  };
+  // Normal points from pillar center toward the artist (so the
+  // graffiti face is the side the artist is standing on).
+  const surfaceNormal=dir.clone().negate();
+  surfaceNormal.y=0;
+  surfaceNormal.normalize();
+
+  // Figure out where on the pillar to place the plane.
+  // X/Z: pillar centre shifted outward by halfW along the normal.
+  // Y:   middle of the pillar mesh's bbox if we have the mesh;
+  //      otherwise pillar.pos.y + topY*0.45 as a last resort.
+  let halfExt=Math.max(0.4,pillar.halfW||0.7);
+  let cx=pillar.pos.x||0;
+  let cz=pillar.pos.z||0;
+  let cy=(pillar.pos.y||0)+(pillar.topY||2.5)*0.45;
   if(pillar.mesh){
-    _gfxRay.firstHitOnly=true;
-    hit=tryRay(pillar.mesh,[1.20,0.60],[0,-0.45,0.45],4.0,false);
-  }
-  if(!hit && playgroundRoot){
-    _gfxRay.firstHitOnly=false;
-    hit=tryRay(playgroundRoot,[1.20],[0,-0.35,0.35],2.2,true);
-  }
-  _gfxRay.firstHitOnly=prev;
-
-  if(hit){
-    const targetMesh=hit.object;
-    const surfacePt=hit.point.clone();
-    let surfaceNormal=hit.face.normal.clone()
-      .transformDirection(targetMesh.matrixWorld)
-      .normalize();
-    // Make the normal point back toward the artist
-    if(surfaceNormal.dot(dir)>0) surfaceNormal.negate();
-    // Flatten tilt so the decal stays upright
-    surfaceNormal.y=0;
-    if(surfaceNormal.lengthSq()<0.05) surfaceNormal.copy(dir).negate();
-    surfaceNormal.normalize();
-
-    // Decal box: face the surface normal. Local -Z of the orientation
-    // must point INTO the surface.
-    const forward=surfaceNormal.clone().negate();
-    const up=new THREE.Vector3(0,1,0);
-    let right=new THREE.Vector3().crossVectors(up,forward);
-    if(right.lengthSq()<0.01) right.set(1,0,0);
-    right.normalize();
-    const upFixed=new THREE.Vector3().crossVectors(forward,right).normalize();
-    const rotM=new THREE.Matrix4().makeBasis(right,upFixed,forward);
-    const orient=new THREE.Euler().setFromRotationMatrix(rotM);
-
-    const decalH=2.0;
-    const decalW=1.7;
-    const decalDepth=0.5; // thin slab so we only carve the front face
-    const boxCentre=surfacePt.clone().addScaledVector(surfaceNormal,-decalDepth*0.15);
-
-    // DecalGeometry iterates every triangle of the target mesh. For the
-    // giant playground structure mesh that can take hundreds of ms and
-    // look like a game hang. Skip the decal for ultra-dense targets and
-    // fall straight to the surface-locked plane, which looks nearly
-    // identical but is free.
-    const targetTri=targetMesh.geometry.index
-      ? targetMesh.geometry.index.count/3
-      : targetMesh.geometry.attributes.position.count/3;
-    if(targetTri<=18000){
-      try{
-        const decalGeo=new DecalGeometry(
-          targetMesh,
-          boxCentre,
-          orient,
-          new THREE.Vector3(decalW,decalH,decalDepth)
-        );
-        if(decalGeo.attributes.position && decalGeo.attributes.position.count>0){
-          const mat=new THREE.MeshBasicMaterial({
-            map:tex,transparent:true,opacity:0.97,depthWrite:false,
-            polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
-          });
-          mesh=new THREE.Mesh(decalGeo,mat);
-          mesh.renderOrder=3;
-        }else{
-          decalGeo.dispose();
-        }
-      }catch(e){/* fall through to plane fallback */}
-    }
-
-    // Fallback plane parked flush on the hit surface, sized to fit
-    // most pillars without hanging off the edges.
-    if(!mesh){
-      const planeH=1.4,planeW=1.1;
-      const geo=new THREE.PlaneGeometry(planeW,planeH);
-      const mat=new THREE.MeshBasicMaterial({
-        map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
-        polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
-      });
-      mesh=new THREE.Mesh(geo,mat);
-      mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
-      mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
-      mesh.renderOrder=3;
-    }
-  }else if(pillar.mesh){
-    // Raycast sweep missed every angle/height. Most likely the
-    // artist is standing inside a merged multi-pillar mesh's bbox,
-    // so rays were casting FROM inside TO inside. Fallback: place
-    // the plane on the bbox face closest to the artist. That's
-    // still on (or very near) the pillar's real skin and avoids
-    // the "2 pillars work, 8 don't" issue that pure raycast had.
     const bb=new THREE.Box3().setFromObject(pillar.mesh);
     if(isFinite(bb.min.x)){
-      const ax=artistPos.x, az=artistPos.z;
-      // Which of the 4 XZ bbox faces is the artist closest to?
-      const dLeft=Math.abs(ax-bb.min.x);
-      const dRight=Math.abs(bb.max.x-ax);
-      const dFront=Math.abs(az-bb.min.z);
-      const dBack=Math.abs(bb.max.z-az);
-      const m=Math.min(dLeft,dRight,dFront,dBack);
-      let fx=0,fz=0,faceX=ax,faceZ=az;
-      if(m===dLeft){ fx=-1; faceX=bb.min.x; faceZ=Math.max(bb.min.z,Math.min(bb.max.z,az)); }
-      else if(m===dRight){ fx=1; faceX=bb.max.x; faceZ=Math.max(bb.min.z,Math.min(bb.max.z,az)); }
-      else if(m===dFront){ fz=-1; faceZ=bb.min.z; faceX=Math.max(bb.min.x,Math.min(bb.max.x,ax)); }
-      else{ fz=1; faceZ=bb.max.z; faceX=Math.max(bb.min.x,Math.min(bb.max.x,ax)); }
-      const surfaceNormal=new THREE.Vector3(fx,0,fz);
-      const faceY=Math.max(bb.min.y+0.6,Math.min(bb.max.y-0.4,(artistPos.y||0)+1.1));
-      const surfacePt=new THREE.Vector3(faceX,faceY,faceZ);
-      const planeH=1.4,planeW=1.1;
-      const geo=new THREE.PlaneGeometry(planeW,planeH);
-      const mat=new THREE.MeshBasicMaterial({
-        map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
-        polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
-      });
-      mesh=new THREE.Mesh(geo,mat);
-      mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
-      mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
-      mesh.renderOrder=3;
-      pillar.graffitiSide=surfaceNormal.clone();
+      // Use mesh centre instead of pillar.pos.x/z only when the
+      // mesh is genuinely narrow (single pillar); for a merged row,
+      // the mesh centre is useless and pillar.pos (which is the
+      // detectPillars-captured center) stays correct.
+      const bw=(bb.max.x-bb.min.x);
+      const bd=(bb.max.z-bb.min.z);
+      if(bw<4 && bd<4){
+        cx=(bb.min.x+bb.max.x)*0.5;
+        cz=(bb.min.z+bb.max.z)*0.5;
+        halfExt=Math.max(0.35,Math.min(bw,bd)*0.5+0.05);
+      }
+      cy=(bb.min.y+bb.max.y)*0.5;
     }
   }
-  if(!mesh){
-    tex.dispose&&tex.dispose();
-    return null;
-  }
+
+  const surfacePt=new THREE.Vector3(
+    cx+surfaceNormal.x*halfExt,
+    cy,
+    cz+surfaceNormal.z*halfExt
+  );
+
+  const seed=Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999);
+  const {tex,render}=makeGraffitiTexture(seed);
+  const planeH=1.4,planeW=1.1;
+  const geo=new THREE.PlaneGeometry(planeW,planeH);
+  const mat=new THREE.MeshBasicMaterial({
+    map:tex,transparent:true,opacity:0.96,depthWrite:false,side:THREE.DoubleSide,
+    polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8,
+  });
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.copy(surfacePt).addScaledVector(surfaceNormal,0.025);
+  mesh.lookAt(mesh.position.x+surfaceNormal.x,mesh.position.y,mesh.position.z+surfaceNormal.z);
+  mesh.renderOrder=3;
 
   scene.add(mesh);
   pillar.graffiti=mesh;
-  pillar.graffitiSide=dir.clone().negate();
+  pillar.graffitiSide=surfaceNormal.clone();
   pillar.graffitiRender=render;
   pillar.graffitiProgress=0;
   render(0.02);
@@ -1945,21 +1840,23 @@ let clipArtistIdle=null,clipArtistWalk=null;
 let extraCharacterClipsPromise=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
 
-// Detected once from the GLB after it loads. If the GLB's bones are
-// named "mixamorig:Hips" we keep that prefix on FBX clip tracks; if
-// they're bare ("Hips") we strip the prefix. Getting this wrong
-// produces the T-pose bug (clip loads but tracks bind to nothing).
-let _mixamoPrefix='';
-function detectMixamoPrefix(scene){
-  if(!scene) return '';
-  let pre='';
-  scene.traverse(o=>{
-    if(!o.isBone||pre) return;
-    const m=/^(mixamorig\d*:)/i.exec(o.name||'');
-    if(m) pre=m[1];
-  });
-  return pre;
+// Set of every bone name in the GLB skeleton. Populated right after
+// charGLTF loads, used by sanitizeClip to resolve each FBX/GLB track
+// to an actual bone regardless of which Mixamo-prefix variant the
+// export used. Previous "detect one prefix, apply everywhere"
+// approach failed whenever a clip's tracks and the GLB's bones
+// happened to use DIFFERENT prefix variants (mixamorig: vs
+// mixamorig1: vs none).
+const _boneNames=new Set();
+function collectBoneNames(scene){
+  _boneNames.clear();
+  if(!scene) return;
+  scene.traverse(o=>{if(o.isBone&&o.name) _boneNames.add(o.name)});
 }
+// Debug snapshot that the Shift+X HUD reads — gives the user a
+// visual confirmation that clips actually bound instead of silently
+// playing nothing.
+const _clipDebug={prefix:'',boneSample:'',clips:{}};
 
 function sanitizeClip(clip){
   // 1. Drop position tracks on the root/hip bones — they'd teleport
@@ -1968,19 +1865,35 @@ function sanitizeClip(clip){
     if(!t.name||!t.name.endsWith('.position'))return true;
     return !/hips|root|armature|mixamorig/i.test(t.name);
   });
-  // 2. Normalise the bone-name prefix to whatever the GLB skeleton
-  //    actually uses. Mixamo FBX tracks always start with
-  //    "mixamorig:" / "mixamorig1:"; the GLB may or may not, so we
-  //    strip the FBX prefix and re-prepend the GLB's detected one.
+  // 2. Resolve each track's bone reference against the real skeleton.
+  //    Try the track name as-is, stripped, and with a few known
+  //    prefixes. First variant that matches an actual bone wins.
+  //    This handles every combination (prefixed GLB + prefixed FBX,
+  //    bare GLB + prefixed FBX, prefixed1 FBX vs prefixed GLB, etc.)
+  //    without having to guess up-front.
+  let bound=0;
   for(const t of clip.tracks){
     if(!t.name) continue;
-    const stripped=t.name.replace(/^mixamorig\d*:/i,'');
-    t.name=_mixamoPrefix+stripped;
+    const dot=t.name.lastIndexOf('.');
+    if(dot<0) continue;
+    const bone=t.name.substring(0,dot);
+    const prop=t.name.substring(dot);
+    if(_boneNames.has(bone)){bound++;continue}
+    const stripped=bone.replace(/^mixamorig\d*:/i,'');
+    const tryNames=[
+      stripped,
+      'mixamorig:'+stripped,
+      'mixamorig1:'+stripped,
+      'mixamorig0:'+stripped,
+      'mixamorig2:'+stripped,
+    ];
+    for(const tn of tryNames){
+      if(_boneNames.has(tn)){t.name=tn+prop;bound++;break}
+    }
   }
-  // Diagnostic: first track name post-sanitize, so "why is this
-  // character T-posing" becomes easy to spot in the console.
-  console.log('[clip]',clip.name,'tracks:',clip.tracks.length,
-    'first:',clip.tracks[0]?.name);
+  const first=clip.tracks[0]?.name||'?';
+  console.log('[clip]',clip.name,'tracks:',clip.tracks.length,'bound:',bound,'first:',first);
+  _clipDebug.clips[clip.name]={tracks:clip.tracks.length,bound,first};
   return clip;
 }
 
@@ -2006,10 +1919,16 @@ async function loadCharacterTemplate(){
     }
     if(!gltf) gltf=await loader.loadAsync('character.glb');
     charGLTF=gltf;
-    // Detect bone-name convention BEFORE sanitising any clip — both
-    // the GLB's own and the FBX clips share the same normaliser.
-    _mixamoPrefix=detectMixamoPrefix(gltf.scene);
-    console.log('[char] mixamoPrefix=',JSON.stringify(_mixamoPrefix));
+    // Build the bone-name Set BEFORE sanitising any clip — both the
+    // GLB's own clips and the FBX clips will use it to pick the
+    // right prefix variant for each track.
+    collectBoneNames(gltf.scene);
+    // Capture a few sample bone names for the Shift+X HUD.
+    const _sampleBones=[];
+    gltf.scene.traverse(o=>{if(o.isBone&&_sampleBones.length<3) _sampleBones.push(o.name)});
+    _clipDebug.boneSample=_sampleBones.join(',');
+    _clipDebug.boneCount=_boneNames.size;
+    console.log('[char] bones:',_boneNames.size,'sample:',_sampleBones);
     // Find animations
     for(const clip of gltf.animations){
       const n=(clip.name||'').toLowerCase();
@@ -2076,17 +1995,10 @@ function rewireArtistActions(){
   }
 }
 
-let _boneSampleLogged=false;
 function buildCharacterInstance(tint,isArtist){
   if(!charGLTF) return null;
   const root=SkeletonUtils.clone(charGLTF.scene);
   root.scale.setScalar(100); // Mixamo 0.01 undo
-  if(!_boneSampleLogged){
-    _boneSampleLogged=true;
-    const bones=[];
-    root.traverse(o=>{if(o.isBone&&bones.length<4) bones.push(o.name)});
-    console.log('[bones] sample:',bones,'prefix:',JSON.stringify(_mixamoPrefix));
-  }
   root.traverse(o=>{
     if(o.isMesh){
       o.frustumCulled=false;
@@ -3405,6 +3317,15 @@ function updateDebugCoords(){
   const inR=(RIVERS||[]).some(rv=>p.x>=rv.minX&&p.x<=rv.maxX&&p.z>=rv.minZ&&p.z<=rv.maxZ);
   const fpsNow=Math.round(1000/Math.max(0.1,_frameMs));
   const fpsAvg=Math.round(1000/Math.max(0.1,_frameMsAvg));
+  // Per-clip binding summary so the user can see at a glance if
+  // a specific animation failed to attach to the skeleton.
+  const cs=_clipDebug.clips;
+  const clipStat=name=>{
+    const d=cs[name];
+    if(!d) return name+':?';
+    return name+':'+d.bound+'/'+d.tracks;
+  };
+  const graffitiCount=pillars.reduce((n,pp)=>n+(pp.graffiti?1:0),0);
   _debugEl.textContent=
     'X: '+p.x.toFixed(2)+
     '\nY: '+p.y.toFixed(2)+
@@ -3415,7 +3336,13 @@ function updateDebugCoords(){
     '\nriv: '+(inR?'IN':'-')+' ('+r+')'+
     '\nart: '+artists.length+
     '\nfps: '+fpsNow+' avg '+fpsAvg+
-    '\nmaxMs: '+_frameMsMax.toFixed(0);
+    '\nmaxMs: '+_frameMsMax.toFixed(0)+
+    '\nbones: '+(_clipDebug.boneCount||0)+
+    '\nsample: '+(_clipDebug.boneSample||'?').slice(0,40)+
+    '\n'+clipStat('idle')+' '+clipStat('walk')+
+    '\n'+clipStat('artist-idle')+' '+clipStat('artist-walk')+
+    '\n'+clipStat('paint')+
+    '\npillars: '+pillars.length+' graf: '+graffitiCount;
 }
 
 // ===== Main loop =====
