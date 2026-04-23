@@ -1,0 +1,6 @@
+[
+  {
+    "type": "pageerror",
+    "text": "SyntaxError: Invalid left-hand side in assignment"
+  }
+]

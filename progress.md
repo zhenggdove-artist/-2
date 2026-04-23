@@ -31,3 +31,6 @@ Progress:
 TODO:
 - Tune the new special weapons if the user wants stronger or more tactical behavior; current versions prioritize low-risk implementation and stable frame-time.
 - If needed, clean up a few mojibake shop labels caused by the source file's mixed encoding history.
+
+- Re-exported mainplayermodel/player_kick.glb, player_punchcombo.glb, and replaced player_jump.glb from the user's new FBX actions using armature-only GLB export so the files stay lightweight.
+- Updated player combat to rotate attacks in order: punch -> kick -> combo, with per-clip one-shot timing instead of a single fixed punch duration.
