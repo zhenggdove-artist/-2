@@ -348,32 +348,32 @@
   <div class="shop-card burst-card">
     <h4>PRISM BURST · 5 COINS</h4>
     <p>Multicolor confetti burst when an artist is knocked down.</p>
-    <button class="shop-buy" id="buy-burst-prism-btn">BUY PRISM</button>
+    <button class="shop-buy" id="buy-burst-prism-btn" hidden>BUY PRISM</button>
   </div>
   <div class="shop-card">
     <h4>PETAL BURST · 5 COINS</h4>
     <p>Heart-shaped pink petal cloud that blooms outward.</p>
-    <button class="shop-buy" id="buy-burst-petal-btn">BUY PETAL</button>
+    <button class="shop-buy" id="buy-burst-petal-btn" hidden>BUY PETAL</button>
   </div>
   <div class="shop-card burst-card">
     <h4>STAR BURST · 5 COINS</h4>
     <p>Golden five-point star cloud with glitter spokes.</p>
-    <button class="shop-buy" id="buy-burst-star-btn">BUY STAR</button>
+    <button class="shop-buy" id="buy-burst-star-btn" hidden>BUY STAR</button>
   </div>
   <div class="shop-card burst-card">
     <h4>FIRE BURST - 5 COINS</h4>
     <p>Orange flame tongues and hot cinders when an artist is knocked down.</p>
-    <button class="shop-buy" id="buy-burst-fire-btn">BUY FIRE</button>
+    <button class="shop-buy" id="buy-burst-fire-btn" hidden>BUY FIRE</button>
   </div>
   <div class="shop-card burst-card">
     <h4>ICE BURST - 5 COINS</h4>
     <p>Blue-white six-arm snowflake cloud with cold sparkles.</p>
-    <button class="shop-buy" id="buy-burst-ice-btn">BUY ICE</button>
+    <button class="shop-buy" id="buy-burst-ice-btn" hidden>BUY ICE</button>
   </div>
   <div class="shop-card burst-card">
     <h4>TORNADO BURST - 5 COINS</h4>
     <p>Spiral gusts that corkscrew upward before fading.</p>
-    <button class="shop-buy" id="buy-burst-tornado-btn">BUY TORNADO</button>
+    <button class="shop-buy" id="buy-burst-tornado-btn" hidden>BUY TORNADO</button>
   </div>
   <div class="shop-section skill-section">SKILL GEAR</div>
   <div class="shop-card skill-card">
@@ -2420,24 +2420,28 @@ async function loadPlayerAssets(){
         }
       }catch{}
     }
-    const [idleGLTF,runGLTF,jumpGLTF,punchGLTF,kickGLTF,punchComboGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
+    const [idleGLTF,runGLTF,jumpGLTF,punchGLTF,kickGLTF,punchComboGLTF]=await Promise.all([
       loader.loadAsync(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_jump.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_punch.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_kick.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_punchcombo.glb?v=${PLAYER_ANIM_REV}`),
+    ]);
+    if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
+    Promise.all([
       loadTex('mainplayermodel/tripo_model_basecolor.JPEG'),
       loadTex('mainplayermodel/tripo_model_normal.JPEG'),
       loadTex('mainplayermodel/tripo_model_roughness.JPEG'),
       loadTex('mainplayermodel/tripo_model_metallic.JPEG'),
-    ]);
-    if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
-    for(const tex of [baseTex,normalTex,roughTex,metalTex]){
-      if(tex) tex.flipY=false;
-    }
-    if(baseTex) baseTex.colorSpace=THREE.SRGBColorSpace;
-    playerTextureSet={base:baseTex,normal:normalTex,rough:roughTex,metal:metalTex};
+    ]).then(([baseTex,normalTex,roughTex,metalTex])=>{
+      for(const tex of [baseTex,normalTex,roughTex,metalTex]){
+        if(tex) tex.flipY=false;
+      }
+      if(baseTex) baseTex.colorSpace=THREE.SRGBColorSpace;
+      playerTextureSet={base:baseTex,normal:normalTex,rough:roughTex,metal:metalTex};
+      if(player.inst?.applyTextures) player.inst.applyTextures();
+    }).catch(()=>{});
     playerGLTF=baseGLTF;
     playerClipIdle=idleGLTF.animations[0]||baseGLTF.animations[0]||null;
     playerClipRun=runGLTF.animations[0]||null;
@@ -2604,6 +2608,19 @@ function buildCharacterInstance(tint,isArtist){
 function buildPlayerInstance(){
   if(!playerGLTF) return null;
   const root=SkeletonUtils.clone(playerGLTF.scene);
+  const applyTextures=()=>{
+    root.traverse(o=>{
+      if(!o.isMesh||!o.material||!playerTextureSet) return;
+      const mats=Array.isArray(o.material)?o.material:[o.material];
+      for(const m of mats){
+        if(playerTextureSet.base) m.map=playerTextureSet.base;
+        if(playerTextureSet.normal) m.normalMap=playerTextureSet.normal;
+        if(playerTextureSet.rough) m.roughnessMap=playerTextureSet.rough;
+        if(playerTextureSet.metal) m.metalnessMap=playerTextureSet.metal;
+        m.needsUpdate=true;
+      }
+    });
+  };
   root.traverse(o=>{
     if(o.isMesh){
       o.frustumCulled=false;
@@ -2625,6 +2642,7 @@ function buildPlayerInstance(){
       }
     }
   });
+  applyTextures();
   const outer=new THREE.Group();
   outer.add(root);
   root.updateMatrixWorld(true);
@@ -2661,7 +2679,7 @@ function buildPlayerInstance(){
     }
   }
   actIdle&&actIdle.play();
-  return {root,outer,mixer,actIdle,actRun,actJump,actPunch,actKick,actPunchCombo,actFire,actThrowBomb,actClean,halfH:(bbox.max.y-bbox.min.y)*0.5};
+  return {root,outer,mixer,actIdle,actRun,actJump,actPunch,actKick,actPunchCombo,actFire,actThrowBomb,actClean,applyTextures,halfH:(bbox.max.y-bbox.min.y)*0.5};
 }
 
 function setArtistFrozenLook(inst,frozen){
@@ -4098,9 +4116,9 @@ function syncBurstShopVisibility(){
   const supported=new Set();
   for(const [id,btn] of Object.entries(burstBuyButtons)){
     const card=btn?.closest('.shop-card');
-    if(card) card.style.display=supported.has(`buy-burst-${id}-btn`) ? '' : 'none';
+    if(card && !supported.has(`buy-burst-${id}-btn`)) card.remove();
   }
-  document.querySelector('#shop-panel .burst-section')?.style?.setProperty('display','none');
+  document.querySelector('#shop-panel .burst-section')?.remove?.();
 }
 
 function unlockBurstEffectsByKills(){
@@ -5140,7 +5158,7 @@ async function init(){
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
 
-  await Promise.all([loadCharacterTemplate(),loadPlayerAssets(),loadPlayground()]);
+  await Promise.all([loadPlayerAssets(),loadPlayground()]);
   if(false && bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
     playableLayer=await detectPlayableLayer(p=>{
@@ -5165,18 +5183,15 @@ async function init(){
   placePlayerOnPlayableLayer();
   startBtn.textContent=origLabel;
   startBtn.disabled=false;
-  loadExtraCharacterClips().catch(e=>console.warn('[char] extra clip load failed',e));
   loadDeferredPlayerSkillClips();
   loadCoin();
+  loadCharacterTemplate()
+    .then(()=>loadExtraCharacterClips())
+    .catch(e=>console.warn('[char] background load failed',e));
   if(bvhReady){
     Promise.resolve().then(async()=>{
       try{
-        startBtn.textContent='SCANNING FLOORSâ€¦';
-        const scannedLayer=await detectPlayableLayer(p=>{
-          if(startBtn.disabled) return;
-          const pct=Math.floor(p*100);
-          startBtn.textContent='SCANNING FLOORSâ€¦ '+pct+'%';
-        });
+        const scannedLayer=await detectPlayableLayer();
         if(scannedLayer){
           playableLayer=scannedLayer;
           worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
@@ -5190,9 +5205,7 @@ async function init(){
         }
       }catch(e){
         console.warn('[floor] detection failed',e);
-      }finally{
-        if(gameState==='intro') startBtn.textContent=origLabel;
-      }
+      }finally{}
       try{
         RIVERS=await detectRiverBounds();
         RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;

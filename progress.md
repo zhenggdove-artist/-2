@@ -44,3 +44,6 @@ TODO:
 - Changed bomb behavior so the throw animation plays at 1.7x speed, the bomb object appears only after the animation completes, it auto-detonates after 10 seconds, and the blast uses a 5x5-area mushroom cloud particle effect.
 - Added localStorage caches for playable-layer and river detection to reduce repeat startup scan time. A fresh Playwright smoke run still found `#start-btn` disabled after the client's 5s click timeout, so first-load startup is better but not solved yet.
 - Added camera-to-player roof occlusion fading: overhead ceiling meshes that block the camera ray now fade to semi-transparent and restore automatically when the line of sight clears.
+- Replaced the unstable built-in player idle with a lightweight `mainplayermodel/player_idle.glb` exported from `action/Idle.fbx`, and stopped re-resetting idle every frame so the player no longer T-poses/shivers while standing still.
+- Moved both floor scanning and artist-template loading off the initial blocking path. Current browser probe shows `#start-btn` returns to `BEGIN` and becomes enabled within ~3 seconds on first load instead of staying stuck disabled.
+- Player textures are now loaded in the background after the base player model/animations, so the game can enter sooner and the mesh gets detailed materials once they finish.
