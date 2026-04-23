@@ -3308,7 +3308,7 @@ const PLAYER_DECEL=26;
 const BOMB_THROW_SPEED=1.7;
 const BOMB_FUSE_TIME=10;
 const BOMB_BLAST_RADIUS=2.5;
-const PLAYER_MODEL_Y_OFFSET=-0.9; // manual vertical tweak for the new player model
+const PLAYER_MODEL_Y_OFFSET=0.0; // keep feet on the ground after bbox normalization
 const ATTACK_DUR=0.38;
 const ATTACK_COOLDOWN=0.5;
 const ATTACK_RANGE=2.6;
@@ -3377,12 +3377,11 @@ function stopPlayerOneShotActions(I=player.inst,fade=0.08){
   if(!I) return;
   for(const act of [I.actPunch,I.actKick,I.actPunchCombo,I.actFire,I.actThrowBomb,I.actClean]){
     if(!act) continue;
-    if(act.isRunning?.()) act.fadeOut(fade);
-    act.stop();
+    act.paused=false;
+    act.enabled=true;
+    act.fadeOut(fade);
     act.setEffectiveTimeScale?.(1);
     act.timeScale=1;
-    act.enabled=true;
-    act.reset();
   }
   I.oneShotActionName=null;
 }
