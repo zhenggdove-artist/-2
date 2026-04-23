@@ -851,6 +851,7 @@ dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/dr
 const loader=new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 const fbxLoader=new FBXLoader();
+const textureLoader=new THREE.TextureLoader();
 
 // ===== Ground: playground.glb =====
 const pillars=[]; // { pos:Vector3, topY:number, mesh:Mesh, graffiti:null|Mesh, paintProgress:0..1, claimedBy:null|Artist }
@@ -2097,6 +2098,7 @@ let extraCharacterClipsPromise=null;
 const PLAYER_SCALE=1.0; // will adjust after bbox measurement
 let playerGLTF=null;
 let playerClipIdle=null,playerClipRun=null,playerClipJump=null,playerClipPunch=null,playerClipFire=null,playerClipThrowBomb=null;
+let playerTextureSet=null;
 
 // Set of every bone name in the GLB skeleton, plus a "tail → full"
 // map so we can match a track regardless of which prefix variant it
@@ -2250,6 +2252,7 @@ async function loadCharacterTemplate(){
 
 async function loadPlayerAssets(){
   try{
+    const loadTex=path=>new Promise(res=>textureLoader.load(path,tex=>res(tex),undefined,()=>res(null)));
     let baseGLTF=null;
     if('caches' in window){
       try{
@@ -2265,14 +2268,23 @@ async function loadPlayerAssets(){
         }
       }catch{}
     }
-    const [runGLTF,jumpGLTF,punchGLTF,fireGLTF,throwGLTF]=await Promise.all([
+    const [runGLTF,jumpGLTF,punchGLTF,fireGLTF,throwGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
       loader.loadAsync('mainplayermodel/player_run.glb'),
       loader.loadAsync('mainplayermodel/player_jump.glb'),
       loader.loadAsync('mainplayermodel/player_punch.glb'),
       loader.loadAsync('mainplayermodel/player_fire.glb'),
       loader.loadAsync('mainplayermodel/player_throwbomb.glb'),
+      loadTex('mainplayermodel/tripo_model_basecolor.JPEG'),
+      loadTex('mainplayermodel/tripo_model_normal.JPEG'),
+      loadTex('mainplayermodel/tripo_model_roughness.JPEG'),
+      loadTex('mainplayermodel/tripo_model_metallic.JPEG'),
     ]);
     if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
+    for(const tex of [baseTex,normalTex,roughTex,metalTex]){
+      if(tex) tex.flipY=false;
+    }
+    if(baseTex) baseTex.colorSpace=THREE.SRGBColorSpace;
+    playerTextureSet={base:baseTex,normal:normalTex,rough:roughTex,metal:metalTex};
     playerGLTF=baseGLTF;
     playerClipIdle=baseGLTF.animations[0]||null;
     playerClipRun=runGLTF.animations[0]||null;
@@ -2416,6 +2428,12 @@ function buildPlayerInstance(){
           const cm=m.clone();
           cm.side=THREE.DoubleSide;
           if('envMapIntensity' in cm) cm.envMapIntensity=0.6;
+          cm.transparent=false;
+          if(playerTextureSet?.base && !cm.map) cm.map=playerTextureSet.base;
+          if(playerTextureSet?.normal && !cm.normalMap) cm.normalMap=playerTextureSet.normal;
+          if(playerTextureSet?.rough && !cm.roughnessMap) cm.roughnessMap=playerTextureSet.rough;
+          if(playerTextureSet?.metal && !cm.metalnessMap) cm.metalnessMap=playerTextureSet.metal;
+          cm.needsUpdate=true;
           return cm;
         });
         o.material=Array.isArray(o.material)?cloned:cloned[0];
