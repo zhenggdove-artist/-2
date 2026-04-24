@@ -5064,6 +5064,7 @@ function updatePlayer(dt){
       const landedInRiver=isInRiver(player.root.position.x,player.root.position.z,gY);
       if(landedInRiver){
         spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,landedHard?1.6:1.0);
+        playSFX('riverEnter',{volume:landedHard?0.8:0.72});
       }
     }
   }else{
@@ -5092,7 +5093,7 @@ function updatePlayer(dt){
     if(player.walkPhase>0.55){
       player.walkPhase=0;
       spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,0.5);
-      playSFX('playerWalk',{volume:0.4,playbackRate:(0.59+Math.random()*0.05)*slowedStepAudio,minGap:0.08});
+      playSFX('riverWalk',{volume:0.48,playbackRate:(0.78+Math.random()*0.06)*slowedStepAudio,minGap:0.08});
     }
   }else if(!player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
@@ -5104,6 +5105,7 @@ function updatePlayer(dt){
   // Splash on first entry
   if(player.inWater && !player.wasInWater){
     spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,1.0);
+    playSFX('riverEnter');
   }
 
   // Smooth model rotation to yaw
@@ -5321,6 +5323,8 @@ const SFX_DEFS={
   artistDown3:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57303.m4a',volume:0.68,maxDuration:0.85,pool:3},
   playerWalk:{src:'sound/Mario Walk.mp3',volume:0.44,maxDuration:0.32,pool:6,minGap:0.06},
   artistWalk:{src:'sound/Cute Animal Walk.mp3',volume:0.44,maxDuration:0.28,pool:10,minGap:0.06},
+  riverEnter:{src:'sound/Jump Into Water.mp3',volume:0.72,maxDuration:0.72,pool:3,minGap:0.12},
+  riverWalk:{src:'sound/Walk In River.mp3',volume:0.5,maxDuration:0.44,pool:6,minGap:0.08},
   throwIce:{src:'sound/Throw  Something.mp3',volume:0.84,maxDuration:0.7,pool:3},
   throwBomb:{src:'sound/Throw  Something.mp3',volume:0.84,maxDuration:0.7,pool:3},
   flame:{src:'sound/Fire Flame.mp3',volume:0.7,maxDuration:0.58,pool:3},
