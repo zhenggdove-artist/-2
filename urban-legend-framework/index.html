@@ -207,11 +207,7 @@
     color:#08386f;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(123,207,255,0.2);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
     pointer-events:auto;cursor:pointer}
-  #loadout-toggle .lt-ico{display:block;width:24px;height:24px;margin:15px auto 0;background:#fff;
-    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;
-    -webkit-mask-size:contain;mask-size:contain;
-    -webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path fill='black' d='M22 10h20l8 9 10 5-7 14-7-3v19H18V35l-7 3-7-14 10-5 8-9z'/></svg>");
-    mask-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path fill='black' d='M22 10h20l8 9 10 5-7 14-7-3v19H18V35l-7 3-7-14 10-5 8-9z'/></svg>\")}
+  #loadout-toggle .lt-ico{display:block;font-size:28px;line-height:54px;margin:0;text-align:center;color:#fff;font-weight:bold}
   .loadout-slot{width:70px;min-height:76px;padding:8px 6px;border-radius:18px;background:rgba(28,19,38,0.82);
     border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 20px rgba(0,0,0,0.28);color:#f7f0ff;
     font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
@@ -440,7 +436,7 @@
 </div>
 
 <div id="loadout-bar"></div>
-<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico" aria-hidden="true"></span></button>
+<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico" aria-hidden="true">E</span></button>
 
 <div id="intro">
   <h1>DEFEND YOUR HOME</h1>
@@ -506,6 +502,8 @@ import {DecalGeometry} from 'three/addons/geometries/DecalGeometry.js';
 // is 17MB — this is what was locking the main thread on load).
 let bvhReady=false;
 let BVH_OPTS={};
+let playgroundBVHQueuedMeshes=[];
+let playgroundBVHBuildActive=false;
 async function setupBVH(){
   try{
     const bvh=await import('three-mesh-bvh');
@@ -1157,6 +1155,38 @@ function loadCachedJSON(key){
   }catch{
     return null;
   }
+}
+
+function schedulePlaygroundBVHBuild(root){
+  if(!bvhReady||!root||playgroundBVHBuildActive) return;
+  playgroundBVHQueuedMeshes.length=0;
+  root.traverse(o=>{
+    if(!o.isMesh||!o.geometry||!o.geometry.attributes?.position) return;
+    const tri=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;
+    if(tri<30||o.geometry.boundsTree) return;
+    playgroundBVHQueuedMeshes.push(o.geometry);
+  });
+  if(!playgroundBVHQueuedMeshes.length) return;
+  playgroundBVHBuildActive=true;
+  const total=playgroundBVHQueuedMeshes.length;
+  const step=deadline=>{
+    const started=performance.now();
+    while(playgroundBVHQueuedMeshes.length){
+      const geo=playgroundBVHQueuedMeshes.shift();
+      try{ geo.computeBoundsTree(BVH_OPTS); }catch{}
+      const timeUp=(deadline&&typeof deadline.timeRemaining==='function'&&deadline.timeRemaining()<4) || (performance.now()-started>10);
+      if(timeUp) break;
+    }
+    if(playgroundBVHQueuedMeshes.length){
+      if(typeof window.requestIdleCallback==='function') window.requestIdleCallback(step,{timeout:80});
+      else window.setTimeout(()=>step(null),16);
+      return;
+    }
+    playgroundBVHBuildActive=false;
+    console.log('[bvh] background build complete for',total,'meshes');
+  };
+  if(typeof window.requestIdleCallback==='function') window.requestIdleCallback(step,{timeout:80});
+  else window.setTimeout(()=>step(null),16);
 }
 
 function saveCachedJSON(key,value){
@@ -5359,14 +5389,13 @@ async function init(){
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
   // computeBoundsTree runs on its geometry right after load.
-  await setupBVH();
+  const bvhPromise=setupBVH();
   setIntroProgress(14,'BOOT');
+  await Promise.all([loadPlayerAssets(),loadPlayground(),bvhPromise]);
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
-
-  await Promise.all([loadPlayerAssets(),loadPlayground()]);
   setIntroProgress(58,'ASSETS');
   if(false && bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
@@ -5390,6 +5419,7 @@ async function init(){
   }
   attachPlayer();
   placePlayerOnPlayableLayer();
+  schedulePlaygroundBVHBuild(playgroundRoot);
   setIntroProgress(70,'READY');
   startBtn.textContent=origLabel;
   startBtn.disabled=false;

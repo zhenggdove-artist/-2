@@ -74,3 +74,6 @@ TODO:
 - User rejected the previous visual downgrade. Restored the original post-process / scene presentation by re-enabling the composer+VHS render path on mobile again and restoring normal `coin.glb` loading; kept only the functional mobile UI position fix for the loadout button.
 - Loadout toggle icon is now a simple pure-white shirt silhouette (mask-based icon), with no text or interior detail, while staying in the moved-right blue circular button position.
 - Attack movement slowdown was relaxed from 10% back to 20% so the player can keep drifting in the pressed direction during punch/skill actions as requested.
+- The loadout toggle icon was simplified again per user request: it now shows a centered uppercase `E` on the blue circular button.
+- Startup optimization was redirected to a non-visual path: BVH setup now begins in parallel with other startup loads, and expensive playground bounds-tree generation is scheduled incrementally in background idle slices instead of blocking `loadPlayground()` before the first playable frame.
+- Mobile probe after the latest change showed `intro-progress-text` reaching `READY 100%`, start button enabled, and the moved loadout button displaying `E` without overlapping the paint bar.
