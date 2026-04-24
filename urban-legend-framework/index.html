@@ -5366,6 +5366,10 @@ const MOBILE_SFX_OVERRIDES={
 const MOBILE_PRIME_SFX_IDS=new Set(['punch','punchCombo','kick','playerWalk','riverEnter','riverWalk','throwIce','throwBomb','coinPickup','jump','flame','bombExplode']);
 const sfxPools=new Map();
 const sfxLastPlayAt=new Map();
+const mobileSFXBuffers=new Map();
+const mobileSFXPromises=new Map();
+const mobileActiveSFX=new Set();
+let mobileAudioCtx=null;
 let sfxPrimed=false;
 let sfxUnlocked=false;
 
@@ -5386,6 +5390,43 @@ function getSFXConfig(id){
   if(!def) return null;
   if(!IS_MOBILE_LAYOUT) return def;
   return {...def,...(MOBILE_SFX_OVERRIDES[id]||{})};
+}
+
+function getMobileAudioContext(){
+  if(!IS_MOBILE_LAYOUT) return null;
+  if(mobileAudioCtx) return mobileAudioCtx;
+  const Ctor=window.AudioContext||window.webkitAudioContext;
+  if(!Ctor) return null;
+  mobileAudioCtx=new Ctor({latencyHint:'interactive'});
+  return mobileAudioCtx;
+}
+
+async function loadMobileSFXBuffer(id){
+  if(!IS_MOBILE_LAYOUT) return null;
+  if(mobileSFXBuffers.has(id)) return mobileSFXBuffers.get(id);
+  if(mobileSFXPromises.has(id)) return mobileSFXPromises.get(id);
+  const def=getSFXConfig(id);
+  if(!def) return null;
+  const ctx=getMobileAudioContext();
+  if(!ctx) return null;
+  const promise=fetch(buildSFXSrc(def.src),{cache:'force-cache'})
+    .then(r=>{
+      if(!r.ok) throw new Error(`SFX fetch failed: ${id} ${r.status}`);
+      return r.arrayBuffer();
+    })
+    .then(buf=>ctx.decodeAudioData(buf.slice(0)))
+    .then(decoded=>{
+      mobileSFXBuffers.set(id,decoded);
+      mobileSFXPromises.delete(id);
+      return decoded;
+    })
+    .catch(err=>{
+      mobileSFXPromises.delete(id);
+      console.warn('[mobile-sfx] decode failed',id,err);
+      return null;
+    });
+  mobileSFXPromises.set(id,promise);
+  return promise;
 }
 
 function ensureSFXPool(id){
@@ -5409,8 +5450,11 @@ function ensureSFXPool(id){
 function primeSFX(){
   if(sfxPrimed) return;
   sfxPrimed=true;
+  if(IS_MOBILE_LAYOUT){
+    for(const id of MOBILE_PRIME_SFX_IDS) loadMobileSFXBuffer(id);
+    return;
+  }
   for(const id of Object.keys(SFX_DEFS)){
-    if(IS_MOBILE_LAYOUT && !MOBILE_PRIME_SFX_IDS.has(id)) continue;
     const pool=ensureSFXPool(id);
     for(const audio of pool) audio.load?.();
   }
@@ -5419,6 +5463,10 @@ function primeSFX(){
 function unlockSFX(){
   if(sfxUnlocked) return;
   sfxUnlocked=true;
+  if(IS_MOBILE_LAYOUT){
+    const ctx=getMobileAudioContext();
+    ctx?.resume?.().catch?.(()=>{});
+  }
   primeSFX();
   if(IS_MOBILE_LAYOUT) return;
   for(const id of Object.keys(SFX_DEFS)){
@@ -5443,6 +5491,49 @@ function playSFX(id,opts={}){
   const lastAt=sfxLastPlayAt.get(id)||-Infinity;
   if(now-lastAt<minGap) return null;
   sfxLastPlayAt.set(id,now);
+  if(IS_MOBILE_LAYOUT){
+    const lowPriority=(id==='artistWalk'||id==='paintWhisperA'||id==='paintWhisperB'||id==='paintWhisperC'||id==='paintWhisperD');
+    if(lowPriority && mobileActiveSFX.size>=4) return null;
+    const ctx=getMobileAudioContext();
+    if(!ctx) return null;
+    if(ctx.state==='suspended'){
+      ctx.resume?.().catch?.(()=>{});
+      if(ctx.state==='suspended') return null;
+    }
+    const startWithBuffer=buffer=>{
+      if(!buffer) return null;
+      const source=ctx.createBufferSource();
+      const gain=ctx.createGain();
+      gain.gain.value=clamp(opts.volume ?? def.volume ?? 1,0,1);
+      source.buffer=buffer;
+      source.playbackRate.value=opts.playbackRate ?? def.playbackRate ?? 1;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      const maxDuration=Math.max(0,opts.maxDuration ?? def.maxDuration ?? 0);
+      const duration=maxDuration>0 ? Math.min(maxDuration,buffer.duration/Math.max(0.01,source.playbackRate.value)) : undefined;
+      mobileActiveSFX.add(source);
+      source.onended=()=>{
+        mobileActiveSFX.delete(source);
+        try{ source.disconnect(); }catch{}
+        try{ gain.disconnect(); }catch{}
+      };
+      try{
+        if(duration!==undefined) source.start(0,0,duration);
+        else source.start(0);
+      }catch(err){
+        mobileActiveSFX.delete(source);
+        console.warn('[mobile-sfx] start failed',id,err);
+        return null;
+      }
+      return source;
+    };
+    const loaded=mobileSFXBuffers.get(id);
+    if(loaded) return startWithBuffer(loaded);
+    loadMobileSFXBuffer(id).then(buffer=>{
+      if(buffer) startWithBuffer(buffer);
+    });
+    return null;
+  }
   const pool=ensureSFXPool(id);
   if(!pool.length) return null;
   let voice=pool.find(a=>a.paused||a.ended);
