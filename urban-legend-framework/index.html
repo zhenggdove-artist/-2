@@ -5091,13 +5091,13 @@ function updatePlayer(dt){
     if(player.walkPhase>0.55){
       player.walkPhase=0;
       spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,0.5);
-      playSFX('playerWalk',{volume:0.4,playbackRate:0.98+Math.random()*0.08,minGap:0.08});
+      playSFX('playerWalk',{volume:0.4,playbackRate:0.59+Math.random()*0.05,minGap:0.08});
     }
   }else if(!player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.5){
       player.walkPhase=0;
-      playSFX('playerWalk',{volume:0.44,playbackRate:1+Math.random()*0.06,minGap:0.08});
+      playSFX('playerWalk',{volume:0.44,playbackRate:0.6+Math.random()*0.05,minGap:0.08});
     }
   }
   // Splash on first entry
