@@ -277,14 +277,23 @@
 
   /* Intro overlay */
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
-    z-index:400;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;
-    color:#f0d0ff;text-align:center;padding:6vw;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;pointer-events:none;
-    overflow-y:auto;overflow-x:hidden}
-  #intro h1{font-size:clamp(22px,5vw,44px);margin:0;color:#ffaed4;letter-spacing:0.25em;
-    text-shadow:0 2px 10px rgba(255,100,160,0.5)}
-  #intro p{font-size:clamp(13px,2vw,16px);line-height:1.7;max-width:640px;letter-spacing:1px;opacity:0.92}
-  #intro .tag{color:#ffe3a0;font-size:clamp(12px,1.8vw,14px);letter-spacing:3px;opacity:0.75}
-  #intro-progress{width:min(340px,78vw);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+    z-index:400;display:flex;align-items:center;justify-content:center;
+    color:#f0d0ff;text-align:center;padding:20px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;pointer-events:auto;
+    overflow:hidden}
+  #intro .intro-card{width:min(92vw,760px);max-height:min(92vh,860px);display:flex;flex-direction:column;align-items:center;gap:16px;
+    padding:26px 28px 22px;border-radius:28px;background:linear-gradient(180deg,rgba(43,19,57,0.9),rgba(15,10,22,0.94));
+    border:1px solid rgba(255,214,150,0.24);box-shadow:0 20px 56px rgba(0,0,0,0.48),inset 0 0 0 1px rgba(255,255,255,0.06);
+    overflow:hidden}
+  #intro h1{font-size:clamp(30px,7vw,58px);margin:0;color:#ffd86b;letter-spacing:0.14em;
+    text-shadow:0 2px 16px rgba(255,188,73,0.38),0 0 26px rgba(255,120,180,0.16)}
+  #intro .tag{color:#ffe3a0;font-size:clamp(11px,1.6vw,13px);letter-spacing:0.26em;opacity:0.78}
+  #intro .intro-copy{width:100%;max-height:min(34vh,300px);overflow-y:auto;overflow-x:hidden;padding:4px 12px 4px 4px;
+    scrollbar-width:thin;scrollbar-color:rgba(255,216,107,0.8) rgba(255,255,255,0.08)}
+  #intro .intro-copy::-webkit-scrollbar{width:10px}
+  #intro .intro-copy::-webkit-scrollbar-track{background:rgba(255,255,255,0.08);border-radius:999px}
+  #intro .intro-copy::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#ffd86b,#ff8fb8);border-radius:999px}
+  #intro p{margin:0;font-size:clamp(12px,1.45vw,14px);line-height:1.62;max-width:none;letter-spacing:0.03em;opacity:0.94}
+  #intro-progress{width:min(380px,100%);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
   #intro-progress-text{font-size:12px;letter-spacing:0.22em;color:#ffe7a5;opacity:0.82}
   #intro-progress-track{width:100%;height:10px;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,0.24);
     background:rgba(255,255,255,0.08);box-shadow:inset 0 2px 8px rgba(0,0,0,0.35)}
@@ -297,10 +306,12 @@
     transition:transform 0.2s;pointer-events:auto;position:relative;z-index:2}
   #intro button:hover{transform:translateY(-2px)}
   @media (max-width:640px){
-    #intro{gap:14px;padding:18px 18px 28px}
-    #intro h1{font-size:clamp(18px,7vw,28px);letter-spacing:0.12em}
-    #intro .tag{font-size:10px;letter-spacing:0.18em}
-    #intro p{max-width:330px;font-size:12px;line-height:1.5;letter-spacing:0.03em}
+    #intro{padding:12px}
+    #intro .intro-card{width:min(94vw,420px);max-height:min(94vh,860px);gap:12px;padding:18px 16px 18px;border-radius:22px}
+    #intro h1{font-size:clamp(24px,9vw,38px);letter-spacing:0.1em}
+    #intro .tag{font-size:10px;letter-spacing:0.16em}
+    #intro .intro-copy{max-height:min(40vh,320px);padding-right:8px}
+    #intro p{font-size:11px;line-height:1.5}
     #intro button{padding:11px 30px}
     #intro-progress{width:min(300px,84vw)}
   }
@@ -478,22 +489,26 @@
 <button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico" aria-hidden="true">E</span></button>
 
 <div id="intro">
-  <h1>RunArtistRun</h1>
-  <div class="tag">— loading briefing —</div>
-  <p>
-    The artists are coming.<br><br>
-    They arrive with spray paint, imagination, and the impulse to create, ready to carry out their artistic vision beneath the overpass.<br><br>
-    You will play as a local resident defending the space under the bridge, driving back waves of artists who come to graffiti.<br><br>
-    Each artist you repel will cause a flower to grow beneath the bridge.<br><br>
-    In the end, the site becomes a landscape generated through the power relations between public space, the outsider’s gaze, and artistic intervention.
-  </p>
-  <button id="start-btn">BEGIN</button>
-  <div id="intro-progress">
-    <div id="intro-progress-text">LOADING 0%</div>
-    <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
-  </div>
-  <div class="tag" style="margin-top:8px;opacity:0.5;font-size:11px">
-    WASD / Joystick — move · Space / JUMP — jump · F / PUNCH — attack · Drag — camera
+  <div class="intro-card">
+    <h1>RunArtistRun</h1>
+    <div class="tag">— loading briefing —</div>
+    <div class="intro-copy">
+      <p>
+        Artists are coming.<br><br>
+        With spray paint, imagination, and creative impulse, they arrive beneath the overpass to enact their artistic visions.<br><br>
+        You play as a local resident defending the space under the bridge, repelling waves of graffiti artists.<br><br>
+        Each artist driven away makes a flower grow.<br><br>
+        In the end, the site becomes a landscape shaped by public space, the outsider’s gaze, and the power relations of artistic intervention.
+      </p>
+    </div>
+    <button id="start-btn">BEGIN</button>
+    <div id="intro-progress">
+      <div id="intro-progress-text">LOADING 0%</div>
+      <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
+    </div>
+    <div class="tag" style="margin-top:8px;opacity:0.5;font-size:11px">
+      WASD / Joystick — move · Space / JUMP — jump · F / PUNCH — attack · Drag — camera
+    </div>
   </div>
 </div>
 
