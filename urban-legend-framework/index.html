@@ -4074,7 +4074,7 @@ function updateArtists(dt,nowS){
       if(!a.nextPaintWhisperAt) a.nextPaintWhisperAt=nowS+0.6+Math.random()*1.6;
       if(nowS>=a.nextPaintWhisperAt){
         const played=playArtistPaintWhisperSFX(a,0.34);
-        a.nextPaintWhisperAt=nowS+(played?(2.8+Math.random()*3.8):(1.2+Math.random()*1.4));
+        a.nextPaintWhisperAt=nowS+(played?(IS_MOBILE_LAYOUT?(4.8+Math.random()*4.2):(2.8+Math.random()*3.8)):(1.2+Math.random()*1.4));
       }
       a.paintT+=dt;
       const pillar=a.target;
@@ -5094,21 +5094,21 @@ function updatePlayer(dt){
   player.inWater=isInRiver(player.root.position.x,player.root.position.z,gY);
   const isKickMoving=(player.currentAttackAnim==='kick') && (player.attackT>=0||player.specialAnimT>0);
   const isPunchOrSkillMoving=((player.currentAttackAnim==='punch'||player.currentAttackAnim==='combo') && (player.attackT>=0||player.specialAnimT>0)) || !!player.pendingSpecialAction || attackInputState.isDown;
-  const baseStepIntervalMul=2.6;
-  const slowedStepIntervalMul=baseStepIntervalMul*(isPunchOrSkillMoving ? 1.3 : 1);
+  const baseStepIntervalMul=IS_MOBILE_LAYOUT ? 1.35 : 2.6;
+  const slowedStepIntervalMul=baseStepIntervalMul*(isPunchOrSkillMoving ? (IS_MOBILE_LAYOUT?1.15:1.3) : 1);
   // Footstep splash while wading
   if(player.inWater && !player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.55*slowedStepIntervalMul){
       player.walkPhase=0;
       spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,0.5);
-      if(!isKickMoving) playSFX('riverWalk',{volume:0.48,playbackRate:0.98+Math.random()*0.05,minGap:0.08});
+      if(!isKickMoving) playSFX('riverWalk',{volume:IS_MOBILE_LAYOUT?0.34:0.48,playbackRate:0.98+Math.random()*0.05,minGap:IS_MOBILE_LAYOUT?0.05:0.08});
     }
   }else if(!player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.5*slowedStepIntervalMul){
       player.walkPhase=0;
-      if(!isKickMoving) playSFX('playerWalk',{volume:0.44,playbackRate:0.98+Math.random()*0.04,minGap:0.08});
+      if(!isKickMoving) playSFX('playerWalk',{volume:IS_MOBILE_LAYOUT?0.22:0.44,playbackRate:0.98+Math.random()*0.04,minGap:IS_MOBILE_LAYOUT?0.05:0.08});
     }
   }
   // Splash on first entry
@@ -5346,6 +5346,24 @@ const SFX_DEFS={
   cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
   bombExplode:{src:'sound/Explode.mp3',volume:0.84,maxDuration:0.82,pool:4},
 };
+const MOBILE_SFX_OVERRIDES={
+  punch:{pool:2},
+  punchCombo:{pool:2},
+  kick:{pool:2},
+  playerWalk:{pool:2,minGap:0.05},
+  artistWalk:{pool:2,minGap:0.12},
+  riverEnter:{pool:2},
+  riverWalk:{pool:2,minGap:0.06},
+  throwIce:{pool:2},
+  throwBomb:{pool:2},
+  coinPickup:{pool:2},
+  jump:{pool:2},
+  paintWhisperA:{pool:1,maxDuration:1.5},
+  paintWhisperB:{pool:1,maxDuration:1.5},
+  paintWhisperC:{pool:1,maxDuration:1.5},
+  paintWhisperD:{pool:1,maxDuration:1.5},
+};
+const MOBILE_PRIME_SFX_IDS=new Set(['punch','punchCombo','kick','playerWalk','riverEnter','riverWalk','throwIce','throwBomb','coinPickup','jump','flame','bombExplode']);
 const sfxPools=new Map();
 const sfxLastPlayAt=new Map();
 let sfxPrimed=false;
@@ -5363,8 +5381,15 @@ function clearSFXStopTimer(voice){
   }
 }
 
-function ensureSFXPool(id){
+function getSFXConfig(id){
   const def=SFX_DEFS[id];
+  if(!def) return null;
+  if(!IS_MOBILE_LAYOUT) return def;
+  return {...def,...(MOBILE_SFX_OVERRIDES[id]||{})};
+}
+
+function ensureSFXPool(id){
+  const def=getSFXConfig(id);
   if(!def) return [];
   let pool=sfxPools.get(id);
   if(pool) return pool;
@@ -5372,7 +5397,7 @@ function ensureSFXPool(id){
   const count=Math.max(1,def.pool||2);
   for(let i=0;i<count;i++){
     const audio=new Audio(buildSFXSrc(def.src));
-    audio.preload='auto';
+    audio.preload=IS_MOBILE_LAYOUT?'metadata':'auto';
     audio.playsInline=true;
     audio.crossOrigin='anonymous';
     pool.push(audio);
@@ -5385,6 +5410,7 @@ function primeSFX(){
   if(sfxPrimed) return;
   sfxPrimed=true;
   for(const id of Object.keys(SFX_DEFS)){
+    if(IS_MOBILE_LAYOUT && !MOBILE_PRIME_SFX_IDS.has(id)) continue;
     const pool=ensureSFXPool(id);
     for(const audio of pool) audio.load?.();
   }
@@ -5394,6 +5420,7 @@ function unlockSFX(){
   if(sfxUnlocked) return;
   sfxUnlocked=true;
   primeSFX();
+  if(IS_MOBILE_LAYOUT) return;
   for(const id of Object.keys(SFX_DEFS)){
     const voice=ensureSFXPool(id)[0];
     if(!voice) continue;
@@ -5408,7 +5435,7 @@ function unlockSFX(){
 }
 
 function playSFX(id,opts={}){
-  const def=SFX_DEFS[id];
+  const def=getSFXConfig(id);
   if(!def) return null;
   if(!sfxPrimed) primeSFX();
   const now=performance.now()/1000;
@@ -5495,7 +5522,7 @@ function playArtistPaintWhisperSFX(a,baseVolume=0.34){
   const whisperIds=['paintWhisperA','paintWhisperB','paintWhisperC','paintWhisperD'];
   const id=whisperIds[(Math.random()*whisperIds.length)|0];
   playSFX(id,{
-    volume:baseVolume*fade,
+    volume:(IS_MOBILE_LAYOUT?baseVolume*0.65:baseVolume)*fade,
     playbackRate:0.97+Math.random()*0.08,
     minGap:0.2,
   });
