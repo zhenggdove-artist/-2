@@ -3130,12 +3130,68 @@ function spawnFlameJet(){
   forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
 }
 
-function throwIceBlock(charge=0){
+function ensureSpecialAimMarker(){
+  if(specialAimMarker) return specialAimMarker;
+  const ring=new THREE.Mesh(
+    new THREE.TorusGeometry(0.58,0.05,12,48),
+    new THREE.MeshBasicMaterial({color:'#ff4d4d',transparent:true,opacity:0.92,depthWrite:false})
+  );
+  ring.rotation.x=Math.PI*0.5;
+  const core=new THREE.Mesh(
+    new THREE.CircleGeometry(0.34,28),
+    new THREE.MeshBasicMaterial({color:'#ff3b3b',transparent:true,opacity:0.22,depthWrite:false,side:THREE.DoubleSide})
+  );
+  core.rotation.x=-Math.PI*0.5;
+  core.position.y=0.01;
+  const crossMat=new THREE.MeshBasicMaterial({color:'#ffd0d0',transparent:true,opacity:0.95,depthWrite:false});
+  const crossA=new THREE.Mesh(new THREE.PlaneGeometry(0.16,1.1),crossMat);
+  crossA.rotation.x=-Math.PI*0.5;
+  crossA.position.y=0.02;
+  const crossB=crossA.clone();
+  crossB.rotation.z=Math.PI*0.5;
+  specialAimMarker=new THREE.Group();
+  specialAimMarker.add(ring,core,crossA,crossB);
+  specialAimMarker.visible=false;
+  specialAimMarker.frustumCulled=false;
+  scene.add(specialAimMarker);
+  return specialAimMarker;
+}
+
+function setSpecialAimMarkerVisible(visible){
+  if(!specialAimMarker) return;
+  specialAimMarker.visible=visible;
+}
+
+function getSpecialThrowTarget(charge=0){
+  if(equippedWeapon!=='ice' && equippedWeapon!=='bomb') return null;
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
-  const throwDist=3.2+charge*3.8;
+  const throwDist=equippedWeapon==='ice' ? (3.2+charge*3.8) : (1.1+charge*2.6);
   const targetX=player.root.position.x+fx*throwDist;
   const targetZ=player.root.position.z+fz*throwDist;
   const groundY=getStandY(targetX,targetZ,player.root.position.y)+GROUND_Y_OFFSET;
+  return {x:targetX,y:groundY,z:targetZ,dist:throwDist};
+}
+
+function updateSpecialAimMarker(nowS=performance.now()/1000){
+  if(gameState!=='playing' || !specialInputState.isDown || !equippedWeapon || (equippedWeapon!=='ice' && equippedWeapon!=='bomb')){
+    setSpecialAimMarkerVisible(false);
+    return;
+  }
+  const target=getSpecialThrowTarget(getSpecialCharge());
+  if(!target){
+    setSpecialAimMarkerVisible(false);
+    return;
+  }
+  const marker=ensureSpecialAimMarker();
+  const pulse=1+Math.sin(nowS*8)*0.08;
+  marker.position.set(target.x,target.y+0.06,target.z);
+  marker.scale.setScalar((equippedWeapon==='ice'?1.08:0.92)*pulse);
+  marker.visible=true;
+}
+
+function throwIceBlock(charge=0){
+  const target=getSpecialThrowTarget(charge);
+  if(!target) return false;
   const group=new THREE.Group();
   const block=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false),new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35}));
   block.rotation.y=Math.PI/6;
@@ -3162,7 +3218,7 @@ function throwIceBlock(charge=0){
   ring.rotation.x=Math.PI*0.5;
   ring.position.y=0.06;
   group.add(block,crystalPoints,ring);
-  group.position.set(targetX,groundY+0.45,targetZ);
+  group.position.set(target.x,target.y+0.45,target.z);
   scene.add(group);
   activeIceFields.push({group,expiresAt:performance.now()/1000+15,radius:1.5});
   return true;
@@ -3206,8 +3262,8 @@ function dropBombTrap(charge=0){
   player.pendingSpecialAction='bomb';
   player.pendingSpecialTimer=getActionClipDuration(act,0.62,BOMB_THROW_SPEED);
   player.pendingSpecialCharge=charge;
-  const {x:fx,z:fz}=getForwardXZ(player.yaw);
-  const throwDist=1.1+charge*2.6;
+  const target=getSpecialThrowTarget(charge);
+  if(!target) return false;
   const group=new THREE.Group();
   const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),new THREE.MeshStandardMaterial({color:'#1f1f2e',metalness:0.35,roughness:0.6,emissive:'#6a2020',emissiveIntensity:0.4}));
   const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.18,8),new THREE.MeshBasicMaterial({color:'#ffd36b'}));
@@ -3216,7 +3272,7 @@ function dropBombTrap(charge=0){
   aura.rotation.x=Math.PI*0.5;
   aura.position.y=0.04;
   group.add(body,fuse,aura);
-  group.position.set(player.root.position.x+fx*throwDist,Math.max(player.root.position.y+0.24,getPlayableSurfaceY(player.root.position.x,player.root.position.z,player.root.position.y)+0.24),player.root.position.z+fz*throwDist);
+  group.position.set(target.x,target.y+0.24,target.z);
   group.visible=false;
   scene.add(group);
   activeBombs.push({group,armed:0,burning:0,burnRadius:BOMB_BLAST_RADIUS,triggered:false,hit:new Set(),spawned:false,autoExplodeAt:BOMB_FUSE_TIME});
@@ -3364,9 +3420,9 @@ function useSpecialWeapon(charge=0){
   if(equippedWeapon==='flame'){
     spawnFlameJet();
   }else if(equippedWeapon==='ice'){
-    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb'});
+    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:BOMB_THROW_SPEED});
     player.pendingSpecialAction='ice';
-    player.pendingSpecialTimer=getActionClipDuration(act,0.62,1);
+    player.pendingSpecialTimer=getActionClipDuration(act,0.62,BOMB_THROW_SPEED);
     player.pendingSpecialCharge=charge;
   }else if(equippedWeapon==='bomb'){
     if(!dropBombTrap(charge)) return false;
@@ -3412,7 +3468,7 @@ player.root.position.set(0,0,0);
 const PLAYER_MAX_SPEED=7.5;
 const PLAYER_ACCEL=22;
 const PLAYER_DECEL=26;
-const BOMB_THROW_SPEED=1.7;
+const BOMB_THROW_SPEED=2.0;
 const BOMB_FUSE_TIME=10;
 const BOMB_BLAST_RADIUS=2.5;
 const PLAYER_ATTACK_TIME_SCALE=3;
@@ -3426,7 +3482,7 @@ const GRAVITY=22;
 const WATER_SPEED_MULT=0.8;
 
 const PLAYER_ATTACK_SEQUENCE=[
-  {id:'punch',action:'actPunch',clipKey:'playerClipPunch',fallback:ATTACK_DUR},
+  {id:'punch',action:'actPunch',clipKey:'playerClipPunch',fallback:ATTACK_DUR,timeScale:PLAYER_ATTACK_TIME_SCALE*0.5},
   {id:'kick',action:'actKick',clipKey:'playerClipKick',fallback:0.46},
   {id:'combo',action:'actPunchCombo',clipKey:'playerClipPunchCombo',fallback:0.58},
 ];
@@ -3441,7 +3497,7 @@ function getPlayerAttackDuration(def){
     playerClipKick,
     playerClipPunchCombo,
   }[def.clipKey];
-  return (clip?.duration||def.fallback||ATTACK_DUR)/PLAYER_ATTACK_TIME_SCALE;
+  return (clip?.duration||def.fallback||ATTACK_DUR)/Math.max(0.01,def.timeScale||PLAYER_ATTACK_TIME_SCALE);
 }
 
 function getCurrentPlayerAttackAction(){
@@ -3523,6 +3579,7 @@ function startAttack(kind='punch'){
   if(player.attackCooldown>0||player.attackT>=0||!player.inst) return false;
   attackInputState.pendingTapAt=0;
   const def=PLAYER_ATTACK_SEQUENCE.find(item=>item.id===kind)||PLAYER_ATTACK_SEQUENCE[0];
+  const attackTimeScale=def.timeScale||PLAYER_ATTACK_TIME_SCALE;
   const I=player.inst;
   const act=I[def.action]||I.actPunch||null;
   player.attackT=0;
@@ -3532,7 +3589,7 @@ function startAttack(kind='punch'){
   player.specialAnimT=player.currentAttackDur;
   player.attackHit.clear();
   attackBtn.classList.add('cooling');
-  if(act) playPlayerOneShot(def.action,player.currentAttackDur,{specialAnim:def.id,timeScale:PLAYER_ATTACK_TIME_SCALE});
+  if(act) playPlayerOneShot(def.action,player.currentAttackDur,{specialAnim:def.id,timeScale:attackTimeScale});
   return true;
 }
 
@@ -4243,6 +4300,7 @@ let cleanPromptCooldown=0;
 const activeBombs=[];
 const activeFlameJets=[];
 const activeIceFields=[];
+let specialAimMarker=null;
 const cleanBtn=document.getElementById('clean-btn');
 const specialBtn=document.getElementById('special-btn');
 const shopBtn=document.getElementById('shop-btn');
@@ -4720,6 +4778,7 @@ function handleSpecialPress(pointerId=null){
   specialInputState.isDown=true;
   specialInputState.pointerId=pointerId;
   specialInputState.downAt=performance.now();
+  updateSpecialAimMarker();
 }
 
 function getSpecialCharge(){
@@ -4734,6 +4793,7 @@ function handleSpecialRelease(pointerId=null){
   specialInputState.isDown=false;
   specialInputState.pointerId=null;
   specialInputState.downAt=0;
+  setSpecialAimMarkerVisible(false);
   useSpecialWeapon(charge);
 }
 
@@ -5142,9 +5202,12 @@ const nameInput=document.getElementById('name-input');
 const submitBtn=document.getElementById('submit-btn');
 const replayBtn=document.getElementById('replay-btn');
 const fadeEl=document.getElementById('fade');
+let introProgressValue=0;
 
 function setIntroProgress(pct,label='LOADING'){
   const clamped=Math.max(0,Math.min(100,Math.round(pct)));
+  if(clamped<introProgressValue) return;
+  introProgressValue=clamped;
   if(introProgressText) introProgressText.textContent=`${label} ${clamped}%`;
   if(introProgressFill) introProgressFill.style.width=`${clamped}%`;
 }
@@ -5167,6 +5230,7 @@ function startGame(){
   player.pendingSpecialTimer=0;
   player.pendingSpecialCharge=0;
   player.pendingCleanTarget=null;
+  setSpecialAimMarkerVisible(false);
   fadeEl.classList.remove('show');
   artWinsOverlay.classList.remove('show');
   updateKillUI();updateCoinUI();updateTimerUI();updatePaintBar();
@@ -5260,6 +5324,8 @@ function resetWorld(){
   player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();player.attackVariantIndex=0;player.currentAttackAnim='punch';player.currentAttackDur=ATTACK_DUR;
   player.specialAnim='none';player.specialAnimT=0;
   player.pendingSpecialAction=null;player.pendingSpecialTimer=0;player.pendingSpecialCharge=0;player.pendingCleanTarget=null;
+  specialInputState.isDown=false;specialInputState.pointerId=null;specialInputState.downAt=0;
+  setSpecialAimMarkerVisible(false);
   player.specialCooldowns.flame=0;player.specialCooldowns.ice=0;player.specialCooldowns.bomb=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
@@ -5385,6 +5451,7 @@ function tick(){
     if(!IS_MOBILE_LAYOUT || (tickCounter%2===0)) updateWater(nowS);
     updateSplash(dt);
     updateKOBursts(dt);
+    updateSpecialAimMarker(nowS);
     updateCam();
     updateCeilingOcclusion();
     updateDebugCoords();
@@ -5440,7 +5507,7 @@ async function init(){
   setIntroProgress(70,'READY');
   startBtn.textContent=origLabel;
   startBtn.disabled=false;
-  setIntroProgress(74,'READY');
+  setIntroProgress(100,'READY');
   loadDeferredPlayerSkillClips();
   scheduleDeferredCoinLoad();
   loadCharacterTemplate()
