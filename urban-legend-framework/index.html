@@ -5518,6 +5518,15 @@ document.addEventListener('selectstart',e=>{
   e.preventDefault();
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gestureend',e=>e.preventDefault(),{passive:false});
+let lastTouchEndAt=0;
+document.addEventListener('touchend',e=>{
+  const now=performance.now();
+  if(now-lastTouchEndAt<320) e.preventDefault();
+  lastTouchEndAt=now;
+},{passive:false});
 
 // Debug: press P to log pillar count
 window.addEventListener('keydown',e=>{
