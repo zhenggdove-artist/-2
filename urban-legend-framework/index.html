@@ -5094,7 +5094,7 @@ function updatePlayer(dt){
   player.inWater=isInRiver(player.root.position.x,player.root.position.z,gY);
   const isKickMoving=(player.currentAttackAnim==='kick') && (player.attackT>=0||player.specialAnimT>0);
   const isPunchOrSkillMoving=((player.currentAttackAnim==='punch'||player.currentAttackAnim==='combo') && (player.attackT>=0||player.specialAnimT>0)) || !!player.pendingSpecialAction || attackInputState.isDown;
-  const baseStepIntervalMul=IS_MOBILE_LAYOUT ? 1.35 : 2.6;
+  const baseStepIntervalMul=IS_MOBILE_LAYOUT ? 3 : 2.6;
   const slowedStepIntervalMul=baseStepIntervalMul*(isPunchOrSkillMoving ? (IS_MOBILE_LAYOUT?1.15:1.3) : 1);
   // Footstep splash while wading
   if(player.inWater && !player.isAir && player.curSpeed>0.5){
@@ -5108,7 +5108,7 @@ function updatePlayer(dt){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.5*slowedStepIntervalMul){
       player.walkPhase=0;
-      if(!isKickMoving) playSFX('playerWalk',{volume:IS_MOBILE_LAYOUT?0.22:0.44,playbackRate:0.98+Math.random()*0.04,minGap:IS_MOBILE_LAYOUT?0.05:0.08});
+      if(!isKickMoving) playSFX('playerWalk',{volume:IS_MOBILE_LAYOUT?0.132:0.44,playbackRate:0.98+Math.random()*0.04,minGap:IS_MOBILE_LAYOUT?0.05:0.08});
     }
   }
   // Splash on first entry
