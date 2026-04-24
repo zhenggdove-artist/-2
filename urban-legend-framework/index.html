@@ -3098,32 +3098,35 @@ function spawnFlameJet(){
   const mouthX=player.root.position.x+fx*0.34;
   const mouthY=player.root.position.y+1.46;
   const mouthZ=player.root.position.z+fz*0.34;
-  const count=22;
+  const count=132;
   const geo=new THREE.BufferGeometry();
   const pos=new Float32Array(count*3);
   const col=new Float32Array(count*3);
   const vel=new Float32Array(count*3);
-  const colors=[new THREE.Color('#ffd3a8'),new THREE.Color('#ff7a28'),new THREE.Color('#ff3b12')];
+  const colors=[new THREE.Color('#fff1bf'),new THREE.Color('#ffd15a'),new THREE.Color('#ff7a28'),new THREE.Color('#ff3b12')];
+  const rightX=fz, rightZ=-fx;
   for(let i=0;i<count;i++){
     const c=colors[i%colors.length];
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    const trail=i===0?0:(0.15+i*0.08);
-    pos[i*3]=fx*0.04-fx*trail;
-    pos[i*3+1]=0;
-    pos[i*3+2]=fz*0.04-fz*trail;
-    const spread=(Math.random()-0.5)*0.08;
-    const speed=5.2+Math.random()*1.4;
-    vel[i*3]=fx*speed + (-fz)*spread;
-    vel[i*3+1]=(Math.random()-0.5)*0.04;
-    vel[i*3+2]=fz*speed + fx*spread;
+    const depth=Math.random()*1.55;
+    const ring=Math.sqrt(Math.random())*(0.02+depth*0.16);
+    const ang=Math.random()*Math.PI*2 + depth*9.5;
+    pos[i*3]=fx*(0.02+depth) + rightX*Math.cos(ang)*ring;
+    pos[i*3+1]=(Math.random()-0.5)*(0.03+depth*0.025);
+    pos[i*3+2]=fz*(0.02+depth) + rightZ*Math.cos(ang)*ring;
+    const forwardSpeed=4.4+Math.random()*2.6+depth*0.95;
+    const swirl=Math.sin(ang)*(0.18+depth*0.14);
+    vel[i*3]=fx*forwardSpeed + rightX*swirl;
+    vel[i*3+1]=(Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03;
+    vel[i*3+2]=fz*forwardSpeed + rightZ*swirl;
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.38,transparent:true,opacity:0.92,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.16,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
   points.position.set(mouthX,mouthY,mouthZ);
   points.frustumCulled=false;
   scene.add(points);
-  activeFlameJets.push({mesh:points,life:0.28,maxLife:0.28,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true});
+  activeFlameJets.push({mesh:points,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true,originX:mouthX,originZ:mouthZ});
   forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
 }
 
@@ -3244,20 +3247,20 @@ function updateSpecialWeapons(dt,nowS){
     const arr=jet.mesh.geometry.attributes.position.array;
     for(let p=0;p<jet.count;p++){
       arr[p*3]+=jet.vel[p*3]*dt;
-      arr[p*3+1]+=jet.vel[p*3+1]*dt + Math.sin(nowS*22+p)*0.003;
+      arr[p*3+1]+=jet.vel[p*3+1]*dt + Math.sin(nowS*22+p*0.35)*0.006;
       arr[p*3+2]+=jet.vel[p*3+2]*dt;
       const drag=jet.drag||0.972;
       jet.vel[p*3]*=drag;
-      jet.vel[p*3+1]*=(jet.dragY||0.9);
+      jet.vel[p*3+1]*=(jet.dragY||0.94);
       jet.vel[p*3+2]*=drag;
       jet.vel[p*3+1]-=(jet.gravity||0)*dt;
     }
     jet.mesh.geometry.attributes.position.needsUpdate=true;
-    jet.mesh.material.opacity=0.9*t;
-    jet.mesh.material.size=(jet.tail?0.5:0.15)+(jet.tail?0.26:0.18)*t;
+    jet.mesh.material.opacity=0.96*t;
+    jet.mesh.material.size=(jet.tail?0.18:0.15)+(jet.tail?0.1:0.18)*t;
     if(jet.hitTick>0.07){
       jet.hitTick=0;
-      forEachArtistInCone(player.root.position.x,player.root.position.z,jet.dirX,jet.dirZ,6.1,Math.PI*0.48,a=>killArtist(a));
+      forEachArtistInCone(jet.originX??player.root.position.x,jet.originZ??player.root.position.z,jet.dirX,jet.dirZ,6.1,Math.PI*0.48,a=>killArtist(a));
     }
     if(jet.life<=0){
       disposeSpecialVisual(jet.mesh);
