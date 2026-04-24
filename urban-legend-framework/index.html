@@ -5086,20 +5086,23 @@ function updatePlayer(dt){
   // Water state (recompute after position update)
   player.wasInWater=player.inWater;
   player.inWater=isInRiver(player.root.position.x,player.root.position.z,gY);
-  const slowedStepIntervalMul=(attackInputState.isDown||player.attackT>=0||player.specialAnimT>0||player.pendingSpecialAction) ? 1.5 : 1;
+  const isKickMoving=(player.currentAttackAnim==='kick') && (player.attackT>=0||player.specialAnimT>0);
+  const isPunchOrSkillMoving=((player.currentAttackAnim==='punch'||player.currentAttackAnim==='combo') && (player.attackT>=0||player.specialAnimT>0)) || !!player.pendingSpecialAction || attackInputState.isDown;
+  const baseStepIntervalMul=1.3;
+  const slowedStepIntervalMul=baseStepIntervalMul*(isPunchOrSkillMoving ? 1.3 : 1);
   // Footstep splash while wading
   if(player.inWater && !player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.55*slowedStepIntervalMul){
       player.walkPhase=0;
       spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,0.5);
-      playSFX('riverWalk',{volume:0.48,playbackRate:0.98+Math.random()*0.05,minGap:0.08});
+      if(!isKickMoving) playSFX('riverWalk',{volume:0.48,playbackRate:0.98+Math.random()*0.05,minGap:0.08});
     }
   }else if(!player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.5*slowedStepIntervalMul){
       player.walkPhase=0;
-      playSFX('playerWalk',{volume:0.44,playbackRate:0.98+Math.random()*0.04,minGap:0.08});
+      if(!isKickMoving) playSFX('playerWalk',{volume:0.44,playbackRate:0.98+Math.random()*0.04,minGap:0.08});
     }
   }
   // Splash on first entry
