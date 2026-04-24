@@ -77,3 +77,5 @@ TODO:
 - The loadout toggle icon was simplified again per user request: it now shows a centered uppercase `E` on the blue circular button.
 - Startup optimization was redirected to a non-visual path: BVH setup now begins in parallel with other startup loads, and expensive playground bounds-tree generation is scheduled incrementally in background idle slices instead of blocking `loadPlayground()` before the first playable frame.
 - Mobile probe after the latest change showed `intro-progress-text` reaching `READY 100%`, start button enabled, and the moved loadout button displaying `E` without overlapping the paint bar.
+
+- Raised the charged throw landing marker by +1.0 world units so the red aim cue no longer sinks into the floor. Bomb mushroom-cloud particle positions/velocities are now scaled to 60% of the previous size. Added low-risk perf work that keeps visuals/mechanics intact: coin fade now caches per-coin materials instead of traversing every mesh every vanish frame, and ceiling-occlusion ray setup now reuses temp vectors to reduce GC churn during play.

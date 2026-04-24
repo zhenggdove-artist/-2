@@ -929,6 +929,8 @@ const ceilingFadableMeshes=new Set();
 const ceilingOcclusionRay=new THREE.Raycaster();
 const ceilingOccludedMeshes=new Set();
 let ceilingOcclusionCooldown=0;
+const _ceilingTargetV=new THREE.Vector3();
+const _ceilingDirV=new THREE.Vector3();
 const groundRaycaster=new THREE.Raycaster();
 const _downV=new THREE.Vector3(0,-1,0);
 const _upPos=new THREE.Vector3();
@@ -1776,8 +1778,8 @@ function updateCeilingOcclusion(){
   ceilingOcclusionCooldown=IS_MOBILE_LAYOUT?4:2;
   restoreCeilingOcclusion();
   if(!playgroundRoot||!player?.root) return;
-  const target=new THREE.Vector3(player.root.position.x,player.root.position.y+1.35,player.root.position.z);
-  const origin=camera.position.clone();
+  const target=_ceilingTargetV.set(player.root.position.x,player.root.position.y+1.35,player.root.position.z);
+  const origin=camera.position;
   if(playableLayer && origin.y>playableLayer.ceilingY+0.35 && origin.y>target.y+1.8){
     for(const mesh of ceilingFadableMeshes){
       const entries=ensureCeilingFadeMaterials(mesh);
@@ -1791,7 +1793,7 @@ function updateCeilingOcclusion(){
     }
     return;
   }
-  const dir=target.clone().sub(origin);
+  const dir=_ceilingDirV.subVectors(target,origin);
   const dist=dir.length();
   if(dist<0.1) return;
   dir.normalize();
@@ -3184,7 +3186,7 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
   }
   const marker=ensureSpecialAimMarker();
   const pulse=1+Math.sin(nowS*8)*0.08;
-  marker.position.set(target.x,target.y+0.06,target.z);
+  marker.position.set(target.x,target.y+1.06,target.z);
   marker.scale.setScalar((equippedWeapon==='ice'?1.08:0.92)*pulse);
   marker.visible=true;
 }
@@ -3225,6 +3227,7 @@ function throwIceBlock(charge=0){
 }
 
 function spawnBombMushroomCloud(x,y,z){
+  const scale=0.6;
   const count=780;
   const geo=new THREE.BufferGeometry();
   const pos=new Float32Array(count*3);
@@ -3236,16 +3239,16 @@ function spawnBombMushroomCloud(x,y,z){
     const trunk=t<0.26;
     const ring=t>0.6;
     const ang=Math.random()*Math.PI*2;
-    const radius=trunk?(Math.random()*0.38):(ring?(1.25+Math.random()*1.8):(Math.random()*1.8));
-    const py=trunk?(Math.random()*2.2):(1.0+Math.random()*2.6);
+    const radius=(trunk?(Math.random()*0.38):(ring?(1.25+Math.random()*1.8):(Math.random()*1.8)))*scale;
+    const py=(trunk?(Math.random()*2.2):(1.0+Math.random()*2.6))*scale;
     pos[i*3]=x+Math.cos(ang)*radius*(trunk?0.45:1);
     pos[i*3+1]=y+py;
     pos[i*3+2]=z+Math.sin(ang)*radius*(trunk?0.45:1);
     const c=colors[(Math.random()*colors.length)|0];
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    const outward=(ring?3.6:1.4)+(Math.random()*1.7);
+    const outward=((ring?3.6:1.4)+(Math.random()*1.7))*scale;
     vel[i*3]=Math.cos(ang)*outward*(trunk?0.24:1);
-    vel[i*3+1]=(trunk?3.1:1.95)+Math.random()*1.9;
+    vel[i*3+1]=((trunk?3.1:1.95)+Math.random()*1.9)*scale;
     vel[i*3+2]=Math.sin(ang)*outward*(trunk?0.24:1);
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
@@ -4229,12 +4232,16 @@ function cloneCoinWithOwnMaterials(){
   const c=coinModel.clone(true);
   // Each clone gets its own materials so vanish-fade (opacity/transparent)
   // on one coin doesn't leak onto future coins or the source model.
+  const fadeMaterials=[];
   c.traverse(o=>{
     if(o.isMesh && o.material){
       const mats=Array.isArray(o.material)?o.material:[o.material];
-      o.material=Array.isArray(o.material)?mats.map(m=>m.clone()):mats[0].clone();
+      const cloned=Array.isArray(o.material)?mats.map(m=>m.clone()):mats[0].clone();
+      o.material=cloned;
+      (Array.isArray(cloned)?cloned:[cloned]).forEach(m=>fadeMaterials.push(m));
     }
   });
+  c.userData.fadeMaterials=fadeMaterials;
   return c;
 }
 
@@ -4250,6 +4257,7 @@ function spawnCoinAt(x,z){
   grp.userData.baseY=baseY;
   grp.userData.born=performance.now()/1000;
   grp.userData.vanishT=-1; // >=0 when player has picked it up
+  grp.userData.fadeMaterials=c.userData?.fadeMaterials?.length ? c.userData.fadeMaterials : (c.material ? (Array.isArray(c.material)?c.material:[c.material]) : []);
   scene.add(grp);
   COINS_FLOATING.push(grp);
   // Cap floating coins to prevent unbounded growth (memory + draw calls)
@@ -4672,14 +4680,9 @@ function updateCoins(dt,now){
       c.position.y=c.userData.vanishStartY+ease*2.2; // rise 2.2m
       c.rotation.y+=dt*14; // fast spin
       const opacity=1-ease;
-      c.traverse(o=>{
-        if(o.isMesh && o.material){
-          const ms=Array.isArray(o.material)?o.material:[o.material];
-          ms.forEach(m=>{
-            if(m){ m.transparent=true; m.opacity=opacity; m.depthWrite=false; }
-          });
-        }
-      });
+      for(const m of (c.userData.fadeMaterials||[])){
+        if(m){ m.transparent=true; m.opacity=opacity; m.depthWrite=false; }
+      }
       if(t>=1){
         disposeCoin(c);
         COINS_FLOATING.splice(i,1);
