@@ -3139,19 +3139,29 @@ function throwIceBlock(charge=0){
   const group=new THREE.Group();
   const block=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false),new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35}));
   block.rotation.y=Math.PI/6;
-  const capGeo=new THREE.CylinderGeometry(0.58,0.58,0.08,6);
-  const capTop=new THREE.Mesh(capGeo,new THREE.MeshBasicMaterial({color:'#effcff',transparent:true,opacity:0.55,depthWrite:false}));
-  const capBottom=new THREE.Mesh(capGeo.clone(),new THREE.MeshBasicMaterial({color:'#8fe5ff',transparent:true,opacity:0.36,depthWrite:false}));
-  capTop.position.y=0.5;
-  capBottom.position.y=-0.5;
-  capTop.rotation.y=capBottom.rotation.y=Math.PI/6;
+  const count=180;
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(count*3);
+  const col=new Float32Array(count*3);
+  const colors=[new THREE.Color('#f3feff'),new THREE.Color('#baf4ff'),new THREE.Color('#6edfff'),new THREE.Color('#2fb9ff')];
+  for(let i=0;i<count;i++){
+    const layer=i/count;
+    const arm=((i%6)/6)*Math.PI*2;
+    const radius=(0.08+layer*0.9)*(0.55+Math.random()*0.55);
+    const spiral=arm+layer*8.5;
+    pos[i*3]=Math.cos(spiral)*radius;
+    pos[i*3+1]=(Math.random()-0.5)*0.9 + Math.sin(layer*Math.PI)*0.28;
+    pos[i*3+2]=Math.sin(spiral)*radius;
+    const c=colors[i%colors.length];
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const crystalPoints=new THREE.Points(geo,new THREE.PointsMaterial({size:0.09,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
   const ring=new THREE.Mesh(new THREE.TorusGeometry(1.55,0.06,10,48),new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.7,depthWrite:false}));
   ring.rotation.x=Math.PI*0.5;
   ring.position.y=0.06;
-  const glyph=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.64,0.03,6),new THREE.MeshBasicMaterial({color:'#5dcfff',transparent:true,opacity:0.62,depthWrite:false}));
-  glyph.rotation.set(Math.PI*0.5,0,Math.PI/6);
-  glyph.position.y=0.18;
-  group.add(block,capTop,capBottom,ring,glyph);
+  group.add(block,crystalPoints,ring);
   group.position.set(targetX,groundY+0.45,targetZ);
   scene.add(group);
   activeIceFields.push({group,expiresAt:performance.now()/1000+15,radius:1.5});
@@ -3159,32 +3169,32 @@ function throwIceBlock(charge=0){
 }
 
 function spawnBombMushroomCloud(x,y,z){
-  const count=420;
+  const count=780;
   const geo=new THREE.BufferGeometry();
   const pos=new Float32Array(count*3);
   const col=new Float32Array(count*3);
   const vel=new Float32Array(count*3);
-  const colors=[new THREE.Color('#fff2b8'),new THREE.Color('#ffb14f'),new THREE.Color('#6b4b38'),new THREE.Color('#f6d3a1')];
+  const colors=[new THREE.Color('#fff1bf'),new THREE.Color('#ffd15a'),new THREE.Color('#ff7a28'),new THREE.Color('#ff3b12')];
   for(let i=0;i<count;i++){
     const t=i/count;
     const trunk=t<0.26;
     const ring=t>0.6;
     const ang=Math.random()*Math.PI*2;
-    const radius=trunk?(Math.random()*0.45):(ring?(1.1+Math.random()*1.2):(Math.random()*1.4));
-    const py=trunk?(Math.random()*1.9):(1.2+Math.random()*1.9);
+    const radius=trunk?(Math.random()*0.38):(ring?(1.25+Math.random()*1.8):(Math.random()*1.8));
+    const py=trunk?(Math.random()*2.2):(1.0+Math.random()*2.6);
     pos[i*3]=x+Math.cos(ang)*radius*(trunk?0.45:1);
     pos[i*3+1]=y+py;
     pos[i*3+2]=z+Math.sin(ang)*radius*(trunk?0.45:1);
     const c=colors[(Math.random()*colors.length)|0];
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    const outward=(ring?2.8:1.2)+(Math.random()*1.4);
-    vel[i*3]=Math.cos(ang)*outward*(trunk?0.28:1);
-    vel[i*3+1]=(trunk?2.4:1.7)+Math.random()*1.6;
-    vel[i*3+2]=Math.sin(ang)*outward*(trunk?0.28:1);
+    const outward=(ring?3.6:1.4)+(Math.random()*1.7);
+    vel[i*3]=Math.cos(ang)*outward*(trunk?0.24:1);
+    vel[i*3+1]=(trunk?3.1:1.95)+Math.random()*1.9;
+    vel[i*3+2]=Math.sin(ang)*outward*(trunk?0.24:1);
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.22,vertexColors:true,transparent:true,opacity:0.92,depthWrite:false,sizeAttenuation:true}));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.1,vertexColors:true,transparent:true,opacity:0.96,depthWrite:false,sizeAttenuation:true}));
   points.frustumCulled=false;
   scene.add(points);
   activeFlameJets.push({mesh:points,life:1.5,maxLife:1.5,dirX:0,dirZ:0,hitTick:-99,vel,count,gravity:2.2,drag:0.965});
@@ -3405,6 +3415,7 @@ const PLAYER_DECEL=26;
 const BOMB_THROW_SPEED=1.7;
 const BOMB_FUSE_TIME=10;
 const BOMB_BLAST_RADIUS=2.5;
+const PLAYER_ATTACK_TIME_SCALE=3;
 const PLAYER_MODEL_Y_OFFSET=0.0; // keep feet on the ground after bbox normalization
 const ATTACK_DUR=0.38;
 const ATTACK_COOLDOWN=0.5;
@@ -3430,7 +3441,7 @@ function getPlayerAttackDuration(def){
     playerClipKick,
     playerClipPunchCombo,
   }[def.clipKey];
-  return clip?.duration||def.fallback||ATTACK_DUR;
+  return (clip?.duration||def.fallback||ATTACK_DUR)/PLAYER_ATTACK_TIME_SCALE;
 }
 
 function getCurrentPlayerAttackAction(){
@@ -3521,7 +3532,7 @@ function startAttack(kind='punch'){
   player.specialAnimT=player.currentAttackDur;
   player.attackHit.clear();
   attackBtn.classList.add('cooling');
-  if(act) playPlayerOneShot(def.action,player.currentAttackDur,{specialAnim:def.id});
+  if(act) playPlayerOneShot(def.action,player.currentAttackDur,{specialAnim:def.id,timeScale:PLAYER_ATTACK_TIME_SCALE});
   return true;
 }
 
@@ -4868,7 +4879,7 @@ function updatePlayer(dt){
   const il=Math.sqrt(ix*ix+iy*iy);
   if(il>1){ix/=il;iy/=il}
   const hasInput=(il>0.05);
-  const attackSlowMul=(attackInputState.isDown||player.attackT>=0||player.specialAnimT>0||player.pendingSpecialAction)?0.2:1;
+  const attackSlowMul=(attackInputState.isDown||player.attackT>=0||player.specialAnimT>0||player.pendingSpecialAction)?0.5:1;
   // forward = away from camera; W (ky=-1) and joystick-up (joyY<0) should both move forward
   const mdx=-iy*fwdX+ix*rightX;
   const mdz=-iy*fwdZ+ix*rightZ;
