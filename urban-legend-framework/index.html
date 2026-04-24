@@ -233,7 +233,8 @@
   .loadout-slot button{width:100%;padding:6px 0;border-radius:999px;border:1px solid rgba(255,255,255,0.16);
     background:rgba(255,255,255,0.08);color:#fff;font-size:10px;letter-spacing:0.16em;cursor:pointer}
   .loadout-slot.active{outline:3px solid #fffb9a;box-shadow:0 0 0 3px rgba(255,167,38,0.42),0 12px 26px rgba(255,193,7,0.28);background:linear-gradient(180deg,rgba(255,249,196,0.96),rgba(255,167,38,0.88));transform:translateY(-3px)}
-  .loadout-slot.active .slot-name,.loadout-slot.active .slot-meta,.loadout-slot.active .slot-kind,.loadout-slot.active button{color:#3a2200;opacity:1}
+  .loadout-slot.active .slot-name,.loadout-slot.active .slot-meta,.loadout-slot.active .slot-kind{color:#3a2200;opacity:1}
+  .loadout-slot.active button{color:#118a37;opacity:1;font-weight:bold}
   .loadout-slot.cleaner{width:92px}
   .loadout-slot .slot-kind{font-size:9px;opacity:0.58;letter-spacing:0.18em}
   .loadout-slot.skill-slot{background:linear-gradient(180deg,rgba(255,235,120,0.82),rgba(137,92,0,0.86));border-color:rgba(255,239,166,0.48);color:#4f3200}
@@ -474,6 +475,11 @@
     <button class="shop-buy" id="buy-weapon-flame-btn">BUY FLAME</button>
   </div>
   <div class="shop-card skill-card">
+    <h4>WATERING CAN - 1 COIN</h4>
+    <p>5 uses. Equip it from E, then pour water onto plants to make them grow larger.</p>
+    <button class="shop-buy" id="buy-weapon-water-btn">BUY WATER</button>
+  </div>
+  <div class="shop-card skill-card">
     <h4>ICE BLOCK - 10 COINS</h4>
     <p>Throw an ice block. The front 3x3 freeze zone locks artists in place for 15 seconds.</p>
     <button class="shop-buy" id="buy-weapon-ice-btn">BUY ICE BLOCK</button>
@@ -582,10 +588,10 @@ const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
 
 // ===== Pastel palette (for flower generation) =====
-const PASTEL_PINK=['#ffbedc','#ffc2c5','#ffb3d9','#ffa7c4','#ffb7b2'];
-const PASTEL_PURPLE=['#d7bffb','#c8b6ff','#e4c1f9','#cdb4db'];
-const PASTEL_BLUE=['#b5e2fa','#a8dadc','#bde0fe','#c6e2e9'];
-const PASTEL_SOFT=['#F5D6D6','#FDFD96','#EAEAEA','#D3D3D3'];
+const PASTEL_PINK=['#ff7fd6','#ff83b5','#ff69c8','#ff86a8','#ff98a0'];
+const PASTEL_PURPLE=['#b67cff','#a77bff','#d78cff','#b98cff'];
+const PASTEL_BLUE=['#6fe6ff','#7fe3f2','#8fd8ff','#9fdfff'];
+const PASTEL_SOFT=['#ffe38c','#f5ff89','#f6b8ff','#b6fff0'];
 const ALL_PASTEL=[...PASTEL_PINK,...PASTEL_PURPLE,...PASTEL_BLUE,...PASTEL_SOFT];
 
 // ===== Supabase (leaderboard) =====
@@ -866,7 +872,7 @@ function makePlant(seedText){
   const emissiveCol=new THREE.Color(ALL_PASTEL[Math.floor(rng()*ALL_PASTEL.length)]);
   const mat=new THREE.MeshStandardMaterial({
     vertexColors:true,roughness:0.6,metalness:0.05,
-    emissive:emissiveCol,emissiveIntensity:0.18,side:THREE.DoubleSide,envMapIntensity:0
+    emissive:emissiveCol,emissiveIntensity:0.42,side:THREE.DoubleSide,envMapIntensity:0
   });
   const mesh=new THREE.Mesh(geo,mat);
   const grp=new THREE.Group();
@@ -874,12 +880,27 @@ function makePlant(seedText){
   const sc=(0.18+rng()*0.20)*2.0; // x2 larger per user request
   grp.scale.setScalar(sc);
   grp.add(mesh);
+  grp.userData.baseScale=sc;
+  grp.userData.targetScale=sc;
+  grp.userData.bugSeed=rng()*Math.PI*2;
   // grow drawRange animation
   mesh.userData.totalIdx=geo.getIndex().count;
   mesh.geometry.setDrawRange(0,0);
   grp.userData.growStart=performance.now()/1000;
   grp.userData.growDur=1.4;
   grp.userData.seedText=seedText;
+  const bugGroup=new THREE.Group();
+  const bugMat=new THREE.MeshBasicMaterial({color:'#f7ff8b',transparent:true,opacity:0.9,depthWrite:false});
+  const bugCount=IS_MOBILE_LAYOUT?2:3;
+  for(let i=0;i<bugCount;i++){
+    const bug=new THREE.Mesh(new THREE.SphereGeometry(0.028,6,6),bugMat.clone());
+    bug.material.color.offsetHSL((rng()-0.5)*0.08,0.05,0.08);
+    bugGroup.add(bug);
+  }
+  bugGroup.userData.radius=0.24+rng()*0.32;
+  bugGroup.userData.height=0.36+rng()*0.56;
+  grp.userData.bugGroup=bugGroup;
+  grp.add(bugGroup);
   return grp;
 }
 
@@ -3302,6 +3323,61 @@ function getSpecialThrowTarget(charge=0){
   return {x:targetX,y:groundY,z:targetZ,dist:throwDist};
 }
 
+function findWaterPlantTarget(){
+  if(!player.root || !flowerGroup.children.length) return null;
+  const {x:fx,z:fz}=getForwardXZ(player.yaw);
+  let best=null,bestScore=1e9;
+  for(const plant of flowerGroup.children){
+    const dx=plant.position.x-player.root.position.x;
+    const dz=plant.position.z-player.root.position.z;
+    const dist=Math.hypot(dx,dz);
+    if(dist>3.6) continue;
+    const inv=dist>0.001 ? 1/dist : 0;
+    const dot=(dx*inv)*fx+(dz*inv)*fz;
+    if(dot<0.35) continue;
+    const score=dist-(dot*0.9);
+    if(score<bestScore){best=plant;bestScore=score;}
+  }
+  return best;
+}
+
+function spawnWaterPour(targetPlant){
+  if(!targetPlant || !player.root) return false;
+  const {x:fx,z:fz}=getForwardXZ(player.yaw);
+  const handX=player.root.position.x+fx*0.26;
+  const handY=player.root.position.y+1.06;
+  const handZ=player.root.position.z+fz*0.26;
+  const endX=targetPlant.position.x;
+  const endY=targetPlant.position.y+targetPlant.scale.y*1.25;
+  const endZ=targetPlant.position.z;
+  const count=78;
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(count*3);
+  const col=new Float32Array(count*3);
+  const colors=[new THREE.Color('#dffcff'),new THREE.Color('#8ff6ff'),new THREE.Color('#58d3ff')];
+  for(let i=0;i<count;i++){
+    const c=colors[i%colors.length];
+    col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
+  }
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.075,transparent:true,opacity:0.92,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  points.frustumCulled=false;
+  scene.add(points);
+  activeWaterStreams.push({mesh:points,fromX:handX,fromY:handY,fromZ:handZ,toX:endX,toY:endY,toZ:endZ,life:0,maxLife:0.5,count});
+  return true;
+}
+
+function waterPlant(targetPlant){
+  if(!targetPlant) return false;
+  spawnWaterPour(targetPlant);
+  const base=targetPlant.userData?.baseScale||targetPlant.scale.x||1;
+  const current=targetPlant.userData?.targetScale||targetPlant.scale.x||base;
+  targetPlant.userData.baseScale=base;
+  targetPlant.userData.targetScale=Math.min(base*2.8,current+base*0.3);
+  return true;
+}
+
 function updateSpecialAimMarker(nowS=performance.now()/1000){
   if(gameState!=='playing' || !specialInputState.isDown || !equippedWeapon || (equippedWeapon!=='ice' && equippedWeapon!=='bomb')){
     setSpecialAimMarkerVisible(false);
@@ -3434,12 +3510,35 @@ function updateSpecialWeapons(dt,nowS){
         }
       }else if(player.pendingSpecialAction==='ice'){
         throwIceBlock(player.pendingSpecialCharge||0);
+      }else if(player.pendingSpecialAction==='water'){
+        if(player.pendingWaterTarget) waterPlant(player.pendingWaterTarget);
       }else if(player.pendingSpecialAction==='clean' && player.pendingCleanTarget){
         cleanPillar(player.pendingCleanTarget);
       }
       player.pendingSpecialAction=null;
       player.pendingSpecialCharge=0;
       player.pendingCleanTarget=null;
+      player.pendingWaterTarget=null;
+    }
+  }
+  for(let i=activeWaterStreams.length-1;i>=0;i--){
+    const fx=activeWaterStreams[i];
+    fx.life+=dt;
+    const t=clamp(fx.life/fx.maxLife,0,1);
+    const pos=fx.mesh.geometry.attributes.position.array;
+    for(let p=0;p<fx.count;p++){
+      const u=(p/(fx.count-1));
+      const prog=clamp(t*1.18-u*0.22,0,1);
+      const curve=(1-prog)*prog;
+      pos[p*3]=lerp(fx.fromX,fx.toX,prog)+(Math.sin(p*1.7+nowS*16)*0.03);
+      pos[p*3+1]=lerp(fx.fromY,fx.toY,prog)+curve*0.32+(Math.cos(p*1.2+nowS*12)*0.03);
+      pos[p*3+2]=lerp(fx.fromZ,fx.toZ,prog)+(Math.cos(p*1.5+nowS*15)*0.03);
+    }
+    fx.mesh.geometry.attributes.position.needsUpdate=true;
+    fx.mesh.material.opacity=0.92*(1-t*0.75);
+    if(t>=1){
+      disposeSpecialVisual(fx.mesh);
+      activeWaterStreams.splice(i,1);
     }
   }
   for(const id of Object.keys(player.specialCooldowns)){
@@ -3551,11 +3650,23 @@ function updateSpecialWeapons(dt,nowS){
 
 function useSpecialWeapon(charge=0){
   if(gameState!=='playing' || !equippedWeapon || !purchasedWeapons.has(equippedWeapon)&&!debugCheatMode) return false;
+  if(equippedWeapon==='water' && !debugCheatMode && wateringUses<=0) return false;
   if(player.pendingSpecialAction||player.attackT>=0||player.specialAnimT>0) return false;
   if(!debugCheatMode && specialCooldownRemaining(equippedWeapon)>0) return false;
   if(debugCheatMode) applyCheatInventory();
   if(equippedWeapon==='flame'){
     spawnFlameJet();
+  }else if(equippedWeapon==='water'){
+    const targetPlant=findWaterPlantTarget();
+    if(!targetPlant) return false;
+    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:2});
+    player.pendingSpecialAction='water';
+    player.pendingSpecialTimer=getActionClipDuration(act,0.62,2);
+    player.pendingWaterTarget=targetPlant;
+    if(!debugCheatMode){
+      wateringUses=Math.max(0,wateringUses-1);
+      if(wateringUses===0 && equippedWeapon==='water') equippedWeapon=null;
+    }
   }else if(equippedWeapon==='ice'){
     const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:BOMB_THROW_SPEED});
     player.pendingSpecialAction='ice';
@@ -3581,7 +3692,7 @@ const player={
   yaw:0, // facing yaw
   attackT:-1, // >=0 while swinging
   attackCooldown:0,
-  specialCooldowns:{flame:0,ice:0,bomb:0},
+  specialCooldowns:{flame:0,water:0,ice:0,bomb:0},
   attackHit:new Set(), // artist ids already hit this swing
   attackVariantIndex:0,
   currentAttackAnim:'punch',
@@ -3592,6 +3703,7 @@ const player={
   pendingSpecialAction:null,
   pendingSpecialTimer:0,
   pendingSpecialCharge:0,
+  pendingWaterTarget:null,
   pendingCleanTarget:null,
   vy:0,            // vertical velocity (jumping)
   isAir:false,     // true while jumping/falling
@@ -4443,12 +4555,14 @@ const BURST_SHOP_ITEMS=[
   {id:'tornado',name:'TWISTER',label:'Spiral',cost:5,icon:'🌀'},
 ];
 const WEAPON_SHOP_ITEMS=[
+  {id:'water',name:'WATER',label:'grow plants',cost:1,icon:'💧'},
   {id:'flame',name:'FLAME',label:'1s cd',cost:10,icon:'🔥'},
   {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:10,icon:'🧊'},
   {id:'bomb',name:'BOMB',label:'trap x5',cost:10,icon:'💣'},
 ];
-const SPECIAL_COOLDOWNS={flame:1,ice:3,bomb:3};
+const SPECIAL_COOLDOWNS={flame:1,water:0.35,ice:3,bomb:3};
 let cleanerUses=0;
+let wateringUses=0;
 let purchasedBurstEffects=new Set(['amber']);
 let equippedBurstEffect='amber';
 let purchasedWeapons=new Set();
@@ -4459,6 +4573,7 @@ let cleanPromptCooldown=0;
 const activeBombs=[];
 const activeFlameJets=[];
 const activeIceFields=[];
+const activeWaterStreams=[];
 let specialAimMarker=null;
 const cleanBtn=document.getElementById('clean-btn');
 const specialBtn=document.getElementById('special-btn');
@@ -4479,6 +4594,7 @@ const burstBuyButtons={
 };
 const weaponBuyButtons={
   flame:document.getElementById('buy-weapon-flame-btn'),
+  water:document.getElementById('buy-weapon-water-btn'),
   ice:document.getElementById('buy-weapon-ice-btn'),
   bomb:document.getElementById('buy-weapon-bomb-btn'),
 };
@@ -4542,6 +4658,7 @@ function getSkillIconSafe(id,kind){
 function syncShopIcons(){
   const defs=[
     ['buy-cleaner-btn',getSkillIconSafe('soap','utility')],
+    ['buy-weapon-water-btn',getSkillIconSafe('water','weapon')],
     ['buy-burst-prism-btn',getSkillIconSafe('prism','burst')],
     ['buy-burst-petal-btn',getSkillIconSafe('petal','burst')],
     ['buy-burst-star-btn',getSkillIconSafe('star','burst')],
@@ -4566,6 +4683,7 @@ function applyCheatInventory(){
   purchasedWeapons=new Set(WEAPON_SHOP_ITEMS.map(item=>item.id));
   if(!equippedWeapon) equippedWeapon='flame';
   cleanerUses=Math.max(cleanerUses,999);
+  wateringUses=Math.max(wateringUses,999);
   coinCount=Math.max(coinCount,999);
 }
 
@@ -4593,9 +4711,11 @@ function refreshSpecialButton(){
   }
   const item=findWeaponItem(equippedWeapon);
   const cd=specialCooldownRemaining(equippedWeapon);
-  const txt=(cd>0 && !debugCheatMode) ? `${item?.name||'SKILL'} ${cd.toFixed(1)}s` : (item?.name||'SKILL');
+  const txt=equippedWeapon==='water'
+    ? `${item?.name||'SKILL'} ${debugCheatMode?'∞':wateringUses}`
+    : ((cd>0 && !debugCheatMode) ? `${item?.name||'SKILL'} ${cd.toFixed(1)}s` : (item?.name||'SKILL'));
   specialBtn.innerHTML=`<span class="btn-ico">${item?.icon||'✦'}</span><span class="btn-txt">${txt}</span>`;
-  specialBtn.classList.toggle('cooling',cd>0 && !debugCheatMode);
+  specialBtn.classList.toggle('cooling',equippedWeapon==='water' ? (!debugCheatMode&&wateringUses<=0) : (cd>0 && !debugCheatMode));
 }
 
 function spendCoins(cost){
@@ -4805,6 +4925,20 @@ for(const item of WEAPON_SHOP_ITEMS){
     if(!spendCoins(item.cost)) return;
     purchasedWeapons.add(item.id);
     equippedWeapon=item.id;
+    renderShopState();
+  });
+}
+if(weaponBuyButtons.water){
+  const freshWaterBtn=weaponBuyButtons.water.cloneNode(true);
+  weaponBuyButtons.water.replaceWith(freshWaterBtn);
+  weaponBuyButtons.water=freshWaterBtn;
+  weaponBuyButtons.water.addEventListener('click',()=>{
+    if(!purchasedWeapons.has('water')){
+      if(!spendCoins(1)) return;
+      purchasedWeapons.add('water');
+    }else if(!spendCoins(1)) return;
+    wateringUses+=5;
+    equippedWeapon='water';
     renderShopState();
   });
 }
@@ -5392,7 +5526,6 @@ function registerGrowingFlower(grp){
   grp.traverse(o=>{if(o.isMesh&&o.userData.totalIdx!==undefined) growingFlowerMeshes.push(o)});
 }
 function updateFlowers(now){
-  if(!growingFlowerMeshes.length) return;
   for(let i=growingFlowerMeshes.length-1;i>=0;i--){
     const o=growingFlowerMeshes[i];
     const grp=o.parent;
@@ -5407,6 +5540,29 @@ function updateFlowers(now){
     if(t>=1){
       delete o.userData.totalIdx;
       growingFlowerMeshes.splice(i,1);
+    }
+  }
+  for(const grp of flowerGroup.children){
+    if(grp.userData?.targetScale){
+      const next=lerp(grp.scale.x,grp.userData.targetScale,0.06);
+      grp.scale.setScalar(Math.abs(grp.userData.targetScale-next)<0.002 ? grp.userData.targetScale : next);
+    }
+    const bugs=grp.userData?.bugGroup;
+    if(!bugs) continue;
+    const bugRadius=(bugs.userData?.radius||0.28)*(grp.scale.x/(grp.userData?.baseScale||grp.scale.x));
+    const bugHeight=(bugs.userData?.height||0.5)*(grp.scale.y/(grp.userData?.baseScale||grp.scale.y));
+    for(let i=0;i<bugs.children.length;i++){
+      const ang=now*(0.9+i*0.23)+(grp.userData?.bugSeed||0)+i*2.1;
+      const wobble=1+Math.sin(now*3.7+i)*0.12;
+      const bug=bugs.children[i];
+      bug.position.set(
+        Math.cos(ang)*bugRadius*wobble,
+        bugHeight*(0.55+0.24*Math.sin(ang*1.7+i)),
+        Math.sin(ang)*bugRadius
+      );
+      const s=0.75+0.35*(0.5+0.5*Math.sin(now*8+i));
+      bug.scale.setScalar(s);
+      if(bug.material) bug.material.opacity=0.58+0.3*(0.5+0.5*Math.sin(now*9+i*1.8));
     }
   }
 }
@@ -5696,6 +5852,128 @@ function playArtistFootstepSFX(a,baseVolume=0.36){
     minGap:0.08,
   });
 }
+function renderLoadoutBar(){
+  if(!loadoutBar) return;
+  if(debugCheatMode) applyCheatInventory();
+  const parts=[];
+  parts.push(
+    `<div class="loadout-slot cleaner">
+      <div class="slot-kind">UTILITY</div>
+      <div class="slot-icon">${getSkillIconSafe('soap','utility')}</div>
+      <div class="slot-name">SOAP</div>
+      <div class="slot-meta">${debugCheatMode?'∞':cleanerUses} clean uses</div>
+      <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
+    </div>`
+  );
+  for(const item of BURST_UNLOCK_ITEMS.filter(item=>item.id==='amber')){
+    if(!purchasedBurstEffects.has(item.id)) continue;
+    const active=item.id===equippedBurstEffect?' active':'';
+    parts.push(
+      `<div class="loadout-slot burst-slot${active}" data-burst-slot="${item.id}">
+        <div class="slot-kind">BURST FX</div>
+        <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'burst')}</div>
+        <div class="slot-name">${item.name}</div>
+        <div class="slot-meta">${item.label}</div>
+        <button type="button">${item.id===equippedBurstEffect?'EQUIPPED':'EQUIP'}</button>
+      </div>`
+    );
+  }
+  for(const item of WEAPON_SHOP_ITEMS){
+    if(!purchasedWeapons.has(item.id)) continue;
+    const active=item.id===equippedWeapon?' active':'';
+    const cd=specialCooldownRemaining(item.id);
+    const meta=item.id==='water'
+      ? `${debugCheatMode?'∞':wateringUses} uses`
+      : `${debugCheatMode?'∞ ready':(cd>0?cd.toFixed(1)+'s':item.label)}`;
+    const btnLabel=item.id==='water' && !debugCheatMode && wateringUses<=0
+      ? 'EMPTY'
+      : (item.id===equippedWeapon?'EQUIPPED':'EQUIP');
+    parts.push(
+      `<div class="loadout-slot skill-slot${active}" data-weapon-slot="${item.id}">
+        <div class="slot-kind">SKILL</div>
+        <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'weapon')}</div>
+        <div class="slot-name">${item.name}</div>
+        <div class="slot-meta">${meta}</div>
+        <button type="button">${btnLabel}</button>
+      </div>`
+    );
+  }
+  loadoutBar.innerHTML=parts.join('');
+  loadoutBar.querySelectorAll('[data-burst-slot]').forEach(el=>{
+    el.querySelector('button')?.addEventListener('click',()=>{
+      const id=el.getAttribute('data-burst-slot');
+      equippedBurstEffect=(equippedBurstEffect===id && id!=='amber') ? 'amber' : id;
+      renderLoadoutBar();
+      renderShopState();
+      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
+    });
+  });
+  loadoutBar.querySelectorAll('[data-weapon-slot]').forEach(el=>{
+    el.querySelector('button')?.addEventListener('click',()=>{
+      const id=el.getAttribute('data-weapon-slot');
+      if(id==='water' && !debugCheatMode && wateringUses<=0) return;
+      equippedWeapon=(equippedWeapon===id) ? null : id;
+      refreshSpecialButton();
+      renderLoadoutBar();
+      renderShopState();
+      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
+    });
+  });
+}
+
+function renderShopState(){
+  if(debugCheatMode) applyCheatInventory();
+  syncShopIcons();
+  syncBurstShopVisibility();
+  if(buyCleanerBtn){
+    buyCleanerBtn.disabled=!debugCheatMode&&coinCount<1;
+    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
+  }
+  for(const item of BURST_UNLOCK_ITEMS){
+    if(item.id==='amber') continue;
+    const btn=burstBuyButtons[item.id];
+    if(!btn) continue;
+    const owned=purchasedBurstEffects.has(item.id);
+    btn.disabled=true;
+    btn.textContent=owned ? (equippedBurstEffect===item.id?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
+  }
+  for(const item of WEAPON_SHOP_ITEMS){
+    const btn=weaponBuyButtons[item.id];
+    if(!btn) continue;
+    const owned=purchasedWeapons.has(item.id);
+    if(item.id==='water'){
+      btn.disabled=!debugCheatMode&&coinCount<item.cost;
+      btn.textContent=`BUY WATER +5 (${debugCheatMode?'∞':wateringUses})`;
+    }else{
+      btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
+      btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+    }
+  }
+  refreshSpecialButton();
+  renderLoadoutBar();
+}
+
+function resetShopState(){
+  cleanerUses=0;
+  wateringUses=0;
+  purchasedBurstEffects=new Set(['amber']);
+  equippedBurstEffect='amber';
+  purchasedWeapons=new Set();
+  equippedWeapon=null;
+  debugCheatMode=false;
+  for(const jet of activeFlameJets) scene.remove(jet.mesh);
+  activeFlameJets.length=0;
+  for(const bomb of activeBombs) scene.remove(bomb.group);
+  activeBombs.length=0;
+  for(const field of activeIceFields) disposeSpecialVisual(field.group);
+  activeIceFields.length=0;
+  for(const stream of activeWaterStreams) disposeSpecialVisual(stream.mesh);
+  activeWaterStreams.length=0;
+  currentCleanTarget=null;
+  cleanBtn.classList.add('hidden');
+  setShopOpen(false);
+  renderShopState();
+}
 
 function playArtistPaintWhisperSFX(a,baseVolume=0.34){
   const artistPos=a?.inst?.outer?.position;
@@ -5881,6 +6159,7 @@ function startGame(){
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
   player.specialCooldowns.flame=0;
+  player.specialCooldowns.water=0;
   player.specialCooldowns.ice=0;
   player.specialCooldowns.bomb=0;
   player.specialAnim='none';
@@ -6022,7 +6301,7 @@ function resetWorld(){
   player.pendingSpecialAction=null;player.pendingSpecialTimer=0;player.pendingSpecialCharge=0;player.pendingCleanTarget=null;
   specialInputState.isDown=false;specialInputState.pointerId=null;specialInputState.downAt=0;
   setSpecialAimMarkerVisible(false);
-  player.specialCooldowns.flame=0;player.specialCooldowns.ice=0;player.specialCooldowns.bomb=0;
+  player.specialCooldowns.flame=0;player.specialCooldowns.water=0;player.specialCooldowns.ice=0;player.specialCooldowns.bomb=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
   spawnTimer=1.5;
