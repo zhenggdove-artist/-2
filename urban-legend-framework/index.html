@@ -2617,9 +2617,9 @@ async function loadDeferredPlayerSkillClips(){
     playerClipClean=sanitizePlayerClip(cleanGLTF.animations[0]||playerClipClean,'player-clean')||playerClipClean;
     if(player?.inst?.mixer){
       if(playerClipJump && !player.inst.actJump){ player.inst.actJump=player.inst.mixer.clipAction(playerClipJump); player.inst.actJump.setLoop(THREE.LoopOnce); player.inst.actJump.clampWhenFinished=true; }
-      if(playerClipPunch && !player.inst.actPunch){ player.inst.actPunch=player.inst.mixer.clipAction(playerClipPunch); player.inst.actPunch.setLoop(THREE.LoopOnce); player.inst.actPunch.clampWhenFinished=false; }
-      if(playerClipKick && !player.inst.actKick){ player.inst.actKick=player.inst.mixer.clipAction(playerClipKick); player.inst.actKick.setLoop(THREE.LoopOnce); player.inst.actKick.clampWhenFinished=false; }
-      if(playerClipPunchCombo && !player.inst.actPunchCombo){ player.inst.actPunchCombo=player.inst.mixer.clipAction(playerClipPunchCombo); player.inst.actPunchCombo.setLoop(THREE.LoopOnce); player.inst.actPunchCombo.clampWhenFinished=false; }
+      if(playerClipPunch && !player.inst.actPunch){ player.inst.actPunch=player.inst.mixer.clipAction(playerClipPunch); player.inst.actPunch.setLoop(THREE.LoopOnce); player.inst.actPunch.clampWhenFinished=true; }
+      if(playerClipKick && !player.inst.actKick){ player.inst.actKick=player.inst.mixer.clipAction(playerClipKick); player.inst.actKick.setLoop(THREE.LoopOnce); player.inst.actKick.clampWhenFinished=true; }
+      if(playerClipPunchCombo && !player.inst.actPunchCombo){ player.inst.actPunchCombo=player.inst.mixer.clipAction(playerClipPunchCombo); player.inst.actPunchCombo.setLoop(THREE.LoopOnce); player.inst.actPunchCombo.clampWhenFinished=true; }
       if(playerClipFire && !player.inst.actFire){ player.inst.actFire=player.inst.mixer.clipAction(playerClipFire); player.inst.actFire.setLoop(THREE.LoopOnce); player.inst.actFire.clampWhenFinished=true; }
       if(playerClipThrowBomb && !player.inst.actThrowBomb){ player.inst.actThrowBomb=player.inst.mixer.clipAction(playerClipThrowBomb); player.inst.actThrowBomb.setLoop(THREE.LoopOnce); player.inst.actThrowBomb.clampWhenFinished=true; }
       if(playerClipClean && !player.inst.actClean){ player.inst.actClean=player.inst.mixer.clipAction(playerClipClean); player.inst.actClean.setLoop(THREE.LoopOnce); player.inst.actClean.clampWhenFinished=true; }
@@ -2823,9 +2823,9 @@ function buildPlayerInstance(){
     actRun.clampWhenFinished=false;
   }
   if(actJump){actJump.setLoop(THREE.LoopOnce);actJump.clampWhenFinished=true}
-  if(actPunch){actPunch.setLoop(THREE.LoopOnce);actPunch.clampWhenFinished=false}
-  if(actKick){actKick.setLoop(THREE.LoopOnce);actKick.clampWhenFinished=false}
-  if(actPunchCombo){actPunchCombo.setLoop(THREE.LoopOnce);actPunchCombo.clampWhenFinished=false}
+  if(actPunch){actPunch.setLoop(THREE.LoopOnce);actPunch.clampWhenFinished=true}
+  if(actKick){actKick.setLoop(THREE.LoopOnce);actKick.clampWhenFinished=true}
+  if(actPunchCombo){actPunchCombo.setLoop(THREE.LoopOnce);actPunchCombo.clampWhenFinished=true}
   if(actFire){actFire.setLoop(THREE.LoopOnce);actFire.clampWhenFinished=true}
   if(actThrowBomb){actThrowBomb.setLoop(THREE.LoopOnce);actThrowBomb.clampWhenFinished=true}
   if(actClean){actClean.setLoop(THREE.LoopOnce);actClean.clampWhenFinished=true}
@@ -3581,7 +3581,7 @@ function playPlayerOneShot(actionName,fallback=0.4,opts={}){
   if(!I) return null;
   const act=I[actionName]||null;
   const timeScale=opts.timeScale||1;
-  const clampWhenFinished=opts.clampWhenFinished ?? !/^act(Punch|Kick|PunchCombo)$/.test(actionName);
+  const clampWhenFinished=opts.clampWhenFinished ?? true;
   player.specialAnim=opts.specialAnim||'oneshot';
   player.specialAnimT=Math.max(player.specialAnimT,getActionClipDuration(act,fallback,timeScale));
   if(I.baseActionName&&I[I.baseActionName]) I[I.baseActionName].fadeOut(0.05);
