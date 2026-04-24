@@ -2610,7 +2610,7 @@ async function loadDeferredPlayerSkillClips(){
     const rawKickClip=kickGLTF.animations[0]||null;
     const rawComboClip=punchComboGLTF.animations[0]||null;
     playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,9,30) : playerClipPunch;
-    playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',6,14,30) : playerClipKick;
+    playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',2,10,30) : playerClipKick;
     playerClipPunchCombo=rawComboClip ? trimPlayerAttackClip(rawComboClip,'player-combo',0,10,30) : playerClipPunchCombo;
     playerClipFire=sanitizePlayerClip(fireGLTF.animations[0]||playerClipFire,'player-fire')||playerClipFire;
     playerClipThrowBomb=sanitizePlayerClip(throwGLTF.animations[0]||playerClipThrowBomb,'player-throwbomb')||playerClipThrowBomb;
@@ -5063,6 +5063,7 @@ function updatePlayer(dt){
           attackAct.clampWhenFinished=true;
           attackAct.fadeOut(recoverLead);
         }
+        I.oneShotActionName=null;
         setPlayerBaseAction(desiredBase,recoverLead);
       }
     }
