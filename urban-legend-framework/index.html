@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
@@ -60,7 +60,7 @@
   /* Mobile / small-screen: keep title at the top of the screen, but
      tucked just below the HUD row so the three boxes + title don't
      collide. (Earlier rev pushed it to bottom:46vh, which dumped it
-     into the middle of the play area — not what we want.) */
+     into the middle of the play area â€” not what we want.) */
   @media (max-width:640px){
     #title{top:12px;width:min(calc(100vw - 116px),280px);bottom:auto;font-size:clamp(12px,3.8vw,18px);letter-spacing:0.12em;opacity:0.74}
     #hud{top:8px;left:8px;right:8px;gap:6px}
@@ -106,7 +106,7 @@
     #paint-bar-label{font-size:10px;width:30px}
   }
 
-  /* ART WINS — fade to black cutscene when the bar fills */
+  /* ART WINS â€” fade to black cutscene when the bar fills */
   #art-wins{position:fixed;inset:0;z-index:700;display:flex;
     align-items:center;justify-content:center;flex-direction:column;gap:24px;
     background:transparent;opacity:0;pointer-events:none;
@@ -281,11 +281,11 @@
     z-index:400;display:flex;align-items:center;justify-content:center;
     color:#f0d0ff;text-align:center;padding:20px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;pointer-events:auto;
     overflow:hidden}
-  #intro .intro-card{width:min(92vw,760px);max-height:min(92vh,860px);display:flex;flex-direction:column;align-items:center;gap:16px;
-    padding:26px 28px 22px;border-radius:28px;background:linear-gradient(180deg,rgba(43,19,57,0.9),rgba(15,10,22,0.94));
+  #intro .intro-card{width:min(94vw,820px);max-height:min(92vh,860px);display:flex;flex-direction:column;align-items:center;gap:16px;
+    padding:38px 44px 28px;border-radius:28px;background:linear-gradient(180deg,rgba(43,19,57,0.9),rgba(15,10,22,0.94));
     border:1px solid rgba(255,214,150,0.24);box-shadow:0 20px 56px rgba(0,0,0,0.48),inset 0 0 0 1px rgba(255,255,255,0.06);
-    overflow:hidden}
-  #intro h1{font-size:clamp(30px,7vw,58px);margin:0;color:#ffd86b;letter-spacing:0.14em;
+    overflow:visible}
+  #intro h1{width:100%;font-size:clamp(28px,5.8vw,48px);margin:0;padding:0 18px 8px;box-sizing:border-box;color:#ffd86b;letter-spacing:0.08em;line-height:1.14;
     text-shadow:0 2px 16px rgba(255,188,73,0.38),0 0 26px rgba(255,120,180,0.16)}
   #intro .tag{color:#ffe3a0;font-size:clamp(11px,1.6vw,13px);letter-spacing:0.26em;opacity:0.78}
   #intro .intro-copy{width:100%;max-height:min(34vh,300px);overflow-y:auto;overflow-x:hidden;padding:4px 12px 4px 4px;
@@ -308,8 +308,8 @@
   #intro button:hover{transform:translateY(-2px)}
   @media (max-width:640px){
     #intro{padding:12px}
-    #intro .intro-card{width:min(94vw,420px);max-height:min(94vh,860px);gap:12px;padding:18px 16px 18px;border-radius:22px}
-    #intro h1{font-size:clamp(24px,9vw,38px);letter-spacing:0.1em}
+    #intro .intro-card{width:min(94vw,420px);max-height:min(94vh,860px);gap:12px;padding:24px 18px 20px;border-radius:22px}
+    #intro h1{font-size:clamp(22px,8.6vw,34px);letter-spacing:0.06em;padding:0 8px 6px}
     #intro .tag{font-size:10px;letter-spacing:0.16em}
     #intro .intro-copy{max-height:min(40vh,320px);padding-right:8px}
     #intro p{font-size:11px;line-height:1.5}
@@ -397,9 +397,9 @@
 <div id="title">RunArtistRun</div>
 
 <div id="hud">
-  <div class="hud-box" id="kill-box">💀 <span id="kill-count">0</span></div>
-  <div class="hud-box" id="timer-box">⏱ <span id="timer-text">3:00</span></div>
-  <div class="hud-box" id="coin-box">🪙 <span id="coin-count">0</span></div>
+  <div class="hud-box" id="kill-box">ðŸ’€ <span id="kill-count">0</span></div>
+  <div class="hud-box" id="timer-box">â± <span id="timer-text">3:00</span></div>
+  <div class="hud-box" id="coin-box">ðŸª™ <span id="coin-count">0</span></div>
 </div>
 
 <div id="paint-bar">
@@ -429,27 +429,27 @@
 
 <button id="shop-btn">SHOP</button>
 <div id="shop-panel">
-  <button id="shop-close" aria-label="Close shop">×</button>
+  <button id="shop-close" aria-label="Close shop">Ã—</button>
   <h3>SHOP</h3>
   <div class="shop-sub">Buy skill gear here. FX bursts unlock from KO milestones and are equipped from the loadout bar.</div>
   <div class="shop-section">UTILITY</div>
   <div class="shop-card burst-card">
-    <h4>CLEANER · 1 COIN</h4>
+    <h4>CLEANER Â· 1 COIN</h4>
     <p>Buy 1 cleaner canister. Each canister gives 3 clean uses.</p>
     <button class="shop-buy" id="buy-cleaner-btn">BUY CLEANER</button>
   </div>
   <div class="shop-card burst-card">
-    <h4>PRISM BURST · 5 COINS</h4>
+    <h4>PRISM BURST Â· 5 COINS</h4>
     <p>Multicolor confetti burst when an artist is knocked down.</p>
     <button class="shop-buy" id="buy-burst-prism-btn" hidden>BUY PRISM</button>
   </div>
   <div class="shop-card">
-    <h4>PETAL BURST · 5 COINS</h4>
+    <h4>PETAL BURST Â· 5 COINS</h4>
     <p>Heart-shaped pink petal cloud that blooms outward.</p>
     <button class="shop-buy" id="buy-burst-petal-btn" hidden>BUY PETAL</button>
   </div>
   <div class="shop-card burst-card">
-    <h4>STAR BURST · 5 COINS</h4>
+    <h4>STAR BURST Â· 5 COINS</h4>
     <p>Golden five-point star cloud with glitter spokes.</p>
     <button class="shop-buy" id="buy-burst-star-btn" hidden>BUY STAR</button>
   </div>
@@ -497,14 +497,14 @@
 <div id="intro">
   <div class="intro-card">
     <h1>RunArtistRun</h1>
-    <div class="tag">— loading briefing —</div>
+    <div class="tag">â€” loading briefing â€”</div>
     <div class="intro-copy">
       <p>
         Artists are coming.<br><br>
         With spray paint, imagination, and creative impulse, they arrive beneath the overpass to enact their artistic visions.<br><br>
         You play as a local resident defending the space under the bridge, repelling waves of graffiti artists.<br><br>
         Each artist driven away makes a flower grow.<br><br>
-        In the end, the site becomes a landscape shaped by public space, the outsider’s gaze, and the power relations of artistic intervention.
+        In the end, the site becomes a landscape shaped by public space, the outsiderâ€™s gaze, and the power relations of artistic intervention.
       </p>
     </div>
     <button id="start-btn">BEGIN</button>
@@ -513,7 +513,7 @@
       <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
     </div>
     <div class="tag" style="margin-top:8px;opacity:0.5;font-size:11px">
-      WASD / Joystick — move · Space / JUMP — jump · F / PUNCH — attack · Drag — camera
+      WASD / Joystick â€” move Â· Space / JUMP â€” jump Â· F / PUNCH â€” attack Â· Drag â€” camera
     </div>
   </div>
 </div>
@@ -535,12 +535,12 @@
 
 <div id="tablet-scene">
   <div id="tablet-img">
-    <div class="glyph">遺 碑</div>
+    <div class="glyph">éº ç¢‘</div>
     <div class="sub">STONE OF THE LOST</div>
     <div style="height:1px;background:rgba(232,223,194,0.2);width:60%;margin:6px 0"></div>
-    <div style="font-size:11px;letter-spacing:4px;opacity:0.6">— 此處曾是家 —</div>
+    <div style="font-size:11px;letter-spacing:4px;opacity:0.6">â€” æ­¤è™•æ›¾æ˜¯å®¶ â€”</div>
   </div>
-  <div id="tablet-caption">The artist's sketch, torn and stained — this was to be their mural.</div>
+  <div id="tablet-caption">The artist's sketch, torn and stained â€” this was to be their mural.</div>
   <button id="tablet-close">CONTINUE</button>
 </div>
 
@@ -561,7 +561,7 @@ import {DecalGeometry} from 'three/addons/geometries/DecalGeometry.js';
 
 // Try to enable three-mesh-bvh for fast raycasting against the playground.
 // Without it, every ground-height query iterates all triangles (the playground
-// is 17MB — this is what was locking the main thread on load).
+// is 17MB â€” this is what was locking the main thread on load).
 let bvhReady=false;
 let BVH_OPTS={};
 let playgroundBVHQueuedMeshes=[];
@@ -579,7 +579,7 @@ async function setupBVH(){
     bvhReady=true;
     console.log('[bvh] loaded');
   }catch(e){
-    console.warn('[bvh] unavailable — ground raycasts will fall back to flat',e);
+    console.warn('[bvh] unavailable â€” ground raycasts will fall back to flat',e);
   }
 }
 
@@ -1016,7 +1016,7 @@ let _lastCeilingTopDown=false;
 const groundRaycaster=new THREE.Raycaster();
 const _downV=new THREE.Vector3(0,-1,0);
 const _upPos=new THREE.Vector3();
-const groundYCache=new Map(); // key → y (floats rounded to 0.5m grid)
+const groundYCache=new Map(); // key â†’ y (floats rounded to 0.5m grid)
 let playableLayer=null; // {y,tolerance,minX,maxX,minZ,maxZ,centerX,centerZ,step,samples,footprint}
 
 function rayGroundHits(x,z){
@@ -1062,7 +1062,7 @@ function rayGroundY(x,z,preferredY=playableLayer?playableLayer.y:null,tolerance=
 }
 
 // Cached raycast: returns the FULL list of ground Y hits under (x,z),
-// or null for a miss. Keyed on a 0.5m grid — each cell is only
+// or null for a miss. Keyed on a 0.5m grid â€” each cell is only
 // raycast once until evicted. Storing the whole hit list (instead of
 // only the "best" Y) is what stops getStandY from snapping a
 // character off a raised walkway onto the lower main floor that
@@ -1113,17 +1113,17 @@ function getGroundY(x,z,defaultY){
 }
 
 // Feet-standing Y. Picks the HIGHEST hit under the cell that is not
-// above the caller's current Y + 1.2m — that combination keeps
+// above the caller's current Y + 1.2m â€” that combination keeps
 // a character anchored to their current stratum (main floor or
 // raised walkway) without snapping them up through a ceiling they
 // happen to be walking beneath.
 //
 // Key cases:
-//   - Player on main floor (ref≈0.5), cell has hits [0.5, 2.0]:
-//     2.0 > 0.5+1.2 → ignored as roof. Best = 0.5. Stay on main.
-//   - Player on walkway (ref≈2.0), cell has [0.5, 2.0]:
-//     2.0 ≤ 2.0+1.2 → accepted. Highest is 2.0. Stay on walkway.
-//   - Player in mid-air above walkway (ref≈3.5), cell has [0.5, 2.0]:
+//   - Player on main floor (refâ‰ˆ0.5), cell has hits [0.5, 2.0]:
+//     2.0 > 0.5+1.2 â†’ ignored as roof. Best = 0.5. Stay on main.
+//   - Player on walkway (refâ‰ˆ2.0), cell has [0.5, 2.0]:
+//     2.0 â‰¤ 2.0+1.2 â†’ accepted. Highest is 2.0. Stay on walkway.
+//   - Player in mid-air above walkway (refâ‰ˆ3.5), cell has [0.5, 2.0]:
 //     both pass the "below ref+1.2" check. Highest is 2.0. Lands
 //     on walkway.
 //   - Player on the walkway but raycast glitches / no hits:
@@ -1140,11 +1140,11 @@ function getStandY(x,z,fallback){
     let best=null;
     for(let i=0;i<hits.length;i++){
       const y=hits[i];
-      if(y>ceilingCutoff) continue; // above us — treat as a roof, not floor
+      if(y>ceilingCutoff) continue; // above us â€” treat as a roof, not floor
       if(best===null||y>best) best=y;
     }
     // No hit survived the cutoff (e.g. character has jumped above
-    // every surface — ref+1.2 is still below real ground). Fall
+    // every surface â€” ref+1.2 is still below real ground). Fall
     // back to the globally highest hit so they can land.
     if(best===null){
       for(let i=0;i<hits.length;i++){
@@ -1306,7 +1306,7 @@ async function detectPlayableLayer(progressFn){
     return cached;
   }
   if(!playgroundRoot) return null;
-  // Coarser grid — each sample does a multi-hit raycast which is the
+  // Coarser grid â€” each sample does a multi-hit raycast which is the
   // expensive step. 16 samples across the diameter is plenty for
   // picking the play layer.
   const step=Math.max(1.2,worldBoundR/16);
@@ -1420,7 +1420,7 @@ async function detectRiverBounds(progressFn){
     const sorted=[...arr].sort((a,b)=>a-b);
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
   };
-  // Build exactly 2 river channels: one along the BACK (−Z) side and
+  // Build exactly 2 river channels: one along the BACK (âˆ’Z) side and
   // one along the FRONT (+Z) side. Each stretches the FULL X range so
   // the water reads as a single continuous channel, not chopped puddles.
   const sides=[
@@ -1700,7 +1700,7 @@ function liftCeilingGeometry(root,anchorY,factor=5){
     if(!changed) return;
     ceilingFadableMeshes.add(o);
     pos.needsUpdate=true;
-    // Skip normal recalculation for lifted ceilings — they're shoved far
+    // Skip normal recalculation for lifted ceilings â€” they're shoved far
     // above the play space and never receive close lighting anyway. Normals
     // recompute is quadratic-ish and was adding many seconds to load.
     o.geometry.computeBoundingBox();
@@ -1778,7 +1778,7 @@ async function loadPlayground(){
     collectGroundMeshes(root);
 
     // Compute BVH so raycasts are O(log n) instead of O(n).
-    // Skip meshes that are too small to matter (< 30 triangles) — the
+    // Skip meshes that are too small to matter (< 30 triangles) â€” the
     // overhead of building a tree for them outweighs the raycast savings,
     // and the playground has many small decorative pieces.
     if(bvhReady){
@@ -1835,7 +1835,7 @@ function collectGroundMeshes(root){
     }
   });
   if(groundMeshes.length<2){
-    // Too few — use all meshes
+    // Too few â€” use all meshes
     groundMeshes.length=0;
     root.traverse(o=>{if(o.isMesh&&o.geometry) groundMeshes.push(o)});
   }
@@ -1936,7 +1936,7 @@ function updateCeilingOcclusion(){
 
 function detectPillars(root){
   const candidates=[];
-  const nameRx=/pillar|column|post|support|柱/i;
+  const nameRx=/pillar|column|post|support|æŸ±/i;
   root.traverse(o=>{
     if(!o.isMesh||!o.geometry)return;
     const bb=new THREE.Box3().setFromObject(o);
@@ -2059,7 +2059,7 @@ function getPlayableBounds(){
 // Build a cell grid over playableLayer.samples so findNearestPlayableSample
 // can run in O(1) instead of O(N). Called once after detectPlayableLayer,
 // and after any change to the sample set. Empty cells mean we fall back to
-// the full linear scan — rare and already handled below.
+// the full linear scan â€” rare and already handled below.
 function buildPlayableSampleIndex(layer){
   if(!layer||!layer.samples||!layer.samples.length) return null;
   const cellSize=Math.max(0.5,layer.step||1);
@@ -2094,7 +2094,7 @@ function findNearestPlayableSample(x,z){
       }
     }
     if(best) return best;
-    // Query point far from any populated cell — fall through to full scan.
+    // Query point far from any populated cell â€” fall through to full scan.
   }
   let best=null;
   let bestD=Infinity;
@@ -2162,9 +2162,9 @@ function clampToPlayableArea(pos,margin=0.35){
   pos.z=clamp(pos.z,b.minZ+margin,b.maxZ-margin);
   // Removed the "snap to nearest sample when >1.4m away" behaviour
   // entirely. It was catching the player in perfectly legitimate
-  // sampling dead-zones — the river trench (no samples, outside
+  // sampling dead-zones â€” the river trench (no samples, outside
   // cluster tolerance) and parts of the middle-front of the arena
-  // where the sparse grid happened to miss — and kicking them back
+  // where the sparse grid happened to miss â€” and kicking them back
   // every frame. The bounds clamp above still keeps the player
   // inside the arena rectangle; getStandY now falls back to the
   // caller's last known Y when the raycast glitches, so there's no
@@ -2240,7 +2240,7 @@ function makeGraffitiTexture(seed){
     }
     strokes.push(stroke);
   }
-  const tags=['X','✗','!','?','@','#','☆','♦'];
+  const tags=['X','âœ—','!','?','@','#','â˜†','â™¦'];
   const tag={
     text:tags[Math.floor(rng()*tags.length)],
     color:colors[Math.floor(rng()*colors.length)],
@@ -2399,7 +2399,7 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
         // Tight mesh's Y centre is usually safe too.
         cy=(bb.min.y+bb.max.y)*0.5;
       }else{
-        // Merged — pin Y to "ground + 1.2" but clamp into the
+        // Merged â€” pin Y to "ground + 1.2" but clamp into the
         // bbox so we never float above it or sink below it.
         cy=Math.max(bb.min.y+0.4,Math.min(bb.max.y-0.4,groundBeneath+1.2));
       }
@@ -2470,12 +2470,12 @@ let playerGLTF=null;
 let playerClipIdle=null,playerClipRun=null,playerClipJump=null,playerClipPunch=null,playerClipKick=null,playerClipPunchCombo=null,playerClipFire=null,playerClip=null,playerClipThrowBomb=null,playerClipClean=null;
 let playerTextureSet=null;
 
-// Set of every bone name in the GLB skeleton, plus a "tail → full"
+// Set of every bone name in the GLB skeleton, plus a "tail â†’ full"
 // map so we can match a track regardless of which prefix variant it
 // was exported with. The user's playground skeleton uses
 // "mixamorigHips" (no colon/underscore) while Mixamo FBX files
 // export "mixamorig:Hips"; previous attempts missed this exact
-// variant and all FBX clips silently bound 0 tracks → T-pose.
+// variant and all FBX clips silently bound 0 tracks â†’ T-pose.
 const _boneNames=new Set();
 const _boneByTail=new Map();
 function stripBonePrefix(n){
@@ -2495,13 +2495,13 @@ function collectBoneNames(scene){
     if(!_boneByTail.has(tail)) _boneByTail.set(tail,o.name);
   });
 }
-// Debug snapshot that the Shift+X HUD reads — gives the user a
+// Debug snapshot that the Shift+X HUD reads â€” gives the user a
 // visual confirmation that clips actually bound instead of silently
 // playing nothing.
 const _clipDebug={prefix:'',boneSample:'',clips:{}};
 
 function sanitizeClip(clip){
-  // 1. Drop position tracks on the root/hip bones — they'd teleport
+  // 1. Drop position tracks on the root/hip bones â€” they'd teleport
   //    the character back to the animation origin every frame.
   clip.tracks=clip.tracks.filter(t=>{
     if(!t.name||!t.name.endsWith('.position'))return true;
@@ -2512,7 +2512,7 @@ function sanitizeClip(clip){
   //    GLB's actual bone name via the tail-name map that
   //    collectBoneNames built. Matches regardless of prefix style
   //    (mixamorig:, mixamorig1:, mixamorig_ , or "mixamorigHips"
-  //    with no separator at all — which is what the user's GLB
+  //    with no separator at all â€” which is what the user's GLB
   //    actually uses).
   let bound=0;
   for(const t of clip.tracks){
@@ -2557,7 +2557,7 @@ function trimPlayerAttackClip(rawClip,name,startFrame=0,endTrimFrames=0,fps=30){
 async function loadFBXClip(path,name){
   // Paths with Chinese folders + spaces in filenames (Breathing Idle.fbx)
   // must be explicitly URL-encoded. Some browsers auto-encode, others
-  // don't — this guarantees both the 主角 directory and the space in
+  // don't â€” this guarantees both the ä¸»è§’ directory and the space in
   // "Breathing Idle.fbx" become valid URL octets. Without this the
   // FBX fetch 404s silently and the clip is never created.
   const encoded=path.split('/').map(encodeURIComponent).join('/');
@@ -2617,7 +2617,7 @@ async function loadCharacterTemplate(){
     }
     if(!gltf) gltf=await loader.loadAsync('character.glb');
     charGLTF=gltf;
-    // Build the bone-name Set BEFORE sanitising any clip — both the
+    // Build the bone-name Set BEFORE sanitising any clip â€” both the
     // GLB's own clips and the FBX clips will use it to pick the
     // right prefix variant for each track.
     collectBoneNames(gltf.scene);
@@ -2730,9 +2730,9 @@ function loadExtraCharacterClips(){
   if(extraCharacterClipsPromise) return extraCharacterClipsPromise;
   extraCharacterClipsPromise=(async()=>{
     const [paintClip,artistIdleClip,artistWalkClip]=await Promise.all([
-      loadAnimationClip('paint','playermodel/paint.glb','playermodel/主角/painting.fbx').catch(()=>null),
-      loadAnimationClip('artist-idle','playermodel/artist_idle.glb','playermodel/主角/Breathing Idle.fbx').catch(()=>null),
-      loadAnimationClip('artist-walk','playermodel/artist_walk.glb','playermodel/主角/Walking.fbx').catch(()=>null),
+      loadAnimationClip('paint','playermodel/paint.glb','playermodel/ä¸»è§’/painting.fbx').catch(()=>null),
+      loadAnimationClip('artist-idle','playermodel/artist_idle.glb','playermodel/ä¸»è§’/Breathing Idle.fbx').catch(()=>null),
+      loadAnimationClip('artist-walk','playermodel/artist_walk.glb','playermodel/ä¸»è§’/Walking.fbx').catch(()=>null),
     ]);
     if(paintClip) clipPaint=paintClip;
     if(artistIdleClip) clipArtistIdle=artistIdleClip;
@@ -2845,7 +2845,7 @@ function buildCharacterInstance(tint,isArtist){
   if(actJump){actJump.setLoop(THREE.LoopOnce);actJump.clampWhenFinished=true}
   if(actPaint){actPaint.setLoop(THREE.LoopRepeat);actPaint.clampWhenFinished=false}
   if(actPanicRun){actPanicRun.setLoop(THREE.LoopRepeat);actPanicRun.clampWhenFinished=false}
-  // Start idle immediately — the T-pose flash that used to appear on
+  // Start idle immediately â€” the T-pose flash that used to appear on
   // artist spawn was because no clip was actually playing before the
   // first updateArtists tick called artistTransition.
   actIdle&&actIdle.play();
@@ -3726,7 +3726,7 @@ const PLAYER_MODEL_Y_OFFSET=0.0; // keep feet on the ground after bbox normaliza
 const ATTACK_DUR=0.38;
 const ATTACK_COOLDOWN=0.5;
 const ATTACK_RANGE=2.6;
-const ATTACK_ARC=Math.PI*0.55; // ~100°
+const ATTACK_ARC=Math.PI*0.55; // ~100Â°
 const JUMP_VEL=7.5;
 const GRAVITY=22;
 const WATER_SPEED_MULT=0.8;
@@ -3862,12 +3862,12 @@ const ARTIST_FAR_WALK_MUL=0.5;      // beyond 10m from player, artists move at h
 const ARTIST_PAINT_TIME=10;         // sec to fully paint a pillar
 const ARTIST_SPAWN_BASE=2.2;        // base spawn interval (sec)
 const ARTIST_MAX_ALIVE=5;
-const ARTIST_FLEE_TRIGGER=3.0;      // player closer than this → flee
-const ARTIST_FLEE_SAFE=10.0;        // player farther than this → calm down, walk again
+const ARTIST_FLEE_TRIGGER=3.0;      // player closer than this â†’ flee
+const ARTIST_FLEE_SAFE=10.0;        // player farther than this â†’ calm down, walk again
 const ARTIST_FLEE_SPEED_MUL=1.7;    // flee run speed multiplier
 
 function pickSpawnPos(){
-  // Spawn at world edge — but try to avoid the trench so artists arrive walking, not falling
+  // Spawn at world edge â€” but try to avoid the trench so artists arrive walking, not falling
   const b=getPlayableBounds();
   const rx=Math.max(2,(b.maxX-b.minX)*0.48);
   const rz=Math.max(2,(b.maxZ-b.minZ)*0.48);
@@ -4029,7 +4029,7 @@ function spawnArtist(){
 }
 
 // Flee now runs "straight away from the player" every frame (computed
-// directly in the state-machine update) — no more pickFleeTarget with
+// directly in the state-machine update) â€” no more pickFleeTarget with
 // scored candidate directions. The old scorer spawned noticeable
 // wandering: artists zig-zagged toward "nice-looking" candidates and
 // kept re-planning every second, instead of just bolting. Simpler
@@ -4038,7 +4038,7 @@ function spawnArtist(){
 function artistTransition(a,newState){
   a.state=newState;
   // Always reset stuck accumulation AND any in-flight flee-flip
-  // when we change what we're trying to do — otherwise a counter
+  // when we change what we're trying to do â€” otherwise a counter
   // built up during a previous walk carries over into (say) the
   // paint state and immediately makes the next walk look stuck.
   a.stuckFrames=0;
@@ -4125,9 +4125,9 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
   a.inst.outer.rotation.y=Math.atan2(nx,nz);
   // Stuck detection: if the arena-bounds clamp ate most of the step
   // (artist pushed into an edge/corner), count frames. DECAY slowly
-  // when moving — don't snap back to 0. The reset-on-move version
-  // let the artist oscillate: steer sideways ⇒ tiny motion ⇒
-  // counter reset ⇒ head back at wall ⇒ bump. Keeping the counter
+  // when moving â€” don't snap back to 0. The reset-on-move version
+  // let the artist oscillate: steer sideways â‡’ tiny motion â‡’
+  // counter reset â‡’ head back at wall â‡’ bump. Keeping the counter
   // high until they actually clear the obstacle makes the steering
   // angle persist long enough for them to escape.
   const stepLen=Math.hypot(p.x-beforeX,p.z-beforeZ);
@@ -4174,7 +4174,7 @@ function updateArtists(dt,nowS){
 
     // Ground stick + water state for non-dying artists.
     // Use hybrid stand-Y with the artist's CURRENT Y as the
-    // reference — that's what lets getStandY choose between the
+    // reference â€” that's what lets getStandY choose between the
     // main floor and a raised walkway at the same XZ (it picks
     // the surface nearest their current level, so a walkway
     // artist stays on the walkway).
@@ -4183,7 +4183,7 @@ function updateArtists(dt,nowS){
       const gY=getStandY(p.x,p.z,prevY);
       a.groundY=gY;
       const tY=gY+GROUND_Y_OFFSET;
-      // Smooth Y change — harsh Y snaps cause the "pop into floor" look
+      // Smooth Y change â€” harsh Y snaps cause the "pop into floor" look
       const diff=tY-prevY;
       if(Math.abs(diff)>0.8) p.y=tY; // big step, don't try to slide
       else p.y=prevY+diff*Math.min(1,dt*16);
@@ -4246,7 +4246,7 @@ function updateArtists(dt,nowS){
         // from the artist id so two nearby artists turn opposite
         // ways and don't both slam into the same corner. After ~50
         // stuck frames (~0.8 s) we give up and pick a different
-        // pillar — that handles cases where the target is genuinely
+        // pillar â€” that handles cases where the target is genuinely
         // unreachable from this side.
         let hx=toX/dist, hz=toZ/dist;
         const stuck=a.stuckFrames||0;
@@ -4289,7 +4289,7 @@ function updateArtists(dt,nowS){
       pillar.paintProgress=Math.min(1,a.paintT/ARTIST_PAINT_TIME);
       // Progressive canvas redraw. Threshold 0.12 = ~8 redraws per
       // 7-sec paint cycle. Each redraw clears + redraws 6 strokes on
-      // a 256×256 canvas AND re-uploads that 256 KB to the GPU —
+      // a 256Ã—256 canvas AND re-uploads that 256 KB to the GPU â€”
       // with multiple pillars painting simultaneously on mobile, the
       // upload bandwidth was the main stutter source. 8 redraws is
       // still enough to visually "fill in" smoothly; the completion
@@ -4323,7 +4323,7 @@ function updateArtists(dt,nowS){
     }else if(a.state==='flee'){
       // Fleeing: run directly away from the player until safe.
       // If we bump the map edge OR come too close to a pillar,
-      // snap a hard 180° turn and lock that direction for ~35
+      // snap a hard 180Â° turn and lock that direction for ~35
       // frames (hard enough to clear the obstacle, not so long
       // they run straight at the player).
       const dx=p.x-px, dz=p.z-pz;
@@ -4339,7 +4339,7 @@ function updateArtists(dt,nowS){
         const d=Math.max(0.001,Math.sqrt(distSq));
         let hx=dx/d, hz=dz/d;
         const stuck=a.stuckFrames||0;
-        // Pillar proximity check — even though the game has no
+        // Pillar proximity check â€” even though the game has no
         // physical collision on pillars, the artist "bumping" a
         // pillar while fleeing reads as stuck to the player.
         let nearPillar=false;
@@ -4365,7 +4365,7 @@ function updateArtists(dt,nowS){
       if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
       moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED)*1.08);
       if(stuck>80){
-        // Can't reach the spawn point — just despawn.
+        // Can't reach the spawn point â€” just despawn.
         removeArtist(i);
         continue;
       }
@@ -4391,7 +4391,7 @@ function removeArtist(idx){
   const a=artists[idx];
   if(a.target&&a.target.claimedBy===a) a.target.claimedBy=null;
   scene.remove(a.inst.outer);
-  // IMPORTANT: SkeletonUtils.clone shares geometry across instances — never dispose.
+  // IMPORTANT: SkeletonUtils.clone shares geometry across instances â€” never dispose.
   // Materials were cloned per-instance in buildCharacterInstance, so they are safe to dispose.
   a.inst.outer.traverse(o=>{
     if(o.isMesh && o.material){
@@ -4444,13 +4444,13 @@ function spawnFlowerAt(x,z){
 // ===== Coin system =====
 let coinModel=null;
 // ==========================================================
-// 金幣尺寸微調：改這一個數字即可。值越大金幣越大。
-// 歷史：40 → 4 → 0.2 → 0.6 (×3)
+// é‡‘å¹£å°ºå¯¸å¾®èª¿ï¼šæ”¹é€™ä¸€å€‹æ•¸å­—å³å¯ã€‚å€¼è¶Šå¤§é‡‘å¹£è¶Šå¤§ã€‚
+// æ­·å²ï¼š40 â†’ 4 â†’ 0.2 â†’ 0.6 (Ã—3)
 // ==========================================================
 const COIN_SCALE=0.6;
 const COINS_FLOATING=[]; // coins on ground to pick up
 const COIN_PICKUP_DIST=1.8;
-const COIN_VANISH_DUR=0.7; // seconds — rise + spin + fade
+const COIN_VANISH_DUR=0.7; // seconds â€” rise + spin + fade
 
 async function loadCoin(){
   try{
@@ -4546,19 +4546,19 @@ function updateCoinUI(){coinCountEl.textContent=coinCount;renderShopState()}
 
 const CLEAN_RANGE=2.25;
 const BURST_SHOP_ITEMS=[
-  {id:'amber',name:'AMBER',label:'Default',cost:0,icon:'☀'},
-  {id:'prism',name:'PRISM',label:'Prism',cost:5,icon:'✦'},
-  {id:'petal',name:'PETAL',label:'Petal',cost:5,icon:'❀'},
-  {id:'star',name:'STAR',label:'Star',cost:5,icon:'★'},
-  {id:'fire',name:'FIRE',label:'Flame',cost:5,icon:'🔥'},
-  {id:'ice',name:'ICE',label:'Frost',cost:5,icon:'❄'},
-  {id:'tornado',name:'TWISTER',label:'Spiral',cost:5,icon:'🌀'},
+  {id:'amber',name:'AMBER',label:'Default',cost:0,icon:'â˜€'},
+  {id:'prism',name:'PRISM',label:'Prism',cost:5,icon:'âœ¦'},
+  {id:'petal',name:'PETAL',label:'Petal',cost:5,icon:'â€'},
+  {id:'star',name:'STAR',label:'Star',cost:5,icon:'â˜…'},
+  {id:'fire',name:'FIRE',label:'Flame',cost:5,icon:'ðŸ”¥'},
+  {id:'ice',name:'ICE',label:'Frost',cost:5,icon:'â„'},
+  {id:'tornado',name:'TWISTER',label:'Spiral',cost:5,icon:'ðŸŒ€'},
 ];
 const WEAPON_SHOP_ITEMS=[
-  {id:'water',name:'WATER',label:'grow plants',cost:1,icon:'💧'},
-  {id:'flame',name:'FLAME',label:'1s cd',cost:10,icon:'🔥'},
-  {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:10,icon:'🧊'},
-  {id:'bomb',name:'BOMB',label:'trap x5',cost:10,icon:'💣'},
+  {id:'water',name:'WATER',label:'grow plants',cost:1,icon:'ðŸ’§'},
+  {id:'flame',name:'FLAME',label:'1s cd',cost:10,icon:'ðŸ”¥'},
+  {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:10,icon:'ðŸ§Š'},
+  {id:'bomb',name:'BOMB',label:'trap x5',cost:10,icon:'ðŸ’£'},
 ];
 const SPECIAL_COOLDOWNS={flame:1,water:0.35,ice:3,bomb:3};
 let cleanerUses=0;
@@ -4627,10 +4627,10 @@ let specialBtnRefreshAccumulator=0;
 const ATTACK_HOLD_MS=240;
 const ATTACK_DOUBLE_TAP_MS=220;
 const BURST_UNLOCK_ITEMS=[
-  {id:'amber',name:'AMBER',label:'Default',icon:'✦',unlockKills:0},
-  {id:'ice',name:'SNOWFLAKE',label:'10 KOs',icon:'❄',unlockKills:10},
-  {id:'star',name:'HEXAGRAM',label:'20 KOs',icon:'★',unlockKills:20},
-  {id:'petal',name:'HEART',label:'30 KOs',icon:'❤',unlockKills:30},
+  {id:'amber',name:'AMBER',label:'Default',icon:'âœ¦',unlockKills:0},
+  {id:'ice',name:'SNOWFLAKE',label:'10 KOs',icon:'â„',unlockKills:10},
+  {id:'star',name:'HEXAGRAM',label:'20 KOs',icon:'â˜…',unlockKills:20},
+  {id:'petal',name:'HEART',label:'30 KOs',icon:'â¤',unlockKills:30},
 ];
 const attackInputState={isDown:false,pointerId:null,downAt:0,pendingTapAt:0};
 const specialInputState={isDown:false,pointerId:null,downAt:0};
@@ -4642,10 +4642,10 @@ function specialCooldownRemaining(id){
 function findBurstItem(id){ return BURST_UNLOCK_ITEMS.find(item=>item.id===id)||BURST_UNLOCK_ITEMS[0]; }
 function findWeaponItem(id){ return WEAPON_SHOP_ITEMS.find(item=>item.id===id)||null; }
 function getSkillIcon(id,kind){
-  if(kind==='burst') return findBurstItem(id)?.icon||'✦';
-  if(kind==='weapon') return findWeaponItem(id)?.icon||'✦';
-  if(kind==='utility') return '🧼';
-  return '✦';
+  if(kind==='burst') return findBurstItem(id)?.icon||'âœ¦';
+  if(kind==='weapon') return findWeaponItem(id)?.icon||'âœ¦';
+  if(kind==='utility') return 'ðŸ§¼';
+  return 'âœ¦';
 }
 
 function getSkillIconSafe(id,kind){
@@ -4705,16 +4705,16 @@ function refreshSpecialButton(){
   if(!specialBtn) return;
   if(debugCheatMode) applyCheatInventory();
   if(!equippedWeapon){
-    specialBtn.innerHTML=`<span class="btn-ico">✦</span><span class="btn-txt">SKILL</span>`;
+    specialBtn.innerHTML=`<span class="btn-ico">âœ¦</span><span class="btn-txt">SKILL</span>`;
     specialBtn.classList.add('cooling');
     return;
   }
   const item=findWeaponItem(equippedWeapon);
   const cd=specialCooldownRemaining(equippedWeapon);
   const txt=equippedWeapon==='water'
-    ? `${item?.name||'SKILL'} ${debugCheatMode?'∞':wateringUses}`
+    ? `${item?.name||'SKILL'} ${debugCheatMode?'âˆž':wateringUses}`
     : ((cd>0 && !debugCheatMode) ? `${item?.name||'SKILL'} ${cd.toFixed(1)}s` : (item?.name||'SKILL'));
-  specialBtn.innerHTML=`<span class="btn-ico">${item?.icon||'✦'}</span><span class="btn-txt">${txt}</span>`;
+  specialBtn.innerHTML=`<span class="btn-ico">${item?.icon||'âœ¦'}</span><span class="btn-txt">${txt}</span>`;
   specialBtn.classList.toggle('cooling',equippedWeapon==='water' ? (!debugCheatMode&&wateringUses<=0) : (cd>0 && !debugCheatMode));
 }
 
@@ -4735,7 +4735,7 @@ function renderLoadoutBar(){
       <div class="slot-kind">UTILITY</div>
       <div class="slot-icon">${getSkillIconSafe('soap','utility')}</div>
       <div class="slot-name">SOAP</div>
-      <div class="slot-meta">${debugCheatMode?'∞':cleanerUses} clean uses</div>
+      <div class="slot-meta">${debugCheatMode?'âˆž':cleanerUses} clean uses</div>
       <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
     </div>`
   );
@@ -4761,7 +4761,7 @@ function renderLoadoutBar(){
         <div class="slot-kind">SKILL</div>
         <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'weapon')}</div>
         <div class="slot-name">${item.name}</div>
-        <div class="slot-meta">${debugCheatMode?'∞ ready':(cd>0?cd.toFixed(1)+'s':item.label)}</div>
+        <div class="slot-meta">${debugCheatMode?'âˆž ready':(cd>0?cd.toFixed(1)+'s':item.label)}</div>
         <button type="button">${item.id===equippedWeapon?'EQUIPPED':'EQUIP'}</button>
       </div>`
     );
@@ -4974,7 +4974,7 @@ function updateCoins(dt,now){
   for(let i=COINS_FLOATING.length-1;i>=0;i--){
     const c=COINS_FLOATING[i];
     if(c.userData.vanishT>=0){
-      // Being collected — rise + spin fast + fade out, then dispose
+      // Being collected â€” rise + spin fast + fade out, then dispose
       c.userData.vanishT+=dt;
       const t=Math.min(1,c.userData.vanishT/COIN_VANISH_DUR);
       const ease=1-(1-t)*(1-t);
@@ -5014,7 +5014,7 @@ function dropSketchAt(x,z){
   const ctx=cv.getContext('2d');
   ctx.fillStyle='#f7eecf';ctx.fillRect(0,0,128,170);
   ctx.fillStyle='#3a3a3a';ctx.font='bold 36px serif';ctx.textAlign='center';
-  ctx.fillText('碑',64,60);
+  ctx.fillText('ç¢‘',64,60);
   ctx.font='11px serif';ctx.fillText('PASSWORD:',64,90);
   ctx.font='bold 16px monospace';ctx.fillText('????-????',64,112);
   ctx.strokeStyle='#8a7055';ctx.strokeRect(6,6,116,158);
@@ -5034,7 +5034,7 @@ function updateSketch(dt,now){
   const dx=sketchMesh.position.x-player.root.position.x;
   const dz=sketchMesh.position.z-player.root.position.z;
   if(dx*dx+dz*dz<2.5*2.5){
-    // Pick up → show tablet cutscene
+    // Pick up â†’ show tablet cutscene
     scene.remove(sketchMesh);sketchMesh=null;
     showTabletScene();
   }
@@ -5307,7 +5307,7 @@ function updatePlayer(dt){
     const targetY=gY+GROUND_Y_OFFSET;
     const curY=player.root.position.y;
     if(targetY < curY - 0.75){
-      // Real ledge drop — start falling
+      // Real ledge drop â€” start falling
       player.isAir=true;
       player.vy=0;
     }else{
@@ -5466,7 +5466,7 @@ const artWinsOverlay=document.getElementById('art-wins');
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
   if(debugCheatMode){
-    timerEl.textContent='∞:∞∞';
+    timerEl.textContent='âˆž:âˆžâˆž';
     timerBox.classList.remove('warn');
     return;
   }
@@ -5519,7 +5519,7 @@ function updateSpawns(dt){
 // Flower growth (drawRange animation). Tracks the set of currently
 // growing flower meshes in a tight list so the per-frame cost is
 // O(growing) rather than O(all flowers). Before, this traversed the
-// whole flowerGroup every frame — ~360 function calls each tick
+// whole flowerGroup every frame â€” ~360 function calls each tick
 // whether any flower was actually animating or not.
 const growingFlowerMeshes=[];
 function registerGrowingFlower(grp){
@@ -5852,128 +5852,6 @@ function playArtistFootstepSFX(a,baseVolume=0.36){
     minGap:0.08,
   });
 }
-function renderLoadoutBar(){
-  if(!loadoutBar) return;
-  if(debugCheatMode) applyCheatInventory();
-  const parts=[];
-  parts.push(
-    `<div class="loadout-slot cleaner">
-      <div class="slot-kind">UTILITY</div>
-      <div class="slot-icon">${getSkillIconSafe('soap','utility')}</div>
-      <div class="slot-name">SOAP</div>
-      <div class="slot-meta">${debugCheatMode?'∞':cleanerUses} clean uses</div>
-      <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
-    </div>`
-  );
-  for(const item of BURST_UNLOCK_ITEMS.filter(item=>item.id==='amber')){
-    if(!purchasedBurstEffects.has(item.id)) continue;
-    const active=item.id===equippedBurstEffect?' active':'';
-    parts.push(
-      `<div class="loadout-slot burst-slot${active}" data-burst-slot="${item.id}">
-        <div class="slot-kind">BURST FX</div>
-        <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'burst')}</div>
-        <div class="slot-name">${item.name}</div>
-        <div class="slot-meta">${item.label}</div>
-        <button type="button">${item.id===equippedBurstEffect?'EQUIPPED':'EQUIP'}</button>
-      </div>`
-    );
-  }
-  for(const item of WEAPON_SHOP_ITEMS){
-    if(!purchasedWeapons.has(item.id)) continue;
-    const active=item.id===equippedWeapon?' active':'';
-    const cd=specialCooldownRemaining(item.id);
-    const meta=item.id==='water'
-      ? `${debugCheatMode?'∞':wateringUses} uses`
-      : `${debugCheatMode?'∞ ready':(cd>0?cd.toFixed(1)+'s':item.label)}`;
-    const btnLabel=item.id==='water' && !debugCheatMode && wateringUses<=0
-      ? 'EMPTY'
-      : (item.id===equippedWeapon?'EQUIPPED':'EQUIP');
-    parts.push(
-      `<div class="loadout-slot skill-slot${active}" data-weapon-slot="${item.id}">
-        <div class="slot-kind">SKILL</div>
-        <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'weapon')}</div>
-        <div class="slot-name">${item.name}</div>
-        <div class="slot-meta">${meta}</div>
-        <button type="button">${btnLabel}</button>
-      </div>`
-    );
-  }
-  loadoutBar.innerHTML=parts.join('');
-  loadoutBar.querySelectorAll('[data-burst-slot]').forEach(el=>{
-    el.querySelector('button')?.addEventListener('click',()=>{
-      const id=el.getAttribute('data-burst-slot');
-      equippedBurstEffect=(equippedBurstEffect===id && id!=='amber') ? 'amber' : id;
-      renderLoadoutBar();
-      renderShopState();
-      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
-    });
-  });
-  loadoutBar.querySelectorAll('[data-weapon-slot]').forEach(el=>{
-    el.querySelector('button')?.addEventListener('click',()=>{
-      const id=el.getAttribute('data-weapon-slot');
-      if(id==='water' && !debugCheatMode && wateringUses<=0) return;
-      equippedWeapon=(equippedWeapon===id) ? null : id;
-      refreshSpecialButton();
-      renderLoadoutBar();
-      renderShopState();
-      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
-    });
-  });
-}
-
-function renderShopState(){
-  if(debugCheatMode) applyCheatInventory();
-  syncShopIcons();
-  syncBurstShopVisibility();
-  if(buyCleanerBtn){
-    buyCleanerBtn.disabled=!debugCheatMode&&coinCount<1;
-    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
-  }
-  for(const item of BURST_UNLOCK_ITEMS){
-    if(item.id==='amber') continue;
-    const btn=burstBuyButtons[item.id];
-    if(!btn) continue;
-    const owned=purchasedBurstEffects.has(item.id);
-    btn.disabled=true;
-    btn.textContent=owned ? (equippedBurstEffect===item.id?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
-  }
-  for(const item of WEAPON_SHOP_ITEMS){
-    const btn=weaponBuyButtons[item.id];
-    if(!btn) continue;
-    const owned=purchasedWeapons.has(item.id);
-    if(item.id==='water'){
-      btn.disabled=!debugCheatMode&&coinCount<item.cost;
-      btn.textContent=`BUY WATER +5 (${debugCheatMode?'∞':wateringUses})`;
-    }else{
-      btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-      btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
-    }
-  }
-  refreshSpecialButton();
-  renderLoadoutBar();
-}
-
-function resetShopState(){
-  cleanerUses=0;
-  wateringUses=0;
-  purchasedBurstEffects=new Set(['amber']);
-  equippedBurstEffect='amber';
-  purchasedWeapons=new Set();
-  equippedWeapon=null;
-  debugCheatMode=false;
-  for(const jet of activeFlameJets) scene.remove(jet.mesh);
-  activeFlameJets.length=0;
-  for(const bomb of activeBombs) scene.remove(bomb.group);
-  activeBombs.length=0;
-  for(const field of activeIceFields) disposeSpecialVisual(field.group);
-  activeIceFields.length=0;
-  for(const stream of activeWaterStreams) disposeSpecialVisual(stream.mesh);
-  activeWaterStreams.length=0;
-  currentCleanTarget=null;
-  cleanBtn.classList.add('hidden');
-  setShopOpen(false);
-  renderShopState();
-}
 
 function playArtistPaintWhisperSFX(a,baseVolume=0.34){
   const artistPos=a?.inst?.outer?.position;
@@ -6176,7 +6054,7 @@ function startGame(){
   // Try autoplay BGM
   const bgm=document.getElementById('bgm');
   try{
-    if(bgm && !bgm.src) bgm.src=encodeURI('music/4月2日.MP3');
+    if(bgm && !bgm.src) bgm.src=encodeURI('music/4æœˆ2æ—¥.MP3');
     bgm.volume=0.4;bgm.muted=false;
     const p=bgm.play();if(p&&p.catch)p.catch(()=>{});
   }catch{}
@@ -6196,7 +6074,7 @@ async function endGame(){
 }
 
 async function refreshLeaderboard(meEntry){
-  leaderboardList.innerHTML='<li style="justify-content:center;color:#8a6cc0">loading…</li>';
+  leaderboardList.innerHTML='<li style="justify-content:center;color:#8a6cc0">loadingâ€¦</li>';
   const data=await fetchLeaderboard();
   leaderboardList.innerHTML='';
   if(!data.length){
@@ -6319,7 +6197,7 @@ tabletClose.addEventListener('click',()=>{tabletScene.classList.remove('show')})
 const _debugEl=document.getElementById('debug-coords');
 // Real frame-interval tracking for FPS. The earlier readout used
 // `performance.now() - last` AT THE END of a tick, which is just
-// tick-processing time (usually 0.5-1ms) — always showed >1000 fps
+// tick-processing time (usually 0.5-1ms) â€” always showed >1000 fps
 // and hid any actual stutter. We now track the gap from the
 // previous RAF callback and a short moving-average so the number
 // on screen reflects actual display rate + recent worst frame.
@@ -6365,7 +6243,7 @@ function updateDebugCoords(){
 // ===== Main loop =====
 let last=performance.now();
 let tickCounter=0;
-// Rolling perf counters — printed every ~30s while playing so that if
+// Rolling perf counters â€” printed every ~30s while playing so that if
 // the game locks up or the tab dies, the console history shows the
 // trend (frame time, entity counts, cache growth) right up to it.
 let _perfSince=0,_perfFrames=0,_perfMaxMs=0;
@@ -6377,7 +6255,7 @@ function tick(){
   const frameMs=now-last;
   const dt=Math.min(0.05,frameMs/1000);
   _frameMs=frameMs;
-  // Ignore frame gaps > 500ms in the max/avg trackers — those are
+  // Ignore frame gaps > 500ms in the max/avg trackers â€” those are
   // the browser tab being backgrounded, the phone screen locking,
   // or an OS alert, not actual in-game jank. Including them makes
   // the on-screen maxMs shoot up to 25s+ after you check a
@@ -6443,7 +6321,7 @@ async function init(){
   // Gate the Start button while heavy work runs
   startBtn.disabled=true;
   const origLabel=startBtn.textContent;
-  startBtn.textContent='LOADING…';
+  startBtn.textContent='LOADINGâ€¦';
   setIntroProgress(2,'BOOT');
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
@@ -6460,11 +6338,11 @@ async function init(){
   if(bvhReady) groundRaycaster.firstHitOnly=true;
   setIntroProgress(36,'WORLD');
   if(bvhReady){
-    startBtn.textContent='SCANNING FLOORS…';
+    startBtn.textContent='SCANNING FLOORSâ€¦';
     playableLayer=await detectPlayableLayer(p=>{
       setIntroProgress(84+p*8,'TERRAIN');
       const pct=Math.floor(p*100);
-      startBtn.textContent='SCANNING FLOORS… '+pct+'%';
+      startBtn.textContent='SCANNING FLOORSâ€¦ '+pct+'%';
     });
     if(playableLayer){
       worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
@@ -6520,25 +6398,25 @@ async function init(){
           placePlayerOnPlayableLayer();
           setIntroProgress(100,'READY');
         }else{
-          console.warn('[river] no trench detected â€” playground may be flat');
+          console.warn('[river] no trench detected Ã¢â‚¬â€ playground may be flat');
         }
       }catch(e){
         console.warn('[river] detection failed',e);
       }
     });
   }else{
-    console.warn('[river] skipped â€” no BVH support');
+    console.warn('[river] skipped Ã¢â‚¬â€ no BVH support');
   }
-  tick(); // begin rendering — intro is still on top
+  tick(); // begin rendering â€” intro is still on top
 
   // River detection needs many raycasts. Only attempt when BVH is available.
   if(bvhReady){
     try{
-      startBtn.textContent='SCANNING TERRAIN…';
+      startBtn.textContent='SCANNING TERRAINâ€¦';
       RIVERS=await detectRiverBounds(p=>{ 
         setIntroProgress(92+p*8,'TERRAIN');
         const pct=Math.floor(p*100);
-        startBtn.textContent='SCANNING TERRAIN… '+pct+'%';
+        startBtn.textContent='SCANNING TERRAINâ€¦ '+pct+'%';
       });
       RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
       if(RIVERS&&RIVERS.length){
@@ -6546,13 +6424,13 @@ async function init(){
         waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
         placePlayerOnPlayableLayer();
       }else{
-        console.warn('[river] no trench detected — playground may be flat');
+        console.warn('[river] no trench detected â€” playground may be flat');
       }
     }catch(e){
       console.warn('[river] detection failed',e);
     }
   }else{
-    console.warn('[river] skipped — no BVH support');
+    console.warn('[river] skipped â€” no BVH support');
   }
 
   startBtn.textContent=origLabel;
