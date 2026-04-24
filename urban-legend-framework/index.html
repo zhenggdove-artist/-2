@@ -541,18 +541,19 @@ const ALL_PASTEL=[...PASTEL_PINK,...PASTEL_PURPLE,...PASTEL_BLUE,...PASTEL_SOFT]
 const SUPABASE_URL='https://ztpftxwfcppsqosilssq.supabase.co';
 const SUPABASE_KEY='sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC';
 const SB_HEADERS={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'};
-const LB_TABLE='defender_leaderboard'; // columns: id(uuid), name(text), kills(int4), created_at(timestamptz default now())
-const LB_CACHE_KEY='defender_lb_cache_v1';
+const LB_TABLE='defender_leaderboard'; // id(uuid), name(text), kills(int4), scene_state(jsonb), created_at(timestamptz)
+const LB_CACHE_KEY='defender_lb_cache_v2';
+const SCENE_STATE_VERSION=1;
 
 async function fetchLeaderboard(){
   try{
-    const r=await fetch(SUPABASE_URL+'/rest/v1/'+LB_TABLE+'?select=name,kills,created_at&order=kills.desc&limit=10',{headers:SB_HEADERS});
+    const r=await fetch(SUPABASE_URL+'/rest/v1/'+LB_TABLE+'?select=id,name,kills,scene_state,created_at&order=kills.desc,created_at.asc&limit=10',{headers:SB_HEADERS});
     if(r.ok){const d=await r.json();localStorage.setItem(LB_CACHE_KEY,JSON.stringify(d));return d}
   }catch{}
   try{return JSON.parse(localStorage.getItem(LB_CACHE_KEY)||'[]')}catch{return[]}
 }
-async function submitScore(name,kills){
-  const entry={name:name.slice(0,12),kills};
+async function submitScore(name,kills,sceneState=null){
+  const entry={name:name.slice(0,12),kills,scene_state:sceneState};
   try{
     await fetch(SUPABASE_URL+'/rest/v1/'+LB_TABLE,{
       method:'POST',
@@ -563,8 +564,8 @@ async function submitScore(name,kills){
   // cache-append
   try{
     const c=JSON.parse(localStorage.getItem(LB_CACHE_KEY)||'[]');
-    c.push({...entry,created_at:new Date().toISOString()});
-    c.sort((a,b)=>b.kills-a.kills);
+    c.push({id:'local-'+Math.random().toString(36).slice(2),...entry,created_at:new Date().toISOString()});
+    c.sort((a,b)=>(b.kills-a.kills)||String(a.created_at||'').localeCompare(String(b.created_at||'')));
     localStorage.setItem(LB_CACHE_KEY,JSON.stringify(c.slice(0,20)));
   }catch{}
 }
@@ -827,6 +828,7 @@ function makePlant(seedText){
   mesh.geometry.setDrawRange(0,0);
   grp.userData.growStart=performance.now()/1000;
   grp.userData.growDur=1.4;
+  grp.userData.seedText=seedText;
   return grp;
 }
 
@@ -2340,7 +2342,8 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
   const surfacePt=surface.hit.point.clone();
   const hitNormal=surface.normal.clone();
 
-  const seed=Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999);
+  if(!pillar.graffitiSeed) pillar.graffitiSeed=Math.floor(pillar.pos.x*37+pillar.pos.z*113+Math.random()*9999);
+  const seed=pillar.graffitiSeed;
   const {tex,render}=makeGraffitiTexture(seed);
   const planeH=1.4,planeW=1.1;
   const mat=new THREE.MeshBasicMaterial({
@@ -5004,6 +5007,20 @@ canvas.addEventListener('pointercancel',endDrag);
 canvas.addEventListener('wheel',e=>{e.preventDefault();camDist=clamp(camDist+e.deltaY*0.015,2,9)},{passive:false});
 
 function updateCam(){
+  if(gameState==='ended'){
+    const b=getPlayableBounds();
+    endCameraOrbitAngle+=0.0026;
+    const radius=Math.max(12,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*0.62);
+    const tx=b.centerX;
+    const tz=b.centerZ;
+    const ty=(playableLayer?.y||0)+1.2;
+    const cx=tx+Math.cos(endCameraOrbitAngle)*radius;
+    const cz=tz+Math.sin(endCameraOrbitAngle)*radius;
+    const cy=ty+18;
+    camera.position.set(cx,cy,cz);
+    camera.lookAt(tx,ty,tz);
+    return;
+  }
   const tx=player.root.position.x;
   const ty=player.root.position.y+1.35;
   const tz=player.root.position.z;
@@ -5626,7 +5643,135 @@ const nameInput=document.getElementById('name-input');
 const submitBtn=document.getElementById('submit-btn');
 const replayBtn=document.getElementById('replay-btn');
 const fadeEl=document.getElementById('fade');
+let endGameSceneState=null;
+let replaySceneEntryId=null;
+let endCameraOrbitAngle=0;
 let introProgressValue=0;
+
+function captureSceneState(){
+  return {
+    version:SCENE_STATE_VERSION,
+    kills:killCount,
+    flowers:flowerGroup.children.map(grp=>({
+      seedText:String(grp.userData?.seedText||'flower'),
+      x:+grp.position.x.toFixed(3),
+      y:+grp.position.y.toFixed(3),
+      z:+grp.position.z.toFixed(3),
+      rx:+grp.rotation.x.toFixed(4),
+      ry:+grp.rotation.y.toFixed(4),
+      rz:+grp.rotation.z.toFixed(4),
+      scale:+grp.scale.x.toFixed(4),
+    })),
+    graffiti:pillars.map((p,index)=>p.graffiti ? {
+      index,
+      progress:+(p.paintProgress||0).toFixed(4),
+      fillCounted:!!p.fillCounted,
+      seed:p.graffitiSeed||null,
+      side:p.graffitiSide ? {
+        x:+p.graffitiSide.x.toFixed(4),
+        y:+p.graffitiSide.y.toFixed(4),
+        z:+p.graffitiSide.z.toFixed(4),
+      } : null,
+    } : null).filter(Boolean),
+  };
+}
+
+function clearLeaderboardSceneVisuals(){
+  for(let i=artists.length-1;i>=0;i--) removeArtist(i);
+  for(let i=COINS_FLOATING.length-1;i>=0;i--){
+    disposeCoin(COINS_FLOATING[i]);
+    COINS_FLOATING.splice(i,1);
+  }
+  for(const jet of activeFlameJets) disposeSpecialVisual(jet.mesh);
+  activeFlameJets.length=0;
+  for(const bomb of activeBombs) disposeSpecialVisual(bomb.group);
+  activeBombs.length=0;
+  for(const field of activeIceFields) disposeSpecialVisual(field.group);
+  activeIceFields.length=0;
+  growingFlowerMeshes.length=0;
+  while(flowerGroup.children.length){
+    const c=flowerGroup.children[0];
+    flowerGroup.remove(c);
+    c.traverse(o=>{
+      if(o.isMesh){
+        o.geometry&&o.geometry.dispose();
+        const ms=Array.isArray(o.material)?o.material:[o.material];
+        ms.forEach(m=>m&&m.dispose&&m.dispose());
+      }
+    });
+  }
+  for(const p of pillars){
+    if(p.graffiti){
+      scene.remove(p.graffiti);
+      p.graffiti.geometry?.dispose?.();
+      if(p.graffiti.material){
+        p.graffiti.material.map?.dispose?.();
+        p.graffiti.material.dispose?.();
+      }
+    }
+    p.graffiti=null;
+    p.graffitiRender=null;
+    p.graffitiProgress=0;
+    p.graffitiTries=0;
+    p.paintProgress=0;
+    p.fillCounted=false;
+    p.graffitiSeed=null;
+    p.graffitiSide=null;
+    p.claimedBy=null;
+  }
+}
+
+function spawnSnapshotFlower(entry){
+  if(!entry) return;
+  const grp=makePlant(String(entry.seedText||'flower'));
+  grp.position.set(entry.x||0,entry.y||0,entry.z||0);
+  grp.rotation.set(entry.rx||0,entry.ry||0,entry.rz||0);
+  grp.scale.setScalar(entry.scale||1);
+  grp.userData.seedText=String(entry.seedText||'flower');
+  grp.traverse(o=>{
+    if(o.isMesh){
+      if(o.geometry?.setDrawRange && o.userData?.totalIdx) o.geometry.setDrawRange(0,o.userData.totalIdx);
+    }
+  });
+  grp.userData.growStart=-999;
+  grp.userData.growDur=0;
+  flowerGroup.add(grp);
+  freezeStaticObject(grp);
+}
+
+function applySceneState(sceneState){
+  if(!sceneState) return false;
+  clearLeaderboardSceneVisuals();
+  for(const flower of (sceneState.flowers||[])) spawnSnapshotFlower(flower);
+  for(const g of (sceneState.graffiti||[])){
+    const pillar=pillars[g.index|0];
+    if(!pillar) continue;
+    pillar.graffitiSeed=g.seed||pillar.graffitiSeed||null;
+    const side=g.side||{x:0,y:0,z:1};
+    const artistFacing=new THREE.Vector3(-(side.x||0),0,-(side.z||1));
+    if(artistFacing.lengthSq()<1e-5) artistFacing.set(0,0,1);
+    const mesh=getOrCreateGraffitiPlane(pillar,pillar.pos,artistFacing);
+    if(!mesh||!pillar.graffitiRender) continue;
+    pillar.paintProgress=clamp(g.progress||0,0,1);
+    pillar.graffitiRender(pillar.paintProgress);
+    pillar.graffitiProgress=pillar.paintProgress;
+    pillar.fillCounted=!!g.fillCounted;
+  }
+  paintFillCount=pillars.reduce((n,p)=>n+(p.fillCounted?1:0),0);
+  updatePaintBar();
+  return true;
+}
+
+function showLeaderboardScene(entry){
+  if(entry?.scene_state){
+    if(applySceneState(entry.scene_state)){
+      replaySceneEntryId=entry.id||entry.created_at||entry.name||null;
+    }
+  }else if(endGameSceneState){
+    applySceneState(endGameSceneState);
+    replaySceneEntryId=null;
+  }
+}
 
 function setIntroProgress(pct,label='LOADING'){
   const clamped=Math.max(0,Math.min(100,Math.round(pct)));
@@ -5672,6 +5817,9 @@ function startGame(){
 async function endGame(){
   if(gameState==='ended') return;
   gameState='ended';
+  endGameSceneState=captureSceneState();
+  replaySceneEntryId=null;
+  endCameraOrbitAngle=0;
   endScore.textContent=killCount;
   endOverlay.classList.add('show');
   nameInput.value='';submitBtn.disabled=false;
@@ -5690,8 +5838,18 @@ async function refreshLeaderboard(meEntry){
   top.forEach((e,i)=>{
     const li=document.createElement('li');
     const isMe=(meEntry && e.name===meEntry.name && e.kills===meEntry.kills);
+    const rowId=e.id||e.created_at||e.name||String(i);
+    const isViewing=replaySceneEntryId && replaySceneEntryId===rowId;
     if(isMe)li.classList.add('me');
+    if(isViewing)li.classList.add('me');
     li.innerHTML=`<span class="rank">${i+1}</span><span class="name">${escapeHTML(e.name||'???')}</span><span class="score">${e.kills}</span>`;
+    li.style.cursor=e.scene_state?'pointer':'default';
+    li.title=e.scene_state?'Click to preview this final scene':'';
+    li.addEventListener('click',()=>{
+      if(!e.scene_state) return;
+      showLeaderboardScene(e);
+      refreshLeaderboard(meEntry);
+    });
     leaderboardList.appendChild(li);
   });
 }
@@ -5701,8 +5859,10 @@ submitBtn.addEventListener('click',async()=>{
   const name=(nameInput.value||'').trim();
   if(!name) return;
   submitBtn.disabled=true;
-  await submitScore(name,killCount);
-  await refreshLeaderboard({name,kills:killCount});
+  const savedScene=endGameSceneState||captureSceneState();
+  await submitScore(name,killCount,savedScene);
+  replaySceneEntryId='local-me';
+  await refreshLeaderboard({name,kills:killCount,id:'local-me',scene_state:savedScene});
 });
 replayBtn.addEventListener('click',()=>{
   endOverlay.classList.remove('show');
@@ -5717,6 +5877,9 @@ artWinsRetryBtn?.addEventListener('click',()=>{
 });
 
 function resetWorld(){
+  endGameSceneState=null;
+  replaySceneEntryId=null;
+  endCameraOrbitAngle=0;
   // Remove all artists
   for(let i=artists.length-1;i>=0;i--) removeArtist(i);
   // Clear all flowers (and the growing-mesh tracking list)

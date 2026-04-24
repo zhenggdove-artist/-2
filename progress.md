@@ -92,3 +92,9 @@ TODO:
 - Wired new SFX hooks for: player punch / combo / kick swings, melee hit reactions on artists, random artist down moans, player + artist footsteps, flame, ice throw, bomb throw, bomb explosion, jump, coin pickup, and graffiti cleaning. Each clip now has a capped playback window so long source files are trimmed to the action length.
 - Ran `node --check` on the extracted module script successfully after the audio + attack-tail changes.
 - Ran the standard `develop-web-game` Playwright client against a local `python -m http.server` build. It still timed out trying to click `#start-btn` because startup remained in `SCANNING FLOORS… 56%` past the client's 5s click window, so this round did not get a clean automated gameplay screenshot. No syntax regression was found, but startup remains a blocker for the standard smoke loop.
+
+- Upgraded the Supabase leaderboard payload shape in code to include `id`, `created_at`, and `scene_state` JSON so endgame snapshots can be stored per run.
+- Added endgame scene capture/replay helpers in `index.html`: current flowers and pillar graffiti can now be serialized and reapplied. The ended-state camera now switches to a slow overhead orbit for leaderboard/replay viewing.
+- End-of-run submit flow now posts `scene_state` with the score, and leaderboard rows with a stored snapshot are clickable to preview that player’s final world state.
+- Added `supabase/leaderboard_schema.sql` with the expected `defender_leaderboard` schema (`scene_state jsonb`) and anon `select`/`insert` RLS policies.
+- Added a real repo-root GitHub Actions workflow `.github/workflows/supabase-keepalive.yml` that pings `defender_leaderboard` every 3 days using the publishable key. This is needed because the old keepalive workflow lived under `urban-legend-framework/.github/...`, which GitHub Actions ignores.
