@@ -828,7 +828,7 @@ function makePlant(seedText){
 // ===== Renderer / Scene / Camera =====
 const canvas=document.getElementById('c');
 const IS_MOBILE_LAYOUT=window.matchMedia('(max-width:640px),(pointer:coarse)').matches;
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
 renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
 renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -1504,6 +1504,7 @@ function createWaterMesh(r){
   surface.renderOrder=1;
   group.userData.surface=surface;
   group.add(surface);
+  freezeStaticObject(group);
   scene.add(group);
   return group;
 }
@@ -1514,6 +1515,16 @@ function updateWater(t){
     if(!surface||!surface.material||!surface.material.uniforms) continue;
     surface.material.uniforms.uTime.value=t;
   }
+}
+
+function freezeStaticObject(root){
+  if(!root) return root;
+  root.updateMatrixWorld(true);
+  root.traverse(o=>{
+    o.matrixAutoUpdate=false;
+    if('matrixWorldAutoUpdate' in o) o.matrixWorldAutoUpdate=false;
+  });
+  return root;
 }
 
 function sampleWaterRamp(stops,t){
@@ -1659,6 +1670,7 @@ async function loadPlayground(){
         }
       }
     });
+    freezeStaticObject(root);
     scene.add(root);
     playgroundRoot=root;
 
@@ -2345,6 +2357,7 @@ function getOrCreateGraffitiPlane(pillar,artistPos,artistFacing){
     mesh.lookAt(mesh.position.x+hitNormal.x,mesh.position.y+hitNormal.y,mesh.position.z+hitNormal.z);
   }
   mesh.renderOrder=3;
+  freezeStaticObject(mesh);
 
   scene.add(mesh);
   pillar.graffiti=mesh;
@@ -4183,6 +4196,7 @@ function spawnFlowerAt(x,z){
     const oz=Math.sin(angle)*radius;
     grp.position.set(x+ox,gY,z+oz);
     flowerGroup.add(grp);
+    freezeStaticObject(grp);
     registerGrowingFlower(grp);
   }
   // Cap total flowers to keep memory bounded over a long game
