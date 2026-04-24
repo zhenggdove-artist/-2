@@ -286,11 +286,22 @@
   #end-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:500;
     display:none;align-items:center;justify-content:center;padding:6vw}
   #end-overlay.show{display:flex}
+  #end-overlay.scene-view{background:rgba(0,0,0,0.08);align-items:flex-start;justify-content:flex-end;padding:14px;pointer-events:none}
   #end-box{width:min(92vw,460px);background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#f3d5ea 55%,#e8b8d8 100%);
-    border-radius:22px;padding:22px;color:#4a3060;
+    border-radius:22px;padding:22px;color:#4a3060;position:relative;pointer-events:auto;
     box-shadow:0 12px 40px rgba(0,0,0,0.6),inset 0 0 0 2px rgba(255,255,255,0.7)}
+  #end-box.minimized{width:auto;min-width:0;padding:10px 14px;border-radius:999px;display:flex;align-items:center;gap:10px}
+  #end-box.minimized .sub,
+  #end-box.minimized #end-score,
+  #end-box.minimized #name-row,
+  #end-box.minimized #leaderboard-list,
+  #end-box.minimized #replay-btn{display:none}
   #end-box h2{margin:0 0 6px;text-align:center;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
     color:#c03870;letter-spacing:0.2em;font-size:22px}
+  #end-box.minimized h2{margin:0;font-size:14px;letter-spacing:0.14em}
+  #end-toggle{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:999px;border:none;
+    background:rgba(74,48,96,0.12);color:#4a3060;font-size:18px;line-height:1;cursor:pointer}
+  #end-box.minimized #end-toggle{position:static;width:24px;height:24px;font-size:16px}
   #end-box .sub{text-align:center;font-size:13px;color:#8a6cc0;margin-bottom:14px;letter-spacing:1px}
   #end-score{text-align:center;font-size:44px;font-weight:bold;color:#c03870;line-height:1;margin:6px 0 10px;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:0.1em}
@@ -351,7 +362,7 @@
 <div id="title">DEFEND YOUR HOME</div>
 
 <div id="hud">
-  <div class="hud-box" id="kill-box">💀 <span id="kill-count">0</span> / 100</div>
+  <div class="hud-box" id="kill-box">💀 <span id="kill-count">0</span></div>
   <div class="hud-box" id="timer-box">⏱ <span id="timer-text">3:00</span></div>
   <div class="hud-box" id="coin-box">🪙 <span id="coin-count">0</span></div>
 </div>
@@ -464,6 +475,7 @@
 
 <div id="end-overlay">
   <div id="end-box">
+    <button id="end-toggle" type="button" aria-label="Toggle leaderboard view">-</button>
     <h2>TIME'S UP</h2>
     <div class="sub">artists struck down</div>
     <div id="end-score">0</div>
@@ -2886,6 +2898,34 @@ function setArtistFrozenLook(inst,frozen){
   inst.isFrozenLook=frozen;
 }
 
+function setArtistBurningLook(inst,burning){
+  if(!inst?.materialEntries || inst.isBurningLook===burning) return;
+  for(const entry of inst.materialEntries){
+    const m=entry.material;
+    if(!m) continue;
+    if(burning){
+      if(m.color) m.color.set('#ff7f3a');
+      if(m.emissive) m.emissive.set('#ff5a12');
+      if('emissiveIntensity' in m) m.emissiveIntensity=0.45;
+      if('roughness' in m) m.roughness=0.36;
+      if('metalness' in m) m.metalness=0.02;
+      if('transparent' in m) m.transparent=false;
+      if('opacity' in m) m.opacity=1;
+      m.needsUpdate=true;
+    }else{
+      if(m.color && entry.color) m.color.copy(entry.color);
+      if(m.emissive && entry.emissive) m.emissive.copy(entry.emissive);
+      if('emissiveIntensity' in m && entry.emissiveIntensity!==null) m.emissiveIntensity=entry.emissiveIntensity;
+      if('roughness' in m && entry.roughness!==null) m.roughness=entry.roughness;
+      if('metalness' in m && entry.metalness!==null) m.metalness=entry.metalness;
+      if('transparent' in m && entry.transparent!==null) m.transparent=entry.transparent;
+      if('opacity' in m && entry.opacity!==null) m.opacity=entry.opacity;
+      m.needsUpdate=true;
+    }
+  }
+  inst.isBurningLook=burning;
+}
+
 // Find a bone matching a regex (for hand attachment)
 function findBone(root,rx){
   let found=null;
@@ -3178,7 +3218,7 @@ function spawnFlameJet(){
   points.frustumCulled=false;
   scene.add(points);
   activeFlameJets.push({mesh:points,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true,originX:mouthX,originZ:mouthZ});
-  forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
+  forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a,'flame'));
 }
 
 function ensureSpecialAimMarker(){
@@ -3388,7 +3428,7 @@ function updateSpecialWeapons(dt,nowS){
     jet.mesh.material.size=(jet.tail?0.18:0.15)+(jet.tail?0.1:0.18)*t;
     if(jet.hitTick>0.07){
       jet.hitTick=0;
-      forEachArtistInCone(jet.originX??player.root.position.x,jet.originZ??player.root.position.z,jet.dirX,jet.dirZ,6.1,Math.PI*0.48,a=>killArtist(a));
+      forEachArtistInCone(jet.originX??player.root.position.x,jet.originZ??player.root.position.z,jet.dirX,jet.dirZ,6.1,Math.PI*0.48,a=>killArtist(a,'flame'));
     }
     if(jet.life<=0){
       disposeSpecialVisual(jet.mesh);
@@ -5219,12 +5259,13 @@ function checkAttackHit(){
   }
 }
 
-function killArtist(a){
+function killArtist(a,cause='generic'){
   a.state='dying';a.deathT=0;
   playRandomSFX(['artistDown1','artistDown2','artistDown3']);
   if(a.target && a.target.claimedBy===a) a.target.claimedBy=null;
   // Fade animations + clear the flee tilt so the death anim plays upright
   const I=a.inst;
+  if(cause==='flame') setArtistBurningLook(I,true);
   I.root.rotation.x=0;
   I.actIdle&&I.actIdle.fadeOut(0.2);
   I.actWalk&&I.actWalk.fadeOut(0.2);
@@ -5642,11 +5683,19 @@ const leaderboardList=document.getElementById('leaderboard-list');
 const nameInput=document.getElementById('name-input');
 const submitBtn=document.getElementById('submit-btn');
 const replayBtn=document.getElementById('replay-btn');
+const endBox=document.getElementById('end-box');
+const endToggle=document.getElementById('end-toggle');
 const fadeEl=document.getElementById('fade');
 let endGameSceneState=null;
 let replaySceneEntryId=null;
 let endCameraOrbitAngle=0;
 let introProgressValue=0;
+
+function setEndOverlaySceneView(minimized){
+  endOverlay.classList.toggle('scene-view',!!minimized);
+  endBox?.classList.toggle('minimized',!!minimized);
+  if(endToggle) endToggle.textContent=minimized?'+':'-';
+}
 
 function captureSceneState(){
   return {
@@ -5788,6 +5837,7 @@ startBtn.addEventListener('click',()=>{
 
 function startGame(){
   unlockSFX();
+  setEndOverlaySceneView(false);
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
@@ -5820,6 +5870,7 @@ async function endGame(){
   endGameSceneState=captureSceneState();
   replaySceneEntryId=null;
   endCameraOrbitAngle=0;
+  setEndOverlaySceneView(false);
   endScore.textContent=killCount;
   endOverlay.classList.add('show');
   nameInput.value='';submitBtn.disabled=false;
@@ -5863,6 +5914,23 @@ submitBtn.addEventListener('click',async()=>{
   await submitScore(name,killCount,savedScene);
   replaySceneEntryId='local-me';
   await refreshLeaderboard({name,kills:killCount,id:'local-me',scene_state:savedScene});
+});
+endToggle?.addEventListener('click',e=>{
+  e.stopPropagation();
+  const minimized=!endOverlay.classList.contains('scene-view');
+  setEndOverlaySceneView(minimized);
+});
+endBox?.addEventListener('click',e=>{
+  if(endBox.classList.contains('minimized')){
+    e.stopPropagation();
+    setEndOverlaySceneView(false);
+  }
+});
+endOverlay?.addEventListener('click',e=>{
+  if(gameState!=='ended') return;
+  if(e.target===endOverlay && !endOverlay.classList.contains('scene-view')){
+    setEndOverlaySceneView(true);
+  }
 });
 replayBtn.addEventListener('click',()=>{
   endOverlay.classList.remove('show');
