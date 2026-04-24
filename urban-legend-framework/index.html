@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <title>Urban Legend — Defender</title>
 <link rel="preload" as="fetch" href="mainplayermodel/player_main.glb" crossorigin>
-<link rel="preload" as="fetch" href="field/playground.glb" crossorigin>
+<link rel="preload" as="fetch" href="field/playground_optimized.glb?v=2026-04-24a" crossorigin>
 <style>
   @font-face{
     font-family:"GoldenGirdle";
@@ -1635,7 +1635,13 @@ function liftCeilingGeometry(root,anchorY,factor=5){
 
 async function loadPlayground(){
   try{
-    const gltf=await loader.loadAsync('field/playground.glb');
+    let gltf=null;
+    try{
+      gltf=await loader.loadAsync('field/playground_optimized.glb?v=2026-04-24a');
+    }catch(optErr){
+      console.warn('[playground] optimized load failed, falling back to original:',optErr);
+      gltf=await loader.loadAsync('field/playground.glb');
+    }
     const root=gltf.scene;
     // Auto-scale+center: compute bbox, target a reasonable size
     const bbox=new THREE.Box3().setFromObject(root);
