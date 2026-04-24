@@ -214,6 +214,11 @@
   .shop-card.skill-card .shop-buy{background:linear-gradient(90deg,#ffe66d,#ffb91f);color:#503300;border-color:rgba(255,247,197,0.8)}
   .shop-card.burst-card .shop-buy{background:linear-gradient(90deg,#6d3e7b,#2f4e74)}
   .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
+  /* Any shop-buy reflecting "equipped right now" shows a strong
+     green so the player can eyeball which skill is currently in
+     their slot without reading every button. Matches the loadout
+     bar's active-slot convention. */
+  .shop-buy.equipped{color:#118a37!important;font-weight:bold;opacity:1}
   #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
     max-width:min(78vw,520px);flex-wrap:wrap}
   #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:999px;
@@ -890,22 +895,35 @@ function makePlant(seedText){
   grp.userData.growDur=1.4;
   grp.userData.seedText=seedText;
   const bugGroup=new THREE.Group();
-  const bugCount=IS_MOBILE_LAYOUT?10:16;
+  const bugCount=IS_MOBILE_LAYOUT?14:22;
   const bugGeo=new THREE.BufferGeometry();
   const bugPos=new Float32Array(bugCount*3);
   const bugCol=new Float32Array(bugCount*3);
+  // Per-bug scrambled phase seeds so each one rides its own 3D
+  // Lissajous path, giving chaotic swarm behaviour instead of a
+  // single co-orbit ring.
+  const bugSeeds=new Float32Array(bugCount*6);
   for(let i=0;i<bugCount;i++){
-    const tint=new THREE.Color(i%2===0 ? '#f7ff8b' : '#ffd36b');
+    const tint=new THREE.Color(i%3===0?'#f7ff8b':(i%3===1?'#ffd36b':'#d6ffb0'));
     bugCol[i*3]=tint.r; bugCol[i*3+1]=tint.g; bugCol[i*3+2]=tint.b;
+    // fx,fy,fz — per-axis oscillation frequencies; phX,phY,phZ — phase offsets
+    bugSeeds[i*6+0]=0.55+rng()*0.9;         // fx
+    bugSeeds[i*6+1]=0.42+rng()*0.75;        // fy
+    bugSeeds[i*6+2]=0.58+rng()*0.95;        // fz
+    bugSeeds[i*6+3]=rng()*Math.PI*2;        // phX
+    bugSeeds[i*6+4]=rng()*Math.PI*2;        // phY
+    bugSeeds[i*6+5]=rng()*Math.PI*2;        // phZ
   }
   bugGeo.setAttribute('position',new THREE.BufferAttribute(bugPos,3));
   bugGeo.setAttribute('color',new THREE.BufferAttribute(bugCol,3));
-  const bugPoints=new THREE.Points(bugGeo,new THREE.PointsMaterial({size:0.055,transparent:true,opacity:0.88,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  const bugPoints=new THREE.Points(bugGeo,new THREE.PointsMaterial({size:0.025,transparent:true,opacity:0.92,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
   bugGroup.add(bugPoints);
-  bugGroup.userData.radius=0.24+rng()*0.32;
-  bugGroup.userData.height=0.36+rng()*0.56;
+  bugGroup.userData.radius=0.28+rng()*0.34;
+  bugGroup.userData.height=0.55+rng()*0.8;  // was 0.36+0.56 → now covers whole plant
   bugGroup.userData.count=bugCount;
+  bugGroup.userData.seeds=bugSeeds;
   grp.userData.bugGroup=bugGroup;
+  grp.userData.bugSeed=rng()*100;
   grp.add(bugGroup);
   return grp;
 }
@@ -3356,32 +3374,83 @@ function spawnWaterPour(targetPlant){
   const endX=targetPlant.position.x;
   const endY=targetPlant.position.y+targetPlant.scale.y*1.25;
   const endZ=targetPlant.position.z;
-  const count=280;
+  // A proper water pour now has two layers:
+  //   1. STREAM: dense stream of ~500 droplets along a gravity arc
+  //      from the hand to the plant top. Staggered birth times so the
+  //      stream "flows" continuously instead of appearing as a cloud.
+  //   2. SPLASH: 90 droplets that burst outward + downward from the
+  //      plant at impact time (after the stream reaches the plant).
+  const streamCount=IS_MOBILE_LAYOUT?340:520;
+  const splashCount=IS_MOBILE_LAYOUT?60:90;
+  const total=streamCount+splashCount;
   const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(count*3);
-  const col=new Float32Array(count*3);
-  const colors=[new THREE.Color('#f4ffff'),new THREE.Color('#b5fbff'),new THREE.Color('#78e8ff'),new THREE.Color('#44cfff')];
-  for(let i=0;i<count;i++){
-    const c=colors[i%colors.length];
-    col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
+  const pos=new Float32Array(total*3);
+  const col=new Float32Array(total*3);
+  const jitter=new Float32Array(total*3);  // per-particle random offsets
+  // Water palette: white-blue at the mouth deepening to cobalt.
+  const streamColors=[
+    new THREE.Color('#f6ffff'),
+    new THREE.Color('#cdf5ff'),
+    new THREE.Color('#7ed8ff'),
+    new THREE.Color('#3aa8e8'),
+  ];
+  const splashColors=[
+    new THREE.Color('#e0f6ff'),
+    new THREE.Color('#9fe2ff'),
+  ];
+  for(let i=0;i<streamCount;i++){
+    const c=streamColors[i%streamColors.length];
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    jitter[i*3]=(Math.random()-0.5)*0.18;
+    jitter[i*3+1]=Math.random()*0.3;
+    jitter[i*3+2]=(Math.random()-0.5)*0.18;
+    // Hide until first update.
+    pos[i*3+1]=-9999;
+  }
+  for(let i=0;i<splashCount;i++){
+    const idx=streamCount+i;
+    const c=splashColors[i%splashColors.length];
+    col[idx*3]=c.r; col[idx*3+1]=c.g; col[idx*3+2]=c.b;
+    const ang=Math.random()*Math.PI*2;
+    const mag=0.25+Math.random()*0.4;
+    jitter[idx*3]=Math.cos(ang)*mag;
+    jitter[idx*3+1]=Math.random()*0.9+0.1;       // up-and-out
+    jitter[idx*3+2]=Math.sin(ang)*mag;
+    pos[idx*3+1]=-9999;
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.11,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({
+    size:0.07,transparent:true,opacity:0.95,depthWrite:false,
+    vertexColors:true,sizeAttenuation:true,
+  }));
   points.frustumCulled=false;
   scene.add(points);
-  activeWaterStreams.push({mesh:points,fromX:handX,fromY:handY,fromZ:handZ,toX:endX,toY:endY,toZ:endZ,life:0,maxLife:0.8,count});
+  activeWaterStreams.push({
+    mesh:points,
+    fromX:handX,fromY:handY,fromZ:handZ,
+    toX:endX,toY:endY,toZ:endZ,
+    life:0,maxLife:1.15,
+    streamCount,splashCount,total,jitter,
+  });
   return true;
 }
 
+// Growth ladder: from base×1 to base×4 across exactly 10 waterings.
+// Per-pour increment = (4 − 1) / 10 = 0.3. Previous 0.65 delta with a
+// 3.1 cap maxed out after 4 pours — user wanted a longer grow-arc.
+const WATER_GROW_STEP=0.3;
+const WATER_GROW_CAP=4.0;
 function waterPlant(targetPlant){
   if(!targetPlant) return false;
   spawnWaterPour(targetPlant);
   const base=targetPlant.userData?.baseScale||targetPlant.scale.x||1;
   const current=targetPlant.userData?.targetScale||targetPlant.scale.x||base;
   targetPlant.userData.baseScale=base;
-  targetPlant.userData.targetScale=Math.min(base*3.1,current+base*0.65);
-  targetPlant.scale.setScalar(Math.max(targetPlant.scale.x,current+base*0.12));
+  targetPlant.userData.targetScale=Math.min(base*WATER_GROW_CAP,current+base*WATER_GROW_STEP);
+  // Immediate visual bump so the first drop of water shows SOME growth
+  // (the lerp in updateFlowers catches up within a second or two).
+  targetPlant.scale.setScalar(Math.max(targetPlant.scale.x,current+base*(WATER_GROW_STEP*0.35)));
   targetPlant.updateMatrix();
   targetPlant.updateMatrixWorld(true);
   return true;
@@ -3535,17 +3604,51 @@ function updateSpecialWeapons(dt,nowS){
     fx.life+=dt;
     const t=clamp(fx.life/fx.maxLife,0,1);
     const pos=fx.mesh.geometry.attributes.position.array;
-    for(let p=0;p<fx.count;p++){
-      const u=(p/(fx.count-1));
-      const lane=(p%4)-1.5;
-      const prog=clamp(t*1.42-u*0.14,0,1);
-      const curve=(1-prog)*prog;
-      pos[p*3]=lerp(fx.fromX,fx.toX,prog)+(Math.sin(p*1.7+nowS*16)*0.035)+(lane*0.018);
-      pos[p*3+1]=lerp(fx.fromY,fx.toY,prog)+curve*0.42+(Math.cos(p*1.2+nowS*12)*0.045);
-      pos[p*3+2]=lerp(fx.fromZ,fx.toZ,prog)+(Math.cos(p*1.5+nowS*15)*0.035)+(lane*0.01);
+    const jit=fx.jitter;
+    const sc=fx.streamCount;
+    const sp=fx.splashCount;
+    // ---- STREAM: tight gravity-arc flow from hand to plant ----
+    // Phase 0..0.55 of the effect. Each droplet has its own birth
+    // offset (u), so they form a CONTINUOUS moving stream rather
+    // than a single expanding cloud. Gravity pulls the Y down
+    // in the second half (quadratic), giving the pour its "falling
+    // water" look.
+    const streamWindow=0.55;
+    for(let p=0;p<sc;p++){
+      const u=p/(sc-1);
+      const local=(t - u*streamWindow);  // 0 when this droplet is at the tap
+      if(local<0 || local>streamWindow){
+        pos[p*3+1]=-9999;
+        continue;
+      }
+      const prog=clamp(local/streamWindow,0,1);
+      // Lerp forward, then bend: small upward lift at start
+      // (momentum out of the spout) then heavier gravity fall.
+      const lift=0.18*prog*(1-prog);                 // small arc peak
+      const drop=prog*prog*0.28;                     // accelerating drop
+      const drift=Math.sin(p*0.9+nowS*18+u*6)*0.04;  // micro wobble
+      pos[p*3]=lerp(fx.fromX,fx.toX,prog)+jit[p*3]*(1-prog)*0.4+drift;
+      pos[p*3+1]=lerp(fx.fromY,fx.toY,prog)+lift-drop+jit[p*3+1]*0.08*(1-prog);
+      pos[p*3+2]=lerp(fx.fromZ,fx.toZ,prog)+jit[p*3+2]*(1-prog)*0.4+drift*0.7;
+    }
+    // ---- SPLASH: droplets burst from the target once the stream
+    //     has reached it (t≈0.45). Short-lived, pulled down by gravity.
+    const splashStart=0.42;
+    for(let s=0;s<sp;s++){
+      const p=sc+s;
+      const local=t-splashStart;
+      if(local<0){
+        pos[p*3+1]=-9999;
+        continue;
+      }
+      const st=clamp(local/(1-splashStart),0,1);
+      const speed=1.4;
+      pos[p*3]=fx.toX+jit[p*3]*st*speed;
+      pos[p*3+1]=fx.toY+jit[p*3+1]*st*0.6-1.8*st*st;
+      pos[p*3+2]=fx.toZ+jit[p*3+2]*st*speed;
     }
     fx.mesh.geometry.attributes.position.needsUpdate=true;
-    fx.mesh.material.opacity=0.98*(1-t*0.58);
+    fx.mesh.material.opacity=t<0.9 ? 0.95 : 0.95*(1-(t-0.9)/0.1);
     if(t>=1){
       disposeSpecialVisual(fx.mesh);
       activeWaterStreams.splice(i,1);
@@ -4744,7 +4847,7 @@ function renderLoadoutBar(){
       <div class="slot-kind">UTILITY</div>
       <div class="slot-icon">${getSkillIconSafe('soap','utility')}</div>
       <div class="slot-name">SOAP</div>
-      <div class="slot-meta">${debugCheatMode?'âˆž':cleanerUses} clean uses</div>
+      <div class="slot-meta">${debugCheatMode?'∞':cleanerUses} clean uses</div>
       <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
     </div>`
   );
@@ -4770,7 +4873,7 @@ function renderLoadoutBar(){
         <div class="slot-kind">SKILL</div>
         <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'weapon')}</div>
         <div class="slot-name">${item.name}</div>
-        <div class="slot-meta">${debugCheatMode?'âˆž ready':(cd>0?cd.toFixed(1)+'s':item.label)}</div>
+        <div class="slot-meta">${debugCheatMode?'∞ ready':(cd>0?cd.toFixed(1)+'s':item.label)}</div>
         <button type="button">${item.id===equippedWeapon?'EQUIPPED':'EQUIP'}</button>
       </div>`
     );
@@ -4810,15 +4913,25 @@ function renderShopState(){
     const btn=burstBuyButtons[item.id];
     if(!btn) continue;
     const owned=purchasedBurstEffects.has(item.id);
+    const equippedHere=owned && equippedBurstEffect===item.id;
     btn.disabled=true;
-    btn.textContent=owned ? (equippedBurstEffect===item.id?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
+    btn.textContent=owned ? (equippedHere?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
+    btn.classList.toggle('equipped',equippedHere);
   }
   for(const item of WEAPON_SHOP_ITEMS){
     const btn=weaponBuyButtons[item.id];
     if(!btn) continue;
     const owned=purchasedWeapons.has(item.id);
-    btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-    btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+    const equippedHere=owned && equippedWeapon===item.id;
+    // Water is consumable: always re-buyable to top up charges.
+    if(item.id==='water'){
+      btn.disabled=!debugCheatMode&&coinCount<item.cost;
+      btn.textContent=`BUY WATER +5 (${debugCheatMode?'∞':wateringUses})`;
+    }else{
+      btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
+      btn.textContent=owned ? (equippedHere?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+    }
+    btn.classList.toggle('equipped',equippedHere);
   }
   refreshSpecialButton();
   renderLoadoutBar();
@@ -5475,7 +5588,7 @@ const artWinsOverlay=document.getElementById('art-wins');
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
   if(debugCheatMode){
-    timerEl.textContent='âˆž:âˆžâˆž';
+    timerEl.textContent='∞:∞∞';
     timerBox.classList.remove('warn');
     return;
   }
@@ -5558,21 +5671,31 @@ function updateFlowers(now){
     }
     const bugs=grp.userData?.bugGroup;
     if(!bugs) continue;
-    const bugRadius=(bugs.userData?.radius||0.28)*(grp.scale.x/(grp.userData?.baseScale||grp.scale.x));
-    const bugHeight=(bugs.userData?.height||0.5)*(grp.scale.y/(grp.userData?.baseScale||grp.scale.y));
+    // Radius & height both scale with the plant so the swarm grows
+    // with the flower as it's watered.
+    const scaleFactor=grp.scale.x/(grp.userData?.baseScale||grp.scale.x||1);
+    const bugRadius=(bugs.userData?.radius||0.3)*scaleFactor;
+    const bugHeight=(bugs.userData?.height||0.8)*scaleFactor;
     const points=bugs.children[0];
     const arr=points?.geometry?.attributes?.position?.array;
     const count=bugs.userData?.count||0;
-    if(!arr||!count) continue;
+    const seeds=bugs.userData?.seeds;
+    if(!arr||!count||!seeds) continue;
+    // Per-bug 3D Lissajous: each bug has its own (fx,fy,fz,phX,phY,phZ),
+    // so they weave through each other across the entire plant height
+    // instead of riding a shared ring near the root.
     for(let i=0;i<count;i++){
-      const ang=now*(1.4+i*0.06)+(grp.userData?.bugSeed||0)+i*0.8;
-      const wobble=1+Math.sin(now*3.7+i)*0.12;
-      arr[i*3]=Math.cos(ang)*bugRadius*wobble;
-      arr[i*3+1]=bugHeight*(0.55+0.24*Math.sin(ang*1.7+i));
-      arr[i*3+2]=Math.sin(ang)*bugRadius;
+      const fx=seeds[i*6+0], fy=seeds[i*6+1], fz=seeds[i*6+2];
+      const phX=seeds[i*6+3], phY=seeds[i*6+4], phZ=seeds[i*6+5];
+      // Radial modulation so bugs don't stay on a single sphere.
+      const rMod=0.55+0.45*(0.5+0.5*Math.sin(now*0.6+phX+phY));
+      arr[i*3]=Math.sin(now*fx+phX)*bugRadius*rMod;
+      // Y spans 5%–100% of plant height — fully chaotic drift up/down.
+      arr[i*3+1]=bugHeight*(0.05+0.95*(0.5+0.5*Math.sin(now*fy+phY)));
+      arr[i*3+2]=Math.cos(now*fz+phZ)*bugRadius*rMod;
     }
     points.geometry.attributes.position.needsUpdate=true;
-    if(points.material) points.material.opacity=0.58+0.3*(0.5+0.5*Math.sin(now*9+(grp.userData?.bugSeed||0)));
+    if(points.material) points.material.opacity=0.72+0.22*(0.5+0.5*Math.sin(now*2+(grp.userData?.bugSeed||0)));
   }
 }
 
