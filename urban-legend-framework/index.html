@@ -3095,6 +3095,9 @@ function disposeSpecialVisual(obj){
 function spawnFlameJet(){
   playPlayerOneShot('actFire',0.52,{specialAnim:'fire'});
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
+  const mouthX=player.root.position.x+fx*0.34;
+  const mouthY=player.root.position.y+1.46;
+  const mouthZ=player.root.position.z+fz*0.34;
   const count=22;
   const geo=new THREE.BufferGeometry();
   const pos=new Float32Array(count*3);
@@ -3104,10 +3107,10 @@ function spawnFlameJet(){
   for(let i=0;i<count;i++){
     const c=colors[i%colors.length];
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    const trail=i===0?0:(0.18+i*0.085);
-    pos[i*3]=-fx*trail;
+    const trail=i===0?0:(0.15+i*0.08);
+    pos[i*3]=fx*0.04-fx*trail;
     pos[i*3+1]=0;
-    pos[i*3+2]=-fz*trail;
+    pos[i*3+2]=fz*0.04-fz*trail;
     const spread=(Math.random()-0.5)*0.08;
     const speed=5.2+Math.random()*1.4;
     vel[i*3]=fx*speed + (-fz)*spread;
@@ -3117,11 +3120,11 @@ function spawnFlameJet(){
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
   const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.38,transparent:true,opacity:0.92,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
-  points.position.set(player.root.position.x+fx*0.72,player.root.position.y+1.72,player.root.position.z+fz*0.72);
+  points.position.set(mouthX,mouthY,mouthZ);
   points.frustumCulled=false;
   scene.add(points);
   activeFlameJets.push({mesh:points,life:0.28,maxLife:0.28,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true});
-  forEachArtistInCone(player.root.position.x,player.root.position.z,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
+  forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a));
 }
 
 function throwIceBlock(charge=0){
