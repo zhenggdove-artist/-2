@@ -86,3 +86,9 @@ TODO:
 
 - UI/layout pass: hid the floating mobile-only loadout toggle on desktop, moved the mobile E button higher above the joystick, and reduced mobile attack/jump/skill button sizes by roughly 30%.
 - Loading flow pass: init now front-loads player textures, deferred player skill clips, character template/clips, coin asset, and the background BVH build before enabling BEGIN. Terrain scans now contribute directly to the intro progress bar instead of background streaming later. Background character/coin streaming remains removed from the ready path to reduce in-game hitching from late asset work.
+
+- Restored the player punch subclip trim from the later over-cut version back to the previously stable range (`22..end-9` frames). This is specifically to remove the extra tail raise that reappeared after the later mobile-skill patch.
+- Added a lightweight pooled SFX system using HTMLAudio instances instead of Three.js positional audio, so the game can play many short action sounds without touching rendering or post-processing cost.
+- Wired new SFX hooks for: player punch / combo / kick swings, melee hit reactions on artists, random artist down moans, player + artist footsteps, flame, ice throw, bomb throw, bomb explosion, jump, coin pickup, and graffiti cleaning. Each clip now has a capped playback window so long source files are trimmed to the action length.
+- Ran `node --check` on the extracted module script successfully after the audio + attack-tail changes.
+- Ran the standard `develop-web-game` Playwright client against a local `python -m http.server` build. It still timed out trying to click `#start-btn` because startup remained in `SCANNING FLOORS… 56%` past the client's 5s click window, so this round did not get a clean automated gameplay screenshot. No syntax regression was found, but startup remains a blocker for the standard smoke loop.

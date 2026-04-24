@@ -2631,7 +2631,7 @@ async function loadDeferredPlayerSkillClips(){
     const rawPunchClip=punchGLTF.animations[0]||null;
     const rawKickClip=kickGLTF.animations[0]||null;
     const rawComboClip=punchComboGLTF.animations[0]||null;
-    playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,12,30) : playerClipPunch;
+    playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,9,30) : playerClipPunch;
     playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',2,10,30) : playerClipKick;
     playerClipPunchCombo=rawComboClip ? trimPlayerAttackClip(rawComboClip,'player-combo',0,10,30) : playerClipPunchCombo;
     playerClipFire=sanitizePlayerClip(fireGLTF.animations[0]||playerClipFire,'player-fire')||playerClipFire;
@@ -3141,6 +3141,7 @@ function disposeSpecialVisual(obj){
 
 function spawnFlameJet(){
   playPlayerOneShot('actFire',0.52,{specialAnim:'fire'});
+  playSFX('flame');
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
   const mouthX=player.root.position.x+fx*0.34;
   const mouthY=player.root.position.y+1.46;
@@ -3239,6 +3240,7 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
 function throwIceBlock(charge=0){
   const target=getSpecialThrowTarget(charge);
   if(!target) return false;
+  playSFX('throwIce');
   const group=new THREE.Group();
   const block=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false),new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35}));
   block.rotation.y=Math.PI/6;
@@ -3304,6 +3306,14 @@ function spawnBombMushroomCloud(x,y,z){
   activeFlameJets.push({mesh:points,life:1.5,maxLife:1.5,dirX:0,dirZ:0,hitTick:-99,vel,count,gravity:2.2,drag:0.965});
 }
 
+function triggerBombExplosion(bomb){
+  if(!bomb || bomb.triggered) return;
+  bomb.triggered=true;
+  bomb.burning=0.65;
+  playSFX('bombExplode');
+  spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.15,bomb.group.position.z);
+}
+
 function dropBombTrap(charge=0){
   if(activeBombs.length>=5 && !debugCheatMode) return false;
   const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:BOMB_THROW_SPEED});
@@ -3338,6 +3348,7 @@ function updateSpecialWeapons(dt,nowS){
           pendingBomb.spawned=true;
           pendingBomb.group.visible=true;
           pendingBomb.armed=0;
+          playSFX('throwBomb');
         }
       }else if(player.pendingSpecialAction==='ice'){
         throwIceBlock(player.pendingSpecialCharge||0);
@@ -3408,27 +3419,23 @@ function updateSpecialWeapons(dt,nowS){
     if(!bomb.spawned) continue;
     bomb.armed+=dt;
     bomb.group.rotation.y+=dt*2.5;
-    if(!bomb.triggered){
-      const pulse=1+Math.sin(nowS*7+bomb.group.position.x)*0.08;
-      bomb.group.scale.setScalar(pulse);
-      if(bomb.group.children[2]) bomb.group.children[2].rotation.z+=dt*3.4;
-      if(bomb.armed>=bomb.autoExplodeAt){
-        bomb.triggered=true;
-        bomb.burning=0.65;
-        spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.15,bomb.group.position.z);
-      }
-      if(bomb.triggered) continue;
-      for(const a of artists){
-        if(a.state==='dying'||a.state==='dead') continue;
-        const dx=a.inst.outer.position.x-bomb.group.position.x;
-        const dz=a.inst.outer.position.z-bomb.group.position.z;
-        if(dx*dx+dz*dz<1.1*1.1){
-          bomb.triggered=true;
-          bomb.burning=0.65;
-          spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.15,bomb.group.position.z);
-          killArtist(a);
-          break;
+      if(!bomb.triggered){
+        const pulse=1+Math.sin(nowS*7+bomb.group.position.x)*0.08;
+        bomb.group.scale.setScalar(pulse);
+        if(bomb.group.children[2]) bomb.group.children[2].rotation.z+=dt*3.4;
+        if(bomb.armed>=bomb.autoExplodeAt){
+          triggerBombExplosion(bomb);
         }
+        if(bomb.triggered) continue;
+        for(const a of artists){
+          if(a.state==='dying'||a.state==='dead') continue;
+          const dx=a.inst.outer.position.x-bomb.group.position.x;
+          const dz=a.inst.outer.position.z-bomb.group.position.z;
+          if(dx*dx+dz*dz<1.1*1.1){
+            triggerBombExplosion(bomb);
+            killArtist(a);
+            break;
+          }
       }
     }else{
       bomb.burning-=dt;
@@ -3640,6 +3647,7 @@ function startAttack(kind='punch'){
   player.specialAnimT=player.currentAttackDur;
   player.attackHit.clear();
   attackBtn.classList.add('cooling');
+  playAttackSwingSFX(def.id);
   if(act) playPlayerOneShot(def.action,player.currentAttackDur,{specialAnim:def.id,timeScale:attackTimeScale});
   return true;
 }
@@ -3941,6 +3949,13 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
     if(a.walkPhase>0.7){
       a.walkPhase=0;
       spawnSplash(p.x,getRiverSurfaceY(p.x,p.z,p.y),p.z,0.4);
+      playSFX('walk',{volume:0.16,playbackRate:0.95+Math.random()*0.15});
+    }
+  }else if(speed>0.12){
+    a.walkPhase+=speed*dt;
+    if(a.walkPhase>0.6){
+      a.walkPhase=0;
+      playSFX('walk',{volume:0.12,playbackRate:0.92+Math.random()*0.14});
     }
   }
 }
@@ -4627,6 +4642,7 @@ function disposeGraffiti(p){
 
 function cleanPillar(p){
   if(!p||(!debugCheatMode&&cleanerUses<=0)) return false;
+  playSFX('cleanGraffiti');
   if(!debugCheatMode) cleanerUses=Math.max(0,cleanerUses-1);
   if(p.fillCounted){
     p.fillCounted=false;
@@ -4760,6 +4776,7 @@ function updateCoins(dt,now){
       // Start vanish animation instead of insta-removing
       c.userData.vanishT=0;
       c.userData.vanishStartY=c.position.y;
+      playSFX('coinPickup');
       coinCount++;updateCoinUI();
     }
   }
@@ -4951,6 +4968,7 @@ if(jumpBtn) jumpBtn.addEventListener('pointerdown',e=>{e.preventDefault();tryJum
 
 function tryJump(){
   if(!player.inst||player.isAir) return;
+  playSFX('jump');
   player.vy=JUMP_VEL;
   player.isAir=true;
   setPlayerBaseAction('actJump',0.05);
@@ -5068,6 +5086,13 @@ function updatePlayer(dt){
     if(player.walkPhase>0.55){
       player.walkPhase=0;
       spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,0.5);
+      playSFX('walk',{volume:0.24,playbackRate:0.98+Math.random()*0.12});
+    }
+  }else if(!player.isAir && player.curSpeed>0.5){
+    player.walkPhase+=player.curSpeed*dt;
+    if(player.walkPhase>0.5){
+      player.walkPhase=0;
+      playSFX('walk',{volume:0.2,playbackRate:1+Math.random()*0.1});
     }
   }
   // Splash on first entry
@@ -5155,12 +5180,14 @@ function checkAttackHit(){
     const ang=Math.acos(clamp(dot,-1,1));
     if(ang>ATTACK_ARC*0.5) continue;
     player.attackHit.add(a.id);
+    playAttackHitSFX(player.currentAttackAnim);
     killArtist(a);
   }
 }
 
 function killArtist(a){
   a.state='dying';a.deathT=0;
+  playRandomSFX(['artistDown1','artistDown2','artistDown3']);
   if(a.target && a.target.claimedBy===a) a.target.claimedBy=null;
   // Fade animations + clear the flee tilt so the death anim plays upright
   const I=a.inst;
@@ -5275,6 +5302,118 @@ const intro=document.getElementById('intro');
 const startBtn=document.getElementById('start-btn');
 const introProgressText=document.getElementById('intro-progress-text');
 const introProgressFill=document.getElementById('intro-progress-fill');
+const SOUND_REV='2026-04-24b';
+const SFX_DEFS={
+  punch:{src:'sound/punch.m4a',volume:0.72,maxDuration:0.22,pool:3},
+  punchCombo:{src:'sound/punch combo.m4a',volume:0.76,maxDuration:0.34,pool:3},
+  kick:{src:'sound/踢kick.m4a',volume:0.82,maxDuration:0.34,pool:3},
+  artistHitPunch:{src:'sound/藝術家被punch打中.m4a',volume:0.82,maxDuration:0.24,pool:4},
+  artistHitCombo:{src:'sound/藝術家被punch combo打中.m4a',volume:0.86,maxDuration:0.34,pool:4},
+  artistHitKick:{src:'sound/藝術家被踢中.m4a',volume:0.86,maxDuration:0.3,pool:4},
+  artistDown1:{src:'sound/藝術家倒地1.m4a',volume:0.68,maxDuration:0.85,pool:3},
+  artistDown2:{src:'sound/藝術家倒地2.m4a',volume:0.68,maxDuration:0.85,pool:3},
+  artistDown3:{src:'sound/藝術家倒地3.m4a',volume:0.68,maxDuration:0.85,pool:3},
+  walk:{src:'sound/走路.m4a',volume:0.24,maxDuration:0.16,pool:8,minGap:0.03},
+  throwIce:{src:'sound/扔出冰塊.m4a',volume:0.76,maxDuration:0.34,pool:3},
+  throwBomb:{src:'sound/扔出炸彈.m4a',volume:0.78,maxDuration:0.38,pool:3},
+  flame:{src:'sound/Fire Flame.mp3',volume:0.7,maxDuration:0.58,pool:3},
+  coinPickup:{src:'sound/Got A Mario Coin.mp3',volume:0.58,maxDuration:0.46,pool:4},
+  jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
+  cleanGraffiti:{src:'sound/擦掉塗鴉.m4a',volume:0.68,maxDuration:0.55,pool:2},
+  bombExplode:{src:'sound/Explode.mp3',volume:0.84,maxDuration:0.82,pool:4},
+};
+const sfxPools=new Map();
+const sfxLastPlayAt=new Map();
+let sfxPrimed=false;
+
+function buildSFXSrc(path){
+  const sep=path.includes('?') ? '&' : '?';
+  return encodeURI(`${path}${sep}v=${SOUND_REV}`);
+}
+
+function clearSFXStopTimer(voice){
+  if(voice?._stopTimer){
+    clearTimeout(voice._stopTimer);
+    voice._stopTimer=0;
+  }
+}
+
+function ensureSFXPool(id){
+  const def=SFX_DEFS[id];
+  if(!def) return [];
+  let pool=sfxPools.get(id);
+  if(pool) return pool;
+  pool=[];
+  const count=Math.max(1,def.pool||2);
+  for(let i=0;i<count;i++){
+    const audio=new Audio(buildSFXSrc(def.src));
+    audio.preload='auto';
+    audio.playsInline=true;
+    audio.crossOrigin='anonymous';
+    pool.push(audio);
+  }
+  sfxPools.set(id,pool);
+  return pool;
+}
+
+function primeSFX(){
+  if(sfxPrimed) return;
+  sfxPrimed=true;
+  for(const id of Object.keys(SFX_DEFS)){
+    const pool=ensureSFXPool(id);
+    for(const audio of pool) audio.load?.();
+  }
+}
+
+function playSFX(id,opts={}){
+  const def=SFX_DEFS[id];
+  if(!def) return null;
+  const now=performance.now()/1000;
+  const minGap=opts.minGap ?? def.minGap ?? 0;
+  const lastAt=sfxLastPlayAt.get(id)||-Infinity;
+  if(now-lastAt<minGap) return null;
+  sfxLastPlayAt.set(id,now);
+  const pool=ensureSFXPool(id);
+  if(!pool.length) return null;
+  let voice=pool.find(a=>a.paused||a.ended);
+  if(!voice) voice=pool[0];
+  clearSFXStopTimer(voice);
+  try{
+    voice.pause();
+    voice.currentTime=0;
+  }catch{}
+  voice.volume=clamp(opts.volume ?? def.volume ?? 1,0,1);
+  voice.playbackRate=opts.playbackRate ?? def.playbackRate ?? 1;
+  const maxDuration=opts.maxDuration ?? def.maxDuration ?? 0;
+  if(maxDuration>0){
+    voice._stopTimer=window.setTimeout(()=>{
+      try{
+        voice.pause();
+        voice.currentTime=0;
+      }catch{}
+    },Math.max(0,maxDuration)*1000);
+  }
+  const playPromise=voice.play();
+  if(playPromise?.catch) playPromise.catch(()=>{});
+  return voice;
+}
+
+function playRandomSFX(ids,opts={}){
+  if(!ids?.length) return null;
+  return playSFX(ids[(Math.random()*ids.length)|0],opts);
+}
+
+function playAttackSwingSFX(kind){
+  if(kind==='combo') return playSFX('punchCombo');
+  if(kind==='kick') return playSFX('kick');
+  return playSFX('punch');
+}
+
+function playAttackHitSFX(kind){
+  if(kind==='combo') return playSFX('artistHitCombo');
+  if(kind==='kick') return playSFX('artistHitKick');
+  return playSFX('artistHitPunch');
+}
 const endOverlay=document.getElementById('end-overlay');
 const endScore=document.getElementById('end-score');
 const leaderboardList=document.getElementById('leaderboard-list');
@@ -5298,6 +5437,7 @@ startBtn.addEventListener('click',()=>{
 });
 
 function startGame(){
+  primeSFX();
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
