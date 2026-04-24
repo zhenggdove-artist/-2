@@ -2610,7 +2610,7 @@ async function loadDeferredPlayerSkillClips(){
     const rawKickClip=kickGLTF.animations[0]||null;
     const rawComboClip=punchComboGLTF.animations[0]||null;
     playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,9,30) : playerClipPunch;
-    playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',0,8,30) : playerClipKick;
+    playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',6,14,30) : playerClipKick;
     playerClipPunchCombo=rawComboClip ? trimPlayerAttackClip(rawComboClip,'player-combo',0,10,30) : playerClipPunchCombo;
     playerClipFire=sanitizePlayerClip(fireGLTF.animations[0]||playerClipFire,'player-fire')||playerClipFire;
     playerClipThrowBomb=sanitizePlayerClip(throwGLTF.animations[0]||playerClipThrowBomb,'player-throwbomb')||playerClipThrowBomb;
@@ -3475,6 +3475,7 @@ const player={
   attackVariantIndex:0,
   currentAttackAnim:'punch',
   currentAttackDur:0.38,
+  attackRecovering:false,
   specialAnimT:0,
   specialAnim:'none',
   pendingSpecialAction:null,
@@ -3610,6 +3611,7 @@ function startAttack(kind='punch'){
   const I=player.inst;
   const act=I[def.action]||I.actPunch||null;
   player.attackT=0;
+  player.attackRecovering=false;
   player.currentAttackAnim=def.id;
   player.currentAttackDur=getPlayerAttackDuration(def);
   player.specialAnim=def.id;
@@ -5051,6 +5053,19 @@ function updatePlayer(dt){
   const desiredBase=player.isAir ? 'actJump' : (moving ? 'actRun' : 'actIdle');
   if(inOneShot){
     player.specialAnimT=Math.max(0,player.specialAnimT-dt);
+    if(player.attackT>=0 && !player.attackRecovering){
+      const recoverLead=Math.min(0.12,Math.max(0.04,player.currentAttackDur*0.22));
+      if(player.attackT>=Math.max(0,player.currentAttackDur-recoverLead)){
+        player.attackRecovering=true;
+        const attackAct=getCurrentPlayerAttackAction();
+        if(attackAct){
+          attackAct.enabled=true;
+          attackAct.clampWhenFinished=true;
+          attackAct.fadeOut(recoverLead);
+        }
+        setPlayerBaseAction(desiredBase,recoverLead);
+      }
+    }
     if(player.specialAnimT===0){
       player.specialAnim='none';
       stopPlayerOneShotActions(I,0.08);
@@ -5071,6 +5086,7 @@ function updatePlayer(dt){
     }
     if(player.attackT>=player.currentAttackDur){
       player.attackT=-1;
+      player.attackRecovering=false;
       player.attackCooldown=ATTACK_COOLDOWN;
       I?.actPunch&&I.actPunch.isRunning()&&I.actPunch.fadeOut(0.08);
       I?.actKick&&I.actKick.isRunning()&&I.actKick.fadeOut(0.08);
@@ -5252,6 +5268,7 @@ function startGame(){
   player.specialCooldowns.bomb=0;
   player.specialAnim='none';
   player.specialAnimT=0;
+  player.attackRecovering=false;
   player.pendingSpecialAction=null;
   player.pendingSpecialTimer=0;
   player.pendingSpecialCharge=0;
@@ -5347,7 +5364,7 @@ function resetWorld(){
   // Reset player pos
   placePlayerOnPlayableLayer();player.curSpeed=0;
   player.vy=0;player.isAir=false;player.inWater=false;player.wasInWater=false;player.walkPhase=0;
-  player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();player.attackVariantIndex=0;player.currentAttackAnim='punch';player.currentAttackDur=ATTACK_DUR;
+  player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();player.attackVariantIndex=0;player.currentAttackAnim='punch';player.currentAttackDur=ATTACK_DUR;player.attackRecovering=false;
   player.specialAnim='none';player.specialAnimT=0;
   player.pendingSpecialAction=null;player.pendingSpecialTimer=0;player.pendingSpecialCharge=0;player.pendingCleanTarget=null;
   specialInputState.isDown=false;specialInputState.pointerId=null;specialInputState.downAt=0;
