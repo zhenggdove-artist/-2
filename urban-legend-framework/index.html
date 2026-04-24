@@ -3949,13 +3949,13 @@ function moveArtist(a,dt,nx,nz,baseSpeed){
     if(a.walkPhase>0.7){
       a.walkPhase=0;
       spawnSplash(p.x,getRiverSurfaceY(p.x,p.z,p.y),p.z,0.4);
-      playSFX('walk',{volume:0.16,playbackRate:0.95+Math.random()*0.15});
+      playArtistFootstepSFX(a,0.32);
     }
   }else if(speed>0.12){
     a.walkPhase+=speed*dt;
     if(a.walkPhase>0.6){
       a.walkPhase=0;
-      playSFX('walk',{volume:0.12,playbackRate:0.92+Math.random()*0.14});
+      playArtistFootstepSFX(a,0.28);
     }
   }
 }
@@ -5091,13 +5091,13 @@ function updatePlayer(dt){
     if(player.walkPhase>0.55){
       player.walkPhase=0;
       spawnSplash(player.root.position.x,getRiverSurfaceY(player.root.position.x,player.root.position.z,gY),player.root.position.z,0.5);
-      playSFX('walk',{volume:0.24,playbackRate:0.98+Math.random()*0.12});
+      playSFX('playerWalk',{volume:0.4,playbackRate:0.98+Math.random()*0.08,minGap:0.08});
     }
   }else if(!player.isAir && player.curSpeed>0.5){
     player.walkPhase+=player.curSpeed*dt;
     if(player.walkPhase>0.5){
       player.walkPhase=0;
-      playSFX('walk',{volume:0.2,playbackRate:1+Math.random()*0.1});
+      playSFX('playerWalk',{volume:0.44,playbackRate:1+Math.random()*0.06,minGap:0.08});
     }
   }
   // Splash on first entry
@@ -5309,20 +5309,21 @@ const introProgressText=document.getElementById('intro-progress-text');
 const introProgressFill=document.getElementById('intro-progress-fill');
 const SOUND_REV='2026-04-24b';
 const SFX_DEFS={
-  punch:{src:'sound/punch.m4a',volume:0.8,maxDuration:0.72,pool:3},
-  punchCombo:{src:'sound/punch combo.m4a',volume:0.82,maxDuration:0.92,pool:3},
-  kick:{src:'sound/\u8e22kick.m4a',volume:0.84,maxDuration:0.82,pool:3},
+  punch:{src:'sound/Punch2.mp3',volume:0.84,maxDuration:0.7,pool:3},
+  punchCombo:{src:'sound/Punch2.mp3',volume:0.82,maxDuration:0.38,pool:4},
+  kick:{src:'sound/KICK2.mp3',volume:0.88,maxDuration:0.78,pool:3},
   artistHitPunch:{src:'sound/\u85dd\u8853\u5bb6\u88abpunch\u6253\u4e2d.m4a',volume:0.82,maxDuration:0.24,pool:4},
   artistHitCombo:{src:'sound/\u85dd\u8853\u5bb6\u88abpunch combo\u6253\u4e2d.m4a',volume:0.86,maxDuration:0.34,pool:4},
   artistHitKick:{src:'sound/\u85dd\u8853\u5bb6\u88ab\u8e22\u4e2d.m4a',volume:0.86,maxDuration:0.3,pool:4},
   artistDown1:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57301.m4a',volume:0.68,maxDuration:0.85,pool:3},
   artistDown2:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57302.m4a',volume:0.68,maxDuration:0.85,pool:3},
   artistDown3:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57303.m4a',volume:0.68,maxDuration:0.85,pool:3},
-  walk:{src:'sound/\u8d70\u8def.m4a',volume:0.34,maxDuration:0.42,pool:8,minGap:0.09},
-  throwIce:{src:'sound/\u6254\u51fa\u51b0\u584a.m4a',volume:0.8,maxDuration:0.9,pool:3},
-  throwBomb:{src:'sound/\u6254\u51fa\u70b8\u5f48.m4a',volume:0.82,maxDuration:0.82,pool:3},
+  playerWalk:{src:'sound/Mario Walk.mp3',volume:0.44,maxDuration:0.32,pool:6,minGap:0.06},
+  artistWalk:{src:'sound/Cute Animal Walk.mp3',volume:0.44,maxDuration:0.28,pool:10,minGap:0.06},
+  throwIce:{src:'sound/Throw  Something.mp3',volume:0.84,maxDuration:0.7,pool:3},
+  throwBomb:{src:'sound/Throw  Something.mp3',volume:0.84,maxDuration:0.7,pool:3},
   flame:{src:'sound/Fire Flame.mp3',volume:0.7,maxDuration:0.58,pool:3},
-  coinPickup:{src:'sound/Got A Mario Coin.mp3',volume:0.58,maxDuration:0.46,pool:4},
+  coinPickup:{src:'sound/Got A Mario Gold Coin2.mp3',volume:0.68,maxDuration:0.54,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
   cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
   bombExplode:{src:'sound/Explode.mp3',volume:0.84,maxDuration:0.82,pool:4},
@@ -5443,7 +5444,13 @@ function playRandomSFX(ids,opts={}){
 }
 
 function playAttackSwingSFX(kind){
-  if(kind==='combo') return playSFX('punchCombo');
+  if(kind==='combo'){
+    playSFX('punchCombo',{playbackRate:2,volume:0.8,maxDuration:0.24});
+    window.setTimeout(()=>{
+      playSFX('punchCombo',{playbackRate:2,volume:0.8,maxDuration:0.24});
+    },120);
+    return null;
+  }
   if(kind==='kick') return playSFX('kick');
   return playSFX('punch');
 }
@@ -5452,6 +5459,23 @@ function playAttackHitSFX(kind){
   if(kind==='combo') return playSFX('artistHitCombo');
   if(kind==='kick') return playSFX('artistHitKick');
   return playSFX('artistHitPunch');
+}
+
+function playArtistFootstepSFX(a,baseVolume=0.36){
+  const artistPos=a?.inst?.outer?.position;
+  const playerPos=player.root?.position;
+  if(!artistPos || !playerPos) return null;
+  const dx=artistPos.x-playerPos.x;
+  const dz=artistPos.z-playerPos.z;
+  const dist=Math.sqrt(dx*dx+dz*dz);
+  const hearRange=18;
+  const fade=clamp(1-dist/hearRange,0,1);
+  if(fade<=0.03) return null;
+  return playSFX('artistWalk',{
+    volume:baseVolume*fade,
+    playbackRate:0.96+Math.random()*0.1,
+    minGap:0.08,
+  });
 }
 const endOverlay=document.getElementById('end-overlay');
 const endScore=document.getElementById('end-score');
