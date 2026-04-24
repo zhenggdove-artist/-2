@@ -2631,7 +2631,7 @@ async function loadDeferredPlayerSkillClips(){
     const rawPunchClip=punchGLTF.animations[0]||null;
     const rawKickClip=kickGLTF.animations[0]||null;
     const rawComboClip=punchComboGLTF.animations[0]||null;
-    playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,9,30) : playerClipPunch;
+    playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,12,30) : playerClipPunch;
     playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',2,10,30) : playerClipKick;
     playerClipPunchCombo=rawComboClip ? trimPlayerAttackClip(rawComboClip,'player-combo',0,10,30) : playerClipPunchCombo;
     playerClipFire=sanitizePlayerClip(fireGLTF.animations[0]||playerClipFire,'player-fire')||playerClipFire;
@@ -4708,10 +4708,24 @@ cleanBtn?.addEventListener('pointerdown',e=>{
   e.preventDefault();
   if(currentCleanTarget) requestCleanAction(currentCleanTarget);
 });
-specialBtn?.addEventListener('pointerdown',e=>{e.preventDefault();handleSpecialPress(e.pointerId);});
-specialBtn?.addEventListener('pointerup',e=>{e.preventDefault();handleSpecialRelease(e.pointerId);});
-specialBtn?.addEventListener('pointercancel',e=>{e.preventDefault();handleSpecialRelease(e.pointerId);});
-specialBtn?.addEventListener('pointerleave',e=>{ if(specialInputState.isDown) handleSpecialRelease(e.pointerId); });
+specialBtn?.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  try{ specialBtn.setPointerCapture?.(e.pointerId); }catch{}
+  handleSpecialPress(e.pointerId);
+});
+specialBtn?.addEventListener('pointerup',e=>{
+  e.preventDefault();
+  handleSpecialRelease(e.pointerId);
+  try{ specialBtn.releasePointerCapture?.(e.pointerId); }catch{}
+});
+specialBtn?.addEventListener('pointercancel',e=>{
+  e.preventDefault();
+  handleSpecialRelease(e.pointerId);
+  try{ specialBtn.releasePointerCapture?.(e.pointerId); }catch{}
+});
+specialBtn?.addEventListener('pointerleave',e=>{
+  if(specialInputState.isDown && e.pointerType==='mouse') handleSpecialRelease(e.pointerId);
+});
 loadoutToggle?.addEventListener('click',()=>setLoadoutExpanded(!document.body.classList.contains('loadout-open')));
 mobileLoadoutQuery.addEventListener?.('change',()=>syncLoadoutLayout(true));
 syncLoadoutLayout(true);
