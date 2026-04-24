@@ -37,34 +37,40 @@
   input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 
-  #title{position:absolute;top:2vh;left:50%;transform:translateX(-50%);
-    font-size:clamp(14px,3.2vw,28px);letter-spacing:0.3em;font-weight:bold;
+  #title{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    width:min(calc(100vw - 170px),620px);text-align:center;line-height:1.02;
+    font-size:clamp(14px,2.8vw,24px);letter-spacing:0.22em;font-weight:bold;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;text-transform:uppercase;
-    z-index:12;pointer-events:none;color:#f2b7cf;white-space:nowrap;
+    z-index:12;pointer-events:none;color:#f2b7cf;white-space:normal;
     text-shadow:0 1px 0 #f7cfe0,0 2px 0 #efbcd3,0 3px 0 #e3a6c1,0 4px 0 #d394b2,0 6px 8px rgba(0,0,0,0.3);
     transition:opacity 1s ease}
   #title.fade-out{opacity:0.3}
 
   /* HUD */
   #hud{position:fixed;top:12px;left:12px;right:12px;z-index:15;pointer-events:none;
-    display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+    display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px}
   .hud-box{background:rgba(20,10,30,0.55);border:1.5px solid var(--bubble-edge);
     border-radius:14px;padding:6px 14px;backdrop-filter:blur(4px);
     box-shadow:0 4px 14px rgba(0,0,0,0.35);color:#fff;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:1px;
     font-size:18px;text-shadow:0 1px 4px rgba(0,0,0,0.6)}
+  #kill-box{justify-self:start}
+  #timer-box{justify-self:center;margin-top:36px}
+  #coin-box{justify-self:end}
   /* Mobile / small-screen: keep title at the top of the screen, but
      tucked just below the HUD row so the three boxes + title don't
      collide. (Earlier rev pushed it to bottom:46vh, which dumped it
      into the middle of the play area — not what we want.) */
   @media (max-width:640px){
-    #title{top:44px;bottom:auto;font-size:clamp(12px,3.5vw,20px);letter-spacing:0.25em;opacity:0.6}
+    #title{top:12px;width:min(calc(100vw - 116px),280px);bottom:auto;font-size:clamp(12px,3.8vw,18px);letter-spacing:0.12em;opacity:0.74}
     #hud{top:8px;left:8px;right:8px;gap:6px}
     .hud-box{font-size:13px;padding:4px 9px;border-radius:10px}
-    #kill-box,#coin-box,#timer-box{flex:0 0 auto}
+    #timer-box{margin-top:42px}
   }
   @media (max-width:420px){
     .hud-box{font-size:11px;padding:3px 7px}
+    #title{width:min(calc(100vw - 104px),240px);font-size:clamp(11px,3.7vw,16px)}
+    #timer-box{margin-top:38px}
   }
 
   /* Paint invasion bar (left side).
@@ -272,7 +278,8 @@
   /* Intro overlay */
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
     z-index:400;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;
-    color:#f0d0ff;text-align:center;padding:6vw;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;pointer-events:none}
+    color:#f0d0ff;text-align:center;padding:6vw;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;pointer-events:none;
+    overflow-y:auto;overflow-x:hidden}
   #intro h1{font-size:clamp(22px,5vw,44px);margin:0;color:#ffaed4;letter-spacing:0.25em;
     text-shadow:0 2px 10px rgba(255,100,160,0.5)}
   #intro p{font-size:clamp(13px,2vw,16px);line-height:1.7;max-width:640px;letter-spacing:1px;opacity:0.92}
@@ -289,6 +296,14 @@
     cursor:pointer;box-shadow:0 8px 24px rgba(192,56,112,0.4),inset 0 0 0 1px rgba(255,255,255,0.3);
     transition:transform 0.2s;pointer-events:auto;position:relative;z-index:2}
   #intro button:hover{transform:translateY(-2px)}
+  @media (max-width:640px){
+    #intro{gap:14px;padding:18px 18px 28px}
+    #intro h1{font-size:clamp(18px,7vw,28px);letter-spacing:0.12em}
+    #intro .tag{font-size:10px;letter-spacing:0.18em}
+    #intro p{max-width:330px;font-size:12px;line-height:1.5;letter-spacing:0.03em}
+    #intro button{padding:11px 30px}
+    #intro-progress{width:min(300px,84vw)}
+  }
 
   /* End overlay: leaderboard */
   #end-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:500;
