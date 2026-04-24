@@ -214,11 +214,6 @@
   .shop-card.skill-card .shop-buy{background:linear-gradient(90deg,#ffe66d,#ffb91f);color:#503300;border-color:rgba(255,247,197,0.8)}
   .shop-card.burst-card .shop-buy{background:linear-gradient(90deg,#6d3e7b,#2f4e74)}
   .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
-  /* Any shop-buy reflecting "equipped right now" shows a strong
-     green so the player can eyeball which skill is currently in
-     their slot without reading every button. Matches the loadout
-     bar's active-slot convention. */
-  .shop-buy.equipped{color:#118a37!important;font-weight:bold;opacity:1}
   #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
     max-width:min(78vw,520px);flex-wrap:wrap}
   #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:999px;
@@ -238,8 +233,14 @@
   .loadout-slot button{width:100%;padding:6px 0;border-radius:999px;border:1px solid rgba(255,255,255,0.16);
     background:rgba(255,255,255,0.08);color:#fff;font-size:10px;letter-spacing:0.16em;cursor:pointer}
   .loadout-slot.active{outline:3px solid #fffb9a;box-shadow:0 0 0 3px rgba(255,167,38,0.42),0 12px 26px rgba(255,193,7,0.28);background:linear-gradient(180deg,rgba(255,249,196,0.96),rgba(255,167,38,0.88));transform:translateY(-3px)}
-  .loadout-slot.active .slot-name,.loadout-slot.active .slot-meta,.loadout-slot.active .slot-kind{color:#3a2200;opacity:1}
-  .loadout-slot.active button{color:#118a37;opacity:1;font-weight:bold}
+  /* Entire active slot (KIND label, NAME, META, button) rendered in
+     a strong green against the yellow highlight background so the
+     equipped column reads as green at a glance — not just the
+     button. */
+  .loadout-slot.active .slot-kind,
+  .loadout-slot.active .slot-name,
+  .loadout-slot.active .slot-meta,
+  .loadout-slot.active button{color:#0a7d2c;opacity:1;font-weight:bold}
   .loadout-slot.cleaner{width:92px}
   .loadout-slot .slot-kind{font-size:9px;opacity:0.58;letter-spacing:0.18em}
   .loadout-slot.skill-slot{background:linear-gradient(180deg,rgba(255,235,120,0.82),rgba(137,92,0,0.86));border-color:rgba(255,239,166,0.48);color:#4f3200}
@@ -3368,9 +3369,14 @@ function findWaterPlantTarget(){
 function spawnWaterPour(targetPlant){
   if(!targetPlant || !player.root) return false;
   const {x:fx,z:fz}=getForwardXZ(player.yaw);
-  const handX=player.root.position.x+fx*0.26;
-  const handY=player.root.position.y+1.06;
-  const handZ=player.root.position.z+fz*0.26;
+  // Hand position: 40 cm in front of root (past the body mesh) and
+  // shoulder-height (root.y + 1.45). Old 0.26 / 1.06 put the start
+  // point inside the player's chest — first frames of the stream
+  // spawned INSIDE the body and got occluded. Moving it outside
+  // makes the pour visible from the first frame.
+  const handX=player.root.position.x+fx*0.40;
+  const handY=player.root.position.y+1.45;
+  const handZ=player.root.position.z+fz*0.40;
   const endX=targetPlant.position.x;
   const endY=targetPlant.position.y+targetPlant.scale.y*1.25;
   const endZ=targetPlant.position.z;
@@ -3588,8 +3594,6 @@ function updateSpecialWeapons(dt,nowS){
         }
       }else if(player.pendingSpecialAction==='ice'){
         throwIceBlock(player.pendingSpecialCharge||0);
-      }else if(player.pendingSpecialAction==='water'){
-        if(player.pendingWaterTarget) waterPlant(player.pendingWaterTarget);
       }else if(player.pendingSpecialAction==='clean' && player.pendingCleanTarget){
         cleanPillar(player.pendingCleanTarget);
       }
@@ -3772,10 +3776,17 @@ function useSpecialWeapon(charge=0){
   }else if(equippedWeapon==='water'){
     const targetPlant=findWaterPlantTarget();
     if(!targetPlant) return false;
-    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:2});
-    player.pendingSpecialAction='water';
-    player.pendingSpecialTimer=getActionClipDuration(act,0.62,2);
-    player.pendingWaterTarget=targetPlant;
+    // Water fires IMMEDIATELY on skill press — the throw animation
+    // plays alongside, not as a gate. Routing it through the
+    // pendingSpecialAction queue meant the stream only spawned when
+    // the anim finished (~0.6s later at timeScale 2, feels like
+    // 1.3s of "why is nothing happening?"). Also, if the player
+    // rotated during the gate, the captured hand direction and the
+    // pour direction diverged and the visible stream seemed to
+    // disappear. Firing inline captures the current yaw/position
+    // and shows the pour on the frame of input.
+    playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:2});
+    waterPlant(targetPlant);
     if(!debugCheatMode){
       wateringUses=Math.max(0,wateringUses-1);
       if(wateringUses===0 && equippedWeapon==='water') equippedWeapon=null;
@@ -4913,25 +4924,21 @@ function renderShopState(){
     const btn=burstBuyButtons[item.id];
     if(!btn) continue;
     const owned=purchasedBurstEffects.has(item.id);
-    const equippedHere=owned && equippedBurstEffect===item.id;
     btn.disabled=true;
-    btn.textContent=owned ? (equippedHere?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
-    btn.classList.toggle('equipped',equippedHere);
+    btn.textContent=owned ? (equippedBurstEffect===item.id?'UNLOCKED / EQUIPPED':'UNLOCKED') : `UNLOCK AT ${item.unlockKills} KO`;
   }
   for(const item of WEAPON_SHOP_ITEMS){
     const btn=weaponBuyButtons[item.id];
     if(!btn) continue;
     const owned=purchasedWeapons.has(item.id);
-    const equippedHere=owned && equippedWeapon===item.id;
     // Water is consumable: always re-buyable to top up charges.
     if(item.id==='water'){
       btn.disabled=!debugCheatMode&&coinCount<item.cost;
       btn.textContent=`BUY WATER +5 (${debugCheatMode?'∞':wateringUses})`;
     }else{
       btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-      btn.textContent=owned ? (equippedHere?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+      btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
     }
-    btn.classList.toggle('equipped',equippedHere);
   }
   refreshSpecialButton();
   renderLoadoutBar();
@@ -5253,6 +5260,22 @@ window.addEventListener('keydown',e=>{
     updateCoinUI();
     renderShopState();
     updatePaintBar();
+    e.preventDefault();
+  }
+  // Shift+V: jump straight to the end / leaderboard overlay. Handy
+  // for iterating on the endgame scene without waiting 3 minutes
+  // each run. Only fires if we're mid-game — otherwise there's
+  // nothing to freeze-frame.
+  if(k==='v'&&e.shiftKey){
+    if(gameState==='playing'){
+      endGame();
+    }else if(gameState==='intro'){
+      // Force a minimal playing state first so endGame() has
+      // something to capture (player + arena already initialised
+      // by this point).
+      gameState='playing';
+      endGame();
+    }
     e.preventDefault();
   }
 });
