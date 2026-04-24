@@ -79,3 +79,5 @@ TODO:
 - Mobile probe after the latest change showed `intro-progress-text` reaching `READY 100%`, start button enabled, and the moved loadout button displaying `E` without overlapping the paint bar.
 
 - Raised the charged throw landing marker by +1.0 world units so the red aim cue no longer sinks into the floor. Bomb mushroom-cloud particle positions/velocities are now scaled to 60% of the previous size. Added low-risk perf work that keeps visuals/mechanics intact: coin fade now caches per-coin materials instead of traversing every mesh every vanish frame, and ceiling-occlusion ray setup now reuses temp vectors to reduce GC churn during play.
+
+- Retuned player attack clips to cut the tail-end raise frames: punch now trims more aggressively from the middle section, and kick/combo now drop the extra ending frames as lightweight subclips. Player combat one-shots no longer clamp the final attack frame on screen. Additional low-risk stutter work: ceiling occlusion now skips recalculation when camera/player positions are effectively unchanged, and artist updates now reuse the main-loop timestamp instead of calling performance.now() again.

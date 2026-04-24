@@ -931,6 +931,9 @@ const ceilingOccludedMeshes=new Set();
 let ceilingOcclusionCooldown=0;
 const _ceilingTargetV=new THREE.Vector3();
 const _ceilingDirV=new THREE.Vector3();
+const _lastCeilingOriginV=new THREE.Vector3(9999,9999,9999);
+const _lastCeilingTargetV=new THREE.Vector3(9999,9999,9999);
+let _lastCeilingTopDown=false;
 const groundRaycaster=new THREE.Raycaster();
 const _downV=new THREE.Vector3(0,-1,0);
 const _upPos=new THREE.Vector3();
@@ -1776,11 +1779,20 @@ function updateCeilingOcclusion(){
   ceilingOcclusionCooldown=Math.max(0,ceilingOcclusionCooldown-1);
   if(ceilingOcclusionCooldown>0) return;
   ceilingOcclusionCooldown=IS_MOBILE_LAYOUT?4:2;
-  restoreCeilingOcclusion();
   if(!playgroundRoot||!player?.root) return;
   const target=_ceilingTargetV.set(player.root.position.x,player.root.position.y+1.35,player.root.position.z);
   const origin=camera.position;
-  if(playableLayer && origin.y>playableLayer.ceilingY+0.35 && origin.y>target.y+1.8){
+  const topDown=!!(playableLayer && origin.y>playableLayer.ceilingY+0.35 && origin.y>target.y+1.8);
+  if(origin.distanceToSquared(_lastCeilingOriginV)<0.02*0.02 &&
+     target.distanceToSquared(_lastCeilingTargetV)<0.02*0.02 &&
+     topDown===_lastCeilingTopDown){
+    return;
+  }
+  _lastCeilingOriginV.copy(origin);
+  _lastCeilingTargetV.copy(target);
+  _lastCeilingTopDown=topDown;
+  restoreCeilingOcclusion();
+  if(topDown){
     for(const mesh of ceilingFadableMeshes){
       const entries=ensureCeilingFadeMaterials(mesh);
       for(const entry of entries){
@@ -2432,6 +2444,14 @@ function sanitizePlayerClip(clip,name){
   return c;
 }
 
+function trimPlayerAttackClip(rawClip,name,startFrame=0,endTrimFrames=0,fps=30){
+  if(!rawClip) return null;
+  const totalFrames=Math.max(2,Math.round((rawClip.duration||0)*fps));
+  const from=Math.max(0,Math.min(totalFrames-2,startFrame|0));
+  const to=Math.max(from+1,Math.min(totalFrames,totalFrames-Math.max(0,endTrimFrames|0)));
+  return sanitizePlayerClip(THREE.AnimationUtils.subclip(rawClip.clone(),`${name||rawClip.name||'player-attack'}_trim`,from,to,fps),name);
+}
+
 async function loadFBXClip(path,name){
   // Paths with Chinese folders + spaces in filenames (Breathing Idle.fbx)
   // must be explicitly URL-encoded. Some browsers auto-encode, others
@@ -2587,20 +2607,22 @@ async function loadDeferredPlayerSkillClips(){
     ]);
     playerClipJump=sanitizePlayerClip(jumpGLTF.animations[0]||playerClipJump,'player-jump')||playerClipJump;
     const rawPunchClip=punchGLTF.animations[0]||null;
-    playerClipPunch=rawPunchClip ? sanitizePlayerClip(THREE.AnimationUtils.subclip(rawPunchClip.clone(),'punch_single',22,36,30),'player-punch') : playerClipPunch;
-    playerClipKick=sanitizePlayerClip(kickGLTF.animations[0]||playerClipKick,'player-kick')||playerClipKick;
-    playerClipPunchCombo=sanitizePlayerClip(punchComboGLTF.animations[0]||playerClipPunchCombo,'player-combo')||playerClipPunchCombo;
+    const rawKickClip=kickGLTF.animations[0]||null;
+    const rawComboClip=punchComboGLTF.animations[0]||null;
+    playerClipPunch=rawPunchClip ? trimPlayerAttackClip(rawPunchClip,'player-punch',22,9,30) : playerClipPunch;
+    playerClipKick=rawKickClip ? trimPlayerAttackClip(rawKickClip,'player-kick',0,8,30) : playerClipKick;
+    playerClipPunchCombo=rawComboClip ? trimPlayerAttackClip(rawComboClip,'player-combo',0,10,30) : playerClipPunchCombo;
     playerClipFire=sanitizePlayerClip(fireGLTF.animations[0]||playerClipFire,'player-fire')||playerClipFire;
     playerClipThrowBomb=sanitizePlayerClip(throwGLTF.animations[0]||playerClipThrowBomb,'player-throwbomb')||playerClipThrowBomb;
     playerClipClean=sanitizePlayerClip(cleanGLTF.animations[0]||playerClipClean,'player-clean')||playerClipClean;
     if(player?.inst?.mixer){
-      if(playerClipJump && !player.inst.actJump) player.inst.actJump=player.inst.mixer.clipAction(playerClipJump);
-      if(playerClipPunch && !player.inst.actPunch) player.inst.actPunch=player.inst.mixer.clipAction(playerClipPunch);
-      if(playerClipKick && !player.inst.actKick) player.inst.actKick=player.inst.mixer.clipAction(playerClipKick);
-      if(playerClipPunchCombo && !player.inst.actPunchCombo) player.inst.actPunchCombo=player.inst.mixer.clipAction(playerClipPunchCombo);
-      if(playerClipFire && !player.inst.actFire) player.inst.actFire=player.inst.mixer.clipAction(playerClipFire);
-      if(playerClipThrowBomb && !player.inst.actThrowBomb) player.inst.actThrowBomb=player.inst.mixer.clipAction(playerClipThrowBomb);
-      if(playerClipClean && !player.inst.actClean) player.inst.actClean=player.inst.mixer.clipAction(playerClipClean);
+      if(playerClipJump && !player.inst.actJump){ player.inst.actJump=player.inst.mixer.clipAction(playerClipJump); player.inst.actJump.setLoop(THREE.LoopOnce); player.inst.actJump.clampWhenFinished=true; }
+      if(playerClipPunch && !player.inst.actPunch){ player.inst.actPunch=player.inst.mixer.clipAction(playerClipPunch); player.inst.actPunch.setLoop(THREE.LoopOnce); player.inst.actPunch.clampWhenFinished=false; }
+      if(playerClipKick && !player.inst.actKick){ player.inst.actKick=player.inst.mixer.clipAction(playerClipKick); player.inst.actKick.setLoop(THREE.LoopOnce); player.inst.actKick.clampWhenFinished=false; }
+      if(playerClipPunchCombo && !player.inst.actPunchCombo){ player.inst.actPunchCombo=player.inst.mixer.clipAction(playerClipPunchCombo); player.inst.actPunchCombo.setLoop(THREE.LoopOnce); player.inst.actPunchCombo.clampWhenFinished=false; }
+      if(playerClipFire && !player.inst.actFire){ player.inst.actFire=player.inst.mixer.clipAction(playerClipFire); player.inst.actFire.setLoop(THREE.LoopOnce); player.inst.actFire.clampWhenFinished=true; }
+      if(playerClipThrowBomb && !player.inst.actThrowBomb){ player.inst.actThrowBomb=player.inst.mixer.clipAction(playerClipThrowBomb); player.inst.actThrowBomb.setLoop(THREE.LoopOnce); player.inst.actThrowBomb.clampWhenFinished=true; }
+      if(playerClipClean && !player.inst.actClean){ player.inst.actClean=player.inst.mixer.clipAction(playerClipClean); player.inst.actClean.setLoop(THREE.LoopOnce); player.inst.actClean.clampWhenFinished=true; }
     }
   }catch(e){
     console.warn('[player] deferred skill clip load failed',e);
@@ -2800,12 +2822,13 @@ function buildPlayerInstance(){
     actRun.setLoop(THREE.LoopRepeat);
     actRun.clampWhenFinished=false;
   }
-  for(const act of [actJump,actPunch,actKick,actPunchCombo,actFire,actThrowBomb,actClean]){
-    if(act){
-      act.setLoop(THREE.LoopOnce);
-      act.clampWhenFinished=true;
-    }
-  }
+  if(actJump){actJump.setLoop(THREE.LoopOnce);actJump.clampWhenFinished=true}
+  if(actPunch){actPunch.setLoop(THREE.LoopOnce);actPunch.clampWhenFinished=false}
+  if(actKick){actKick.setLoop(THREE.LoopOnce);actKick.clampWhenFinished=false}
+  if(actPunchCombo){actPunchCombo.setLoop(THREE.LoopOnce);actPunchCombo.clampWhenFinished=false}
+  if(actFire){actFire.setLoop(THREE.LoopOnce);actFire.clampWhenFinished=true}
+  if(actThrowBomb){actThrowBomb.setLoop(THREE.LoopOnce);actThrowBomb.clampWhenFinished=true}
+  if(actClean){actClean.setLoop(THREE.LoopOnce);actClean.clampWhenFinished=true}
   actIdle&&actIdle.play();
   return {root,outer,mixer,actIdle,actRun,actJump,actPunch,actKick,actPunchCombo,actFire,actThrowBomb,actClean,applyTextures,baseActionName:'actIdle',oneShotActionName:null,halfH:(bbox.max.y-bbox.min.y)*0.5};
 }
@@ -3558,6 +3581,7 @@ function playPlayerOneShot(actionName,fallback=0.4,opts={}){
   if(!I) return null;
   const act=I[actionName]||null;
   const timeScale=opts.timeScale||1;
+  const clampWhenFinished=opts.clampWhenFinished ?? !/^act(Punch|Kick|PunchCombo)$/.test(actionName);
   player.specialAnim=opts.specialAnim||'oneshot';
   player.specialAnimT=Math.max(player.specialAnimT,getActionClipDuration(act,fallback,timeScale));
   if(I.baseActionName&&I[I.baseActionName]) I[I.baseActionName].fadeOut(0.05);
@@ -3568,7 +3592,7 @@ function playPlayerOneShot(actionName,fallback=0.4,opts={}){
   if(act){
     act.reset();
     act.enabled=true;
-    act.clampWhenFinished=true;
+    act.clampWhenFinished=clampWhenFinished;
     act.setEffectiveTimeScale?.(timeScale);
     act.setEffectiveWeight?.(1);
     act.timeScale=timeScale;
@@ -3906,9 +3930,8 @@ function getArtistCruiseSpeed(a,baseSpeed){
   return baseSpeed;
 }
 
-function updateArtists(dt){
+function updateArtists(dt,nowS){
   const px=player.root.position.x, pz=player.root.position.z;
-  const nowS=performance.now()/1000;
   for(let i=artists.length-1;i>=0;i--){
     const a=artists[i];
     const p=a.inst.outer.position;
@@ -4040,7 +4063,7 @@ function updateArtists(dt){
         }
       }
       // bob head slightly during painting
-      p.y+=Math.sin(performance.now()*0.012)*0.04;
+      p.y+=Math.sin(nowS*12)*0.04;
       if(pillar.paintProgress>=1){
         if(!pillar.fillCounted){
           pillar.fillCounted=true;
@@ -5426,7 +5449,7 @@ function tick(){
       updateTimerUI();
       updatePlayer(dt);
       updateSpawns(dt);
-      updateArtists(dt);
+      updateArtists(dt,nowS);
       updateCoins(dt,nowS);
       updateSpecialWeapons(dt,nowS);
       updateSketch(dt,nowS);
