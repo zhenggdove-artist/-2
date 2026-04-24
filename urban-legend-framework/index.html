@@ -228,16 +228,21 @@
   .loadout-slot.skill-slot button{background:rgba(91,57,0,0.16);color:#4f3200;border-color:rgba(91,57,0,0.2)}
   .loadout-slot.burst-slot{background:linear-gradient(180deg,rgba(69,34,88,0.92),rgba(25,39,65,0.9));border-color:rgba(255,173,210,0.24)}
   .loadout-slot.burst-slot .slot-kind{color:#ffb5d5;opacity:0.92}
+  @media (min-width:641px){
+    #loadout-toggle{display:none !important}
+  }
   @media (max-width:640px){
     #art-wins{justify-content:center;align-items:center;padding:0 8vw}
     #art-wins .aw-text{font-size:clamp(38px,13vw,74px);letter-spacing:0.18em}
     #art-wins .aw-btn{font-size:12px}
     #shop-btn{top:104px;right:14px;padding:9px 16px}
     #shop-panel{top:150px;right:10px;width:min(310px,calc(100vw - 20px));max-height:calc(100vh - 170px)}
-    #special-btn{right:24px;bottom:126px;width:78px;height:78px;z-index:17}
-    #jump-btn{right:124px;bottom:36px}
-    #attack-btn{right:24px;bottom:36px}
-    #loadout-toggle{display:block;left:42px;bottom:126px}
+    #special-btn{right:24px;bottom:116px;width:55px;height:55px;z-index:17;padding:6px;gap:2px;font-size:9px}
+    #special-btn .btn-ico{font-size:14px}
+    #special-btn .btn-txt{font-size:8px;letter-spacing:0.1em}
+    #jump-btn{right:94px;bottom:36px;width:45px;height:45px;font-size:9px}
+    #attack-btn{right:24px;bottom:36px;width:59px;height:59px;font-size:10px}
+    #loadout-toggle{display:block;left:42px;bottom:154px}
     #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:11px 10px 12px;
       border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
       backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
@@ -252,7 +257,7 @@
     .loadout-slot button{padding:5px 0;font-size:8px}
   }
   @media (max-width:420px){
-    #loadout-toggle{left:42px;bottom:126px;width:54px;height:54px}
+    #loadout-toggle{left:42px;bottom:148px;width:54px;height:54px}
     #loadout-bar{left:8px;right:8px;bottom:198px}
   }
 
@@ -269,7 +274,7 @@
   #intro-progress-track{width:100%;height:10px;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,0.24);
     background:rgba(255,255,255,0.08);box-shadow:inset 0 2px 8px rgba(0,0,0,0.35)}
   #intro-progress-fill{width:0%;height:100%;border-radius:999px;background:linear-gradient(90deg,#ff8fb8,#ffd86b,#9be08c);
-    box-shadow:0 0 18px rgba(255,216,107,0.4);transition:width .2s ease}
+    box-shadow:0 0 18px rgba(255,216,107,0.4);transition:width .35s ease}
   #intro button{padding:12px 40px;border-radius:999px;border:2px solid #ffaed4;
     background:linear-gradient(135deg,#c03870,#7555a8);color:#fff;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:18px;letter-spacing:3px;
@@ -1163,7 +1168,7 @@ function loadCachedJSON(key){
 }
 
 function schedulePlaygroundBVHBuild(root){
-  if(!bvhReady||!root||playgroundBVHBuildActive) return;
+  if(!bvhReady||!root||playgroundBVHBuildActive) return Promise.resolve();
   playgroundBVHQueuedMeshes.length=0;
   root.traverse(o=>{
     if(!o.isMesh||!o.geometry||!o.geometry.attributes?.position) return;
@@ -1171,9 +1176,10 @@ function schedulePlaygroundBVHBuild(root){
     if(tri<30||o.geometry.boundsTree) return;
     playgroundBVHQueuedMeshes.push(o.geometry);
   });
-  if(!playgroundBVHQueuedMeshes.length) return;
+  if(!playgroundBVHQueuedMeshes.length) return Promise.resolve();
   playgroundBVHBuildActive=true;
   const total=playgroundBVHQueuedMeshes.length;
+  return new Promise(resolve=>{
   const step=deadline=>{
     const started=performance.now();
     while(playgroundBVHQueuedMeshes.length){
@@ -1189,9 +1195,11 @@ function schedulePlaygroundBVHBuild(root){
     }
     playgroundBVHBuildActive=false;
     console.log('[bvh] background build complete for',total,'meshes');
+    resolve();
   };
   if(typeof window.requestIdleCallback==='function') window.requestIdleCallback(step,{timeout:80});
   else window.setTimeout(()=>step(null),16);
+  });
 }
 
 function saveCachedJSON(key,value){
@@ -2578,28 +2586,23 @@ async function loadPlayerAssets(){
         }
       }catch{}
     }
-    const [idleGLTF,runGLTF,baseTex]=await Promise.all([
+    const [idleGLTF,runGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
       loader.loadAsync(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
       loader.loadAsync(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
       loadTex('mainplayermodel/tripo_model_basecolor.JPEG'),
+      loadTex('mainplayermodel/tripo_model_normal.JPEG'),
+      loadTex('mainplayermodel/tripo_model_roughness.JPEG'),
+      loadTex('mainplayermodel/tripo_model_metallic.JPEG'),
     ]);
     if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
     if(baseTex){
       baseTex.flipY=false;
       baseTex.colorSpace=THREE.SRGBColorSpace;
     }
-    playerTextureSet={base:baseTex,normal:null,rough:null,metal:null};
-    Promise.all([
-      loadTex('mainplayermodel/tripo_model_normal.JPEG'),
-      loadTex('mainplayermodel/tripo_model_roughness.JPEG'),
-      loadTex('mainplayermodel/tripo_model_metallic.JPEG'),
-    ]).then(([normalTex,roughTex,metalTex])=>{
-      for(const tex of [normalTex,roughTex,metalTex]){
-        if(tex) tex.flipY=false;
-      }
-      playerTextureSet={...playerTextureSet,normal:normalTex,rough:roughTex,metal:metalTex};
-      if(player.inst?.applyTextures) player.inst.applyTextures();
-    }).catch(()=>{});
+    for(const tex of [normalTex,roughTex,metalTex]){
+      if(tex) tex.flipY=false;
+    }
+    playerTextureSet={base:baseTex,normal:normalTex,rough:roughTex,metal:metalTex};
     playerGLTF=baseGLTF;
     collectBoneNames(baseGLTF.scene);
     playerClipIdle=sanitizePlayerClip(idleGLTF.animations[0]||baseGLTF.animations[0]||null,'player-idle');
@@ -5533,21 +5536,25 @@ async function init(){
   startBtn.disabled=true;
   const origLabel=startBtn.textContent;
   startBtn.textContent='LOADING…';
-  setIntroProgress(3,'BOOT');
+  setIntroProgress(2,'BOOT');
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
   // computeBoundsTree runs on its geometry right after load.
-  const bvhPromise=setupBVH();
-  setIntroProgress(14,'BOOT');
-  await Promise.all([loadPlayerAssets(),loadPlayground(),bvhPromise]);
+  await setupBVH();
+  setIntroProgress(8,'BOOT');
+  await loadPlayerAssets();
+  setIntroProgress(18,'PLAYER');
+  await loadPlayground();
+  setIntroProgress(30,'WORLD');
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
-  setIntroProgress(58,'ASSETS');
-  if(false && bvhReady){
+  setIntroProgress(36,'WORLD');
+  if(bvhReady){
     startBtn.textContent='SCANNING FLOORS…';
     playableLayer=await detectPlayableLayer(p=>{
+      setIntroProgress(84+p*8,'TERRAIN');
       const pct=Math.floor(p*100);
       startBtn.textContent='SCANNING FLOORS… '+pct+'%';
     });
@@ -5567,18 +5574,17 @@ async function init(){
   }
   attachPlayer();
   placePlayerOnPlayableLayer();
-  schedulePlaygroundBVHBuild(playgroundRoot);
-  setIntroProgress(70,'READY');
-  startBtn.textContent=origLabel;
-  startBtn.disabled=false;
-  setIntroProgress(100,'READY');
-  loadDeferredPlayerSkillClips();
-  scheduleDeferredCoinLoad();
-  loadCharacterTemplate()
-    .then(()=>loadExtraCharacterClips())
-    .then(()=>setIntroProgress(82,'STREAM'))
-    .catch(e=>console.warn('[char] background load failed',e));
-  if(bvhReady){
+  await schedulePlaygroundBVHBuild(playgroundRoot);
+  setIntroProgress(44,'WORLD');
+  await loadDeferredPlayerSkillClips();
+  setIntroProgress(58,'PLAYER');
+  await loadCharacterTemplate();
+  setIntroProgress(70,'ARTISTS');
+  await loadExtraCharacterClips();
+  setIntroProgress(78,'ARTISTS');
+  await loadCoin();
+  setIntroProgress(84,'ITEMS');
+  if(false&&bvhReady){
     Promise.resolve().then(async()=>{
       try{
         const scannedLayer=await detectPlayableLayer();
@@ -5617,12 +5623,12 @@ async function init(){
   }
   tick(); // begin rendering — intro is still on top
 
-  return;
   // River detection needs many raycasts. Only attempt when BVH is available.
   if(bvhReady){
     try{
       startBtn.textContent='SCANNING TERRAIN…';
       RIVERS=await detectRiverBounds(p=>{ 
+        setIntroProgress(92+p*8,'TERRAIN');
         const pct=Math.floor(p*100);
         startBtn.textContent='SCANNING TERRAIN… '+pct+'%';
       });
@@ -5643,6 +5649,7 @@ async function init(){
 
   startBtn.textContent=origLabel;
   startBtn.disabled=false;
+  setIntroProgress(100,'READY');
 }
 init();
 
