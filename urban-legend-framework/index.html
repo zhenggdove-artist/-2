@@ -5381,25 +5381,11 @@ function unlockSFX(){
     if(!voice) continue;
     try{
       clearSFXStopTimer(voice);
-      voice.muted=true;
+      voice.pause();
       voice.currentTime=0;
-      const p=voice.play();
-      if(p?.then){
-        p.then(()=>{
-          voice.pause();
-          voice.currentTime=0;
-          voice.muted=false;
-        }).catch(()=>{
-          voice.muted=false;
-        });
-      }else{
-        voice.pause();
-        voice.currentTime=0;
-        voice.muted=false;
-      }
-    }catch{
       voice.muted=false;
-    }
+      voice.load?.();
+    }catch{}
   }
 }
 
