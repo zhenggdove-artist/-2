@@ -4722,6 +4722,7 @@ for(const item of WEAPON_SHOP_ITEMS){
 }
 cleanBtn?.addEventListener('pointerdown',e=>{
   e.preventDefault();
+  unlockSFX();
   if(currentCleanTarget) requestCleanAction(currentCleanTarget);
 });
 specialBtn?.addEventListener('pointerdown',e=>{
@@ -4820,6 +4821,7 @@ function updateSketch(dt,now){
 // ===== Input =====
 const keys={w:false,a:false,s:false,d:false,space:false,up:false,down:false,left:false,right:false};
 function handleAttackPress(pointerId=null){
+  unlockSFX();
   if(attackInputState.isDown) return;
   attackInputState.isDown=true;
   attackInputState.pointerId=pointerId;
@@ -4856,6 +4858,7 @@ function scheduleDeferredCoinLoad(delay=1800){
 }
 
 function handleSpecialPress(pointerId=null){
+  unlockSFX();
   if(specialInputState.isDown) return;
   specialInputState.isDown=true;
   specialInputState.pointerId=pointerId;
@@ -4880,6 +4883,7 @@ function handleSpecialRelease(pointerId=null){
 }
 
 window.addEventListener('keydown',e=>{
+  unlockSFX();
   const k=e.key.toLowerCase();
   if(k==='w')keys.w=true;
   if(k==='a')keys.a=true;
@@ -4968,6 +4972,7 @@ if(jumpBtn) jumpBtn.addEventListener('pointerdown',e=>{e.preventDefault();tryJum
 
 function tryJump(){
   if(!player.inst||player.isAir) return;
+  unlockSFX();
   playSFX('jump');
   player.vy=JUMP_VEL;
   player.isAir=true;
@@ -5306,25 +5311,26 @@ const SOUND_REV='2026-04-24b';
 const SFX_DEFS={
   punch:{src:'sound/punch.m4a',volume:0.72,maxDuration:0.22,pool:3},
   punchCombo:{src:'sound/punch combo.m4a',volume:0.76,maxDuration:0.34,pool:3},
-  kick:{src:'sound/踢kick.m4a',volume:0.82,maxDuration:0.34,pool:3},
-  artistHitPunch:{src:'sound/藝術家被punch打中.m4a',volume:0.82,maxDuration:0.24,pool:4},
-  artistHitCombo:{src:'sound/藝術家被punch combo打中.m4a',volume:0.86,maxDuration:0.34,pool:4},
-  artistHitKick:{src:'sound/藝術家被踢中.m4a',volume:0.86,maxDuration:0.3,pool:4},
-  artistDown1:{src:'sound/藝術家倒地1.m4a',volume:0.68,maxDuration:0.85,pool:3},
-  artistDown2:{src:'sound/藝術家倒地2.m4a',volume:0.68,maxDuration:0.85,pool:3},
-  artistDown3:{src:'sound/藝術家倒地3.m4a',volume:0.68,maxDuration:0.85,pool:3},
-  walk:{src:'sound/走路.m4a',volume:0.24,maxDuration:0.16,pool:8,minGap:0.03},
-  throwIce:{src:'sound/扔出冰塊.m4a',volume:0.76,maxDuration:0.34,pool:3},
-  throwBomb:{src:'sound/扔出炸彈.m4a',volume:0.78,maxDuration:0.38,pool:3},
+  kick:{src:'sound/\u8e22kick.m4a',volume:0.82,maxDuration:0.34,pool:3},
+  artistHitPunch:{src:'sound/\u85dd\u8853\u5bb6\u88abpunch\u6253\u4e2d.m4a',volume:0.82,maxDuration:0.24,pool:4},
+  artistHitCombo:{src:'sound/\u85dd\u8853\u5bb6\u88abpunch combo\u6253\u4e2d.m4a',volume:0.86,maxDuration:0.34,pool:4},
+  artistHitKick:{src:'sound/\u85dd\u8853\u5bb6\u88ab\u8e22\u4e2d.m4a',volume:0.86,maxDuration:0.3,pool:4},
+  artistDown1:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57301.m4a',volume:0.68,maxDuration:0.85,pool:3},
+  artistDown2:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57302.m4a',volume:0.68,maxDuration:0.85,pool:3},
+  artistDown3:{src:'sound/\u85dd\u8853\u5bb6\u5012\u57303.m4a',volume:0.68,maxDuration:0.85,pool:3},
+  walk:{src:'sound/\u8d70\u8def.m4a',volume:0.24,maxDuration:0.16,pool:8,minGap:0.03},
+  throwIce:{src:'sound/\u6254\u51fa\u51b0\u584a.m4a',volume:0.76,maxDuration:0.34,pool:3},
+  throwBomb:{src:'sound/\u6254\u51fa\u70b8\u5f48.m4a',volume:0.78,maxDuration:0.38,pool:3},
   flame:{src:'sound/Fire Flame.mp3',volume:0.7,maxDuration:0.58,pool:3},
   coinPickup:{src:'sound/Got A Mario Coin.mp3',volume:0.58,maxDuration:0.46,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
-  cleanGraffiti:{src:'sound/擦掉塗鴉.m4a',volume:0.68,maxDuration:0.55,pool:2},
+  cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
   bombExplode:{src:'sound/Explode.mp3',volume:0.84,maxDuration:0.82,pool:4},
 };
 const sfxPools=new Map();
 const sfxLastPlayAt=new Map();
 let sfxPrimed=false;
+let sfxUnlocked=false;
 
 function buildSFXSrc(path){
   const sep=path.includes('?') ? '&' : '?';
@@ -5365,9 +5371,41 @@ function primeSFX(){
   }
 }
 
+function unlockSFX(){
+  if(sfxUnlocked) return;
+  sfxUnlocked=true;
+  primeSFX();
+  for(const id of Object.keys(SFX_DEFS)){
+    const voice=ensureSFXPool(id)[0];
+    if(!voice) continue;
+    try{
+      clearSFXStopTimer(voice);
+      voice.muted=true;
+      voice.currentTime=0;
+      const p=voice.play();
+      if(p?.then){
+        p.then(()=>{
+          voice.pause();
+          voice.currentTime=0;
+          voice.muted=false;
+        }).catch(()=>{
+          voice.muted=false;
+        });
+      }else{
+        voice.pause();
+        voice.currentTime=0;
+        voice.muted=false;
+      }
+    }catch{
+      voice.muted=false;
+    }
+  }
+}
+
 function playSFX(id,opts={}){
   const def=SFX_DEFS[id];
   if(!def) return null;
+  if(!sfxPrimed) primeSFX();
   const now=performance.now()/1000;
   const minGap=opts.minGap ?? def.minGap ?? 0;
   const lastAt=sfxLastPlayAt.get(id)||-Infinity;
@@ -5437,7 +5475,7 @@ startBtn.addEventListener('click',()=>{
 });
 
 function startGame(){
-  primeSFX();
+  unlockSFX();
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
