@@ -75,31 +75,70 @@
   input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 
-  /* VIEWPORT FRAME — neon thorn clusters at the four corners.
-     Sits below the HUD layer (z=11 vs HUD z=15) so the clusters
-     wreath the corners without ever covering interactive UI. The
-     SVGs are absolutely sized so they stay crisp on retina, and
-     mirrored via scale() rather than re-drawn so all 4 corners
-     are guaranteed identical. */
+  /* VIEWPORT FRAME — direct overlay of the reference frame asset
+     (img/frame_reference.png). My hand-drawn SVG vines couldn't
+     match the painterly thickness / asymmetric tendril work of
+     the reference, so we just use the actual artwork as a
+     full-bleed background and mask out the centre so gameplay
+     shows through. Pure-CSS, no DOM beyond the wrapper.
+     ----------------------------------------------------------------
+     If the frame artwork ever changes, drop a new file at
+     urban-legend-framework/img/frame_reference.png — same size
+     applies. The radial mask below controls how far inward the
+     ornaments reach. The 75-92% stops are intentionally generous
+     so the thorny tendrils (which sweep ~25% inward from each
+     corner) stay visible. */
+  /* The mask is built from FOUR corner gradients added together,
+     so only the four thorny corner clusters of the reference image
+     are visible. Everything in between (HUD pills, paint bar,
+     SHOP tag, loadout cards, action buttons, central emblems —
+     i.e. all the live UI that already exists in CSS) stays hidden,
+     so the overlay never duplicates real interactive widgets.
+     ----------------------------------------------------------------
+     To enlarge / shrink the visible thorn corners, change every
+     "circle 320px" pair below in lockstep — the inner stop (at 60 %)
+     keeps a hard-edged opaque core, the outer stop (at 100 %) feathers
+     into transparency. Bigger radius → more of the reference image
+     bleeds in toward the centre. */
   #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    filter:drop-shadow(0 0 8px rgba(244,238,92,0.7)) drop-shadow(0 0 18px rgba(255,245,160,0.45))}
-  /* Each corner ornament is sized generously (220 px desktop /
-     150 px mobile) so the vine work is legible — too small and
-     the spikes blur into a fuzzy halo. Mirroring is applied via
-     scaleX/Y so all four corners are pixel-identical. */
-  #viewport-frame .vf-corner{position:absolute;width:220px;height:220px;color:var(--neon-soft)}
-  #viewport-frame .vf-tl{top:0;left:0}
-  #viewport-frame .vf-tr{top:0;right:0;transform:scaleX(-1)}
-  #viewport-frame .vf-bl{bottom:0;left:0;transform:scaleY(-1)}
-  #viewport-frame .vf-br{bottom:0;right:0;transform:scale(-1,-1)}
-  /* Hide the frame whenever the end overlay is up so the corner
-     ornaments don't poke out past the leaderboard's dark backdrop.
-     Intro/art-wins overlays are higher z-index so they cover the
-     frame naturally without needing a hide rule. */
-  body.game-ended #viewport-frame{display:none}
+    background-image:url("img/frame_reference.png");
+    background-size:100% 100%;
+    background-repeat:no-repeat;
+    background-position:center center;
+    -webkit-mask-image:
+      radial-gradient(circle 320px at 0% 0%,   black 60%,transparent 100%),
+      radial-gradient(circle 320px at 100% 0%, black 60%,transparent 100%),
+      radial-gradient(circle 320px at 0% 100%, black 60%,transparent 100%),
+      radial-gradient(circle 320px at 100% 100%,black 60%,transparent 100%);
+            mask-image:
+      radial-gradient(circle 320px at 0% 0%,   black 60%,transparent 100%),
+      radial-gradient(circle 320px at 100% 0%, black 60%,transparent 100%),
+      radial-gradient(circle 320px at 0% 100%, black 60%,transparent 100%),
+      radial-gradient(circle 320px at 100% 100%,black 60%,transparent 100%);
+    -webkit-mask-composite:source-over;mask-composite:add;
+    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
   @media (max-width:640px){
-    #viewport-frame .vf-corner{width:140px;height:140px}
+    #viewport-frame{
+      -webkit-mask-image:
+        radial-gradient(circle 200px at 0% 0%,   black 60%,transparent 100%),
+        radial-gradient(circle 200px at 100% 0%, black 60%,transparent 100%),
+        radial-gradient(circle 200px at 0% 100%, black 60%,transparent 100%),
+        radial-gradient(circle 200px at 100% 100%,black 60%,transparent 100%);
+              mask-image:
+        radial-gradient(circle 200px at 0% 0%,   black 60%,transparent 100%),
+        radial-gradient(circle 200px at 100% 0%, black 60%,transparent 100%),
+        radial-gradient(circle 200px at 0% 100%, black 60%,transparent 100%),
+        radial-gradient(circle 200px at 100% 100%,black 60%,transparent 100%);
+    }
   }
+  /* Old SVG corner ornaments are kept in DOM but no longer
+     rendered — the reference overlay supersedes them. */
+  #viewport-frame .vf-corner{display:none}
+  /* Hide the frame whenever the end overlay is up so the
+     ornaments don't poke through the leaderboard's pink
+     backdrop. Intro / art-wins overlays already sit higher
+     on the z-stack. */
+  body.game-ended #viewport-frame{display:none}
 
   /* TITLE banner — cream tag suspended at the top of the viewport
      with a chartreuse glow halo. Replaces the previous pink

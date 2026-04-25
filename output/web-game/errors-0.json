@@ -1,6 +1,6 @@
 [
   {
-    "type": "pageerror",
-    "text": "SyntaxError: Invalid left-hand side in assignment"
+    "type": "console.error",
+    "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
   }
 ]
