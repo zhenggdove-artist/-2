@@ -82,19 +82,23 @@
      mirrored via scale() rather than re-drawn so all 4 corners
      are guaranteed identical. */
   #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    filter:drop-shadow(0 0 6px rgba(244,238,92,0.55)) drop-shadow(0 0 14px rgba(255,245,160,0.35))}
-  #viewport-frame .vf-corner{position:absolute;width:140px;height:140px;color:var(--neon-soft)}
+    filter:drop-shadow(0 0 8px rgba(244,238,92,0.7)) drop-shadow(0 0 18px rgba(255,245,160,0.45))}
+  /* Each corner ornament is sized generously (220 px desktop /
+     150 px mobile) so the vine work is legible — too small and
+     the spikes blur into a fuzzy halo. Mirroring is applied via
+     scaleX/Y so all four corners are pixel-identical. */
+  #viewport-frame .vf-corner{position:absolute;width:220px;height:220px;color:var(--neon-soft)}
   #viewport-frame .vf-tl{top:0;left:0}
-  #viewport-frame .vf-tr{top:0;right:0}
-  #viewport-frame .vf-bl{bottom:0;left:0}
-  #viewport-frame .vf-br{bottom:0;right:0}
+  #viewport-frame .vf-tr{top:0;right:0;transform:scaleX(-1)}
+  #viewport-frame .vf-bl{bottom:0;left:0;transform:scaleY(-1)}
+  #viewport-frame .vf-br{bottom:0;right:0;transform:scale(-1,-1)}
   /* Hide the frame whenever the end overlay is up so the corner
      ornaments don't poke out past the leaderboard's dark backdrop.
      Intro/art-wins overlays are higher z-index so they cover the
      frame naturally without needing a hide rule. */
   body.game-ended #viewport-frame{display:none}
   @media (max-width:640px){
-    #viewport-frame .vf-corner{width:88px;height:88px}
+    #viewport-frame .vf-corner{width:140px;height:140px}
   }
 
   /* TITLE banner — cream tag suspended at the top of the viewport
@@ -456,14 +460,15 @@
     #intro-progress{width:min(300px,84vw)}
   }
 
-  /* End overlay: leaderboard. Backdrop is a soft plum tint with a
-     blur, NOT 82% black — the previous heavy darken washed every
-     pillar/water tile gray. The card itself is a glowing cream
-     "poster" pinned over the still-running scene. */
+  /* End overlay: leaderboard. Backdrop is a HOT-PINK tint
+     (per design ref) with a blur — not the muddy plum that was
+     reading as gray. Pillars + water + flowers behind keep their
+     saturation; the leaderboard card sits in front like a
+     concert poster taped over neon. */
   #end-overlay{position:fixed;inset:0;
-    background:radial-gradient(circle at 50% 50%,rgba(40,18,58,0.32) 0%,rgba(15,8,22,0.72) 100%);
-    backdrop-filter:blur(6px) saturate(1.05);
-    -webkit-backdrop-filter:blur(6px) saturate(1.05);
+    background:radial-gradient(circle at 50% 35%,rgba(255,158,210,0.45) 0%,rgba(217,38,128,0.55) 45%,rgba(120,15,68,0.72) 100%);
+    backdrop-filter:blur(5px) saturate(1.18);
+    -webkit-backdrop-filter:blur(5px) saturate(1.18);
     z-index:500;display:none;align-items:center;justify-content:center;padding:6vw}
   #end-overlay.show{display:flex}
   /* When the end screen is showing, all gameplay UI gets out of
@@ -498,9 +503,14 @@
   #end-box.minimized #name-row,
   #end-box.minimized #leaderboard-list,
   #end-box.minimized #replay-btn{display:none}
-  #end-box h2{margin:0 0 6px;text-align:center;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
-    color:var(--ink);letter-spacing:0.2em;font-size:22px}
-  #end-box.minimized h2{margin:0;font-size:14px;letter-spacing:0.14em}
+  /* GAME OVER heading: BriefingFont (FFCommaTrial) reads cleanly
+     even at big sizes and contrasts the GoldenGirdle game UI, so
+     "GAME OVER" is unmistakable rather than reading as a wreath of
+     hard-to-parse glyphs. */
+  #end-box h2{margin:0 0 6px;text-align:center;
+    font-family:"BriefingFont","Trebuchet MS",sans-serif;
+    color:var(--ink);letter-spacing:0.18em;font-size:30px;font-weight:bold}
+  #end-box.minimized h2{margin:0;font-size:16px;letter-spacing:0.14em}
   #end-toggle{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:999px;border:none;
     background:rgba(26,15,36,0.10);color:var(--ink);font-size:18px;line-height:1;cursor:pointer}
   #end-box.minimized #end-toggle{position:static;width:24px;height:24px;font-size:16px}
@@ -575,82 +585,113 @@
      SVG paths are stroked, not filled, to keep them lightweight
      (~1 KB each) regardless of how the user scales the viewport. -->
 <div id="viewport-frame" aria-hidden="true">
-  <svg class="vf-corner vf-tl" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-    <g fill="none" stroke="var(--neon-soft)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <!-- Radiating spike cluster from the corner (0,0) -->
-      <path d="M0 0 L60 6"/>
-      <path d="M0 0 L48 24"/>
-      <path d="M0 0 L34 34"/>
-      <path d="M0 0 L24 48"/>
-      <path d="M0 0 L6 60"/>
-      <!-- Spike tips (small chevrons) -->
-      <path d="M50 4 L60 6 L54 14"/>
-      <path d="M40 24 L48 24 L46 32"/>
-      <path d="M28 30 L34 34 L30 40"/>
-      <path d="M22 42 L24 48 L32 46"/>
-      <path d="M4 50 L6 60 L14 54"/>
-      <!-- Curl tendril -->
-      <path d="M48 24 Q66 26 66 42 Q66 54 54 56"/>
-      <!-- Inner radiating accents -->
-      <path d="M2 2 L18 8"/>
-      <path d="M2 2 L8 18"/>
-      <!-- Glowing bead at corner -->
-      <circle cx="3" cy="3" r="2.6" fill="var(--neon-soft)" stroke="none"/>
+  <!-- Master vine ornament drawn once, then mirrored to all four
+       corners via CSS transforms. Built from 3 elements that match
+       the design reference's visual language:
+         (a) MAIN SPINE — a sweeping S-curve from the corner toward
+             the centre, varying stroke weight (3.5 → 2.2) so it
+             reads like a tapering tendril.
+         (b) THORN BRANCHES — sharp triangular ribs sprouting from
+             the spine at irregular intervals, each itself a tiny
+             chevron. Smaller secondary thorns reinforce density.
+         (c) CURL FINIAL — the spine ends in a nautilus curl, with
+             one extra "whip" curling off the side.
+         (d) ACCENT BEADS + LEAF NUBS — small circles and almonds
+             punctuate the negative space.
+       All paths share the neon-yellow colour and are merged through
+       a soft Gaussian glow so the whole thing reads as one neon
+       vine when displayed at 1.2x size with a drop-shadow halo. -->
+  <svg class="vf-corner vf-tl" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="vfGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="1.8" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g fill="none" stroke="#fff5a0" stroke-linecap="round" stroke-linejoin="round" filter="url(#vfGlow)">
+      <!-- (a) Main spine: corner → swooping right + down -->
+      <path d="M 4 4 C 30 28, 60 32, 92 50 S 152 70, 192 60" stroke-width="3.4"/>
+      <!-- Sub-spine drooping from elbow -->
+      <path d="M 92 50 C 96 92, 112 130, 138 168 S 168 196, 196 200" stroke-width="3"/>
+      <!-- (b) Big thorn branches off the upper spine -->
+      <path d="M 38 18 L 56 0 L 60 22" stroke-width="2.4"/>
+      <path d="M 70 32 L 96 14 L 88 38" stroke-width="2.6"/>
+      <path d="M 118 46 L 138 26 L 134 52" stroke-width="2.4"/>
+      <path d="M 162 56 L 178 38 L 184 62" stroke-width="2.4"/>
+      <!-- Big thorn branches off the side spine -->
+      <path d="M 96 76 L 78 84 L 102 100" stroke-width="2.2"/>
+      <path d="M 116 116 L 96 124 L 122 138" stroke-width="2.2"/>
+      <path d="M 138 156 L 118 162 L 144 178" stroke-width="2.4"/>
+      <!-- Smaller secondary thorns clustering near corner -->
+      <path d="M 14 14 L 22 4 L 26 16" stroke-width="1.6"/>
+      <path d="M 22 28 L 34 22 L 30 36" stroke-width="1.5"/>
+      <path d="M 50 60 L 64 56 L 56 70" stroke-width="1.5"/>
+      <path d="M 78 100 L 88 110 L 80 118" stroke-width="1.5"/>
+      <path d="M 158 64 L 154 78 L 168 76" stroke-width="1.5"/>
+      <!-- (c) Curl finial at the end of the upper spine -->
+      <path d="M 192 60 C 210 60, 214 76, 204 84 C 196 90, 188 80, 196 76" stroke-width="2.4"/>
+      <!-- Curl finial at the bottom -->
+      <path d="M 196 200 C 214 198, 218 184, 210 178 C 200 172, 192 184, 200 188" stroke-width="2.4"/>
+      <!-- Whip flick across the negative space -->
+      <path d="M 28 50 Q 40 70 32 92 Q 26 108 42 120" stroke-width="1.8"/>
+      <path d="M 32 92 L 22 88 L 30 100" stroke-width="1.4"/>
+      <!-- (d) Leaf nubs (almond shapes) -->
+      <path d="M 110 36 Q 116 30 122 36 Q 116 42 110 36 Z" stroke-width="1.6"/>
+      <path d="M 70 78 Q 78 70 86 78 Q 78 86 70 78 Z" stroke-width="1.6"/>
+      <path d="M 168 144 Q 178 138 186 146 Q 178 154 168 146 Z" stroke-width="1.6"/>
+      <!-- Origin beads -->
+      <circle cx="4" cy="4" r="3" fill="#fff5a0" stroke="none"/>
+      <circle cx="4" cy="4" r="6.5" fill="none" stroke="#fff5a0" stroke-width="1"/>
+      <circle cx="92" cy="50" r="2" fill="#fff5a0" stroke="none"/>
+      <circle cx="192" cy="60" r="2" fill="#fff5a0" stroke="none"/>
+      <circle cx="196" cy="200" r="2" fill="#fff5a0" stroke="none"/>
     </g>
   </svg>
-  <svg class="vf-corner vf-tr" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-    <g fill="none" stroke="var(--neon-soft)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M120 0 L60 6"/>
-      <path d="M120 0 L72 24"/>
-      <path d="M120 0 L86 34"/>
-      <path d="M120 0 L96 48"/>
-      <path d="M120 0 L114 60"/>
-      <path d="M70 4 L60 6 L66 14"/>
-      <path d="M80 24 L72 24 L74 32"/>
-      <path d="M92 30 L86 34 L90 40"/>
-      <path d="M98 42 L96 48 L88 46"/>
-      <path d="M116 50 L114 60 L106 54"/>
-      <path d="M72 24 Q54 26 54 42 Q54 54 66 56"/>
-      <path d="M118 2 L102 8"/>
-      <path d="M118 2 L112 18"/>
-      <circle cx="117" cy="3" r="2.6" fill="var(--neon-soft)" stroke="none"/>
-    </g>
+  <svg class="vf-corner vf-tr" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+    <use href="#vf-vine-art"/>
   </svg>
-  <svg class="vf-corner vf-bl" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-    <g fill="none" stroke="var(--neon-soft)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M0 120 L60 114"/>
-      <path d="M0 120 L48 96"/>
-      <path d="M0 120 L34 86"/>
-      <path d="M0 120 L24 72"/>
-      <path d="M0 120 L6 60"/>
-      <path d="M50 116 L60 114 L54 106"/>
-      <path d="M40 96 L48 96 L46 88"/>
-      <path d="M28 90 L34 86 L30 80"/>
-      <path d="M22 78 L24 72 L32 74"/>
-      <path d="M4 70 L6 60 L14 66"/>
-      <path d="M48 96 Q66 94 66 78 Q66 66 54 64"/>
-      <path d="M2 118 L18 112"/>
-      <path d="M2 118 L8 102"/>
-      <circle cx="3" cy="117" r="2.6" fill="var(--neon-soft)" stroke="none"/>
-    </g>
+  <svg class="vf-corner vf-bl" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+    <use href="#vf-vine-art"/>
   </svg>
-  <svg class="vf-corner vf-br" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-    <g fill="none" stroke="var(--neon-soft)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M120 120 L60 114"/>
-      <path d="M120 120 L72 96"/>
-      <path d="M120 120 L86 86"/>
-      <path d="M120 120 L96 72"/>
-      <path d="M120 120 L114 60"/>
-      <path d="M70 116 L60 114 L66 106"/>
-      <path d="M80 96 L72 96 L74 88"/>
-      <path d="M92 90 L86 86 L90 80"/>
-      <path d="M98 78 L96 72 L88 74"/>
-      <path d="M116 70 L114 60 L106 66"/>
-      <path d="M72 96 Q54 94 54 78 Q54 66 66 64"/>
-      <path d="M118 118 L102 112"/>
-      <path d="M118 118 L112 102"/>
-      <circle cx="117" cy="117" r="2.6" fill="var(--neon-soft)" stroke="none"/>
-    </g>
+  <svg class="vf-corner vf-br" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+    <use href="#vf-vine-art"/>
+  </svg>
+  <!-- Symbol holding the master vine art so the other 3 corners
+       can <use> it without re-drawing every path. CSS transforms
+       on each .vf-* element produce the mirror reflections. -->
+  <svg width="0" height="0" style="position:absolute" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="vf-vine-art" viewBox="0 0 220 220">
+        <g fill="none" stroke="#fff5a0" stroke-linecap="round" stroke-linejoin="round" filter="url(#vfGlow)">
+          <path d="M 4 4 C 30 28, 60 32, 92 50 S 152 70, 192 60" stroke-width="3.4"/>
+          <path d="M 92 50 C 96 92, 112 130, 138 168 S 168 196, 196 200" stroke-width="3"/>
+          <path d="M 38 18 L 56 0 L 60 22" stroke-width="2.4"/>
+          <path d="M 70 32 L 96 14 L 88 38" stroke-width="2.6"/>
+          <path d="M 118 46 L 138 26 L 134 52" stroke-width="2.4"/>
+          <path d="M 162 56 L 178 38 L 184 62" stroke-width="2.4"/>
+          <path d="M 96 76 L 78 84 L 102 100" stroke-width="2.2"/>
+          <path d="M 116 116 L 96 124 L 122 138" stroke-width="2.2"/>
+          <path d="M 138 156 L 118 162 L 144 178" stroke-width="2.4"/>
+          <path d="M 14 14 L 22 4 L 26 16" stroke-width="1.6"/>
+          <path d="M 22 28 L 34 22 L 30 36" stroke-width="1.5"/>
+          <path d="M 50 60 L 64 56 L 56 70" stroke-width="1.5"/>
+          <path d="M 78 100 L 88 110 L 80 118" stroke-width="1.5"/>
+          <path d="M 158 64 L 154 78 L 168 76" stroke-width="1.5"/>
+          <path d="M 192 60 C 210 60, 214 76, 204 84 C 196 90, 188 80, 196 76" stroke-width="2.4"/>
+          <path d="M 196 200 C 214 198, 218 184, 210 178 C 200 172, 192 184, 200 188" stroke-width="2.4"/>
+          <path d="M 28 50 Q 40 70 32 92 Q 26 108 42 120" stroke-width="1.8"/>
+          <path d="M 32 92 L 22 88 L 30 100" stroke-width="1.4"/>
+          <path d="M 110 36 Q 116 30 122 36 Q 116 42 110 36 Z" stroke-width="1.6"/>
+          <path d="M 70 78 Q 78 70 86 78 Q 78 86 70 78 Z" stroke-width="1.6"/>
+          <path d="M 168 144 Q 178 138 186 146 Q 178 154 168 146 Z" stroke-width="1.6"/>
+          <circle cx="4" cy="4" r="3" fill="#fff5a0" stroke="none"/>
+          <circle cx="4" cy="4" r="6.5" fill="none" stroke="#fff5a0" stroke-width="1"/>
+          <circle cx="92" cy="50" r="2" fill="#fff5a0" stroke="none"/>
+          <circle cx="192" cy="60" r="2" fill="#fff5a0" stroke="none"/>
+          <circle cx="196" cy="200" r="2" fill="#fff5a0" stroke="none"/>
+        </g>
+      </symbol>
+    </defs>
   </svg>
 </div>
 <div id="title">RunArtistRun</div>
@@ -804,7 +845,7 @@
 <div id="end-overlay">
   <div id="end-box">
     <button id="end-toggle" type="button" aria-label="Toggle leaderboard view">-</button>
-    <h2>RUN COMPLETE</h2>
+    <h2>GAME OVER</h2>
     <div class="sub">artists repelled</div>
     <div id="end-score">0</div>
     <div id="name-row">
@@ -1286,8 +1327,18 @@ const vhsPass=new ShaderPass(VHSShader);
 composer.addPass(vhsPass);
 let vhsEnabled=true;
 vhsPass.enabled=vhsEnabled;
+// VHS toggle moved off Shift+V to Shift+G — Shift+V was added later
+// as the "jump to leaderboard" debug warp, and the two handlers were
+// firing on the same keystroke. End up disabling VHS every time the
+// user wanted to inspect the end screen, which is what made the
+// leaderboard look gray (and the filter never came back on after
+// replay because the global flag stayed false).
 window.addEventListener('keydown',e=>{
-  if(e.shiftKey&&e.key==='V'){e.preventDefault();vhsEnabled=!vhsEnabled;vhsPass.enabled=vhsEnabled}
+  if(e.shiftKey&&(e.key==='G'||e.key==='g')){
+    e.preventDefault();
+    vhsEnabled=!vhsEnabled;
+    vhsPass.enabled=vhsEnabled;
+  }
 });
 
 // ===== Loaders =====
@@ -6574,6 +6625,10 @@ endOverlay?.addEventListener('click',e=>{
 replayBtn.addEventListener('click',()=>{
   endOverlay.classList.remove('show');
   document.body.classList.remove('game-ended');
+  // Re-enable VHS unconditionally so a replay always starts with the
+  // full post-process look, even if the player toggled it off mid-run.
+  vhsEnabled=true;
+  vhsPass.enabled=true;
   resetWorld();
   startGame();
 });
