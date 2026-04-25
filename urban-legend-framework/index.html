@@ -12,12 +12,18 @@
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="RunArtistRun"/>
 <meta name="twitter:description" content="RunArtistRun"/>
+<link rel="preload" as="font" type="font/otf" href="FONTS/Bristol.otf" crossorigin>
 <link rel="preload" as="fetch" href="mainplayermodel/player_main.glb" crossorigin>
 <link rel="preload" as="fetch" href="field/playground_optimized.glb?v=2026-04-24a" crossorigin>
 <style>
   @font-face{
     font-family:"GoldenGirdle";
     src:url("FONTS/Golden Girdle.otf") format("opentype");
+    font-weight:normal;font-style:normal;font-display:swap;
+  }
+  @font-face{
+    font-family:"Bristol";
+    src:url("FONTS/Bristol.otf") format("opentype");
     font-weight:normal;font-style:normal;font-display:swap;
   }
   :root{
@@ -29,6 +35,21 @@
     --bubble-text:#8a6cc0;
     --danger:#ff4b7a;
     --ok:#9be08c;
+    /* "Neon thorn" theme — modelled on the reference mock-up.
+       Cream paper cards with chartreuse-yellow glow edges, dark
+       plum backdrop. Used by HUD pills, loadout slots, SHOP
+       button, and the title banner. */
+    --paper:#fff7d3;
+    --paper-soft:#fff1c2;
+    --neon:#f4ee5c;
+    --neon-soft:#fff5a0;
+    --neon-deep:#c9b020;
+    --ink:#1a0f24;
+    --ink-soft:rgba(26,15,36,0.78);
+    --thorn-glow:0 0 0 1.5px var(--neon),
+                 0 0 10px rgba(244,238,92,0.55),
+                 0 0 22px rgba(255,245,160,0.35),
+                 0 8px 18px rgba(0,0,0,0.45);
   }
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;
     font-family:"Trebuchet MS",sans-serif;color:#fff;
@@ -37,40 +58,52 @@
   input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 
-  #title{position:absolute;top:10px;left:50%;transform:translateX(-50%);
-    width:min(calc(100vw - 170px),620px);text-align:center;line-height:1.02;
-    font-size:clamp(14px,2.8vw,24px);letter-spacing:0.22em;font-weight:bold;
+  /* TITLE banner — cream tag suspended at the top of the viewport
+     with a chartreuse glow halo. Replaces the previous pink
+     drop-shadow stack so the title shares the gothic-paper
+     aesthetic with the HUD pills. */
+  #title{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    padding:8px 24px 7px;border-radius:18px;
+    background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
+    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.7);
+    width:auto;max-width:min(calc(100vw - 170px),620px);text-align:center;line-height:1.02;
+    font-size:clamp(14px,2.8vw,22px);letter-spacing:0.18em;font-weight:bold;
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;text-transform:uppercase;
-    z-index:12;pointer-events:none;color:#f2b7cf;white-space:normal;
-    text-shadow:0 1px 0 #f7cfe0,0 2px 0 #efbcd3,0 3px 0 #e3a6c1,0 4px 0 #d394b2,0 6px 8px rgba(0,0,0,0.3);
+    z-index:12;pointer-events:none;color:var(--ink);white-space:nowrap;
+    text-shadow:0 1px 0 rgba(255,255,255,0.55),0 2px 4px rgba(180,150,30,0.35);
     transition:opacity 1s ease}
   #title.fade-out{opacity:0.3}
 
-  /* HUD */
+  /* HUD — top row of cream "tag" pills + a centre timer pill that
+     hangs slightly below the title. All share the same neon-thorn
+     edge so the heads-up display reads as one coherent set. */
   #hud{position:fixed;top:12px;left:12px;right:12px;z-index:15;pointer-events:none;
     display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px}
-  .hud-box{background:rgba(20,10,30,0.55);border:1.5px solid var(--bubble-edge);
-    border-radius:14px;padding:6px 14px;backdrop-filter:blur(4px);
-    box-shadow:0 4px 14px rgba(0,0,0,0.35);color:#fff;
+  .hud-box{position:relative;
+    background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
+    border-radius:999px;padding:5px 14px;
+    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
+    color:var(--ink);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:1px;
-    font-size:18px;text-shadow:0 1px 4px rgba(0,0,0,0.6)}
+    font-size:17px;text-shadow:0 1px 0 rgba(255,255,255,0.55);display:inline-flex;
+    align-items:center;gap:6px}
   #kill-box{justify-self:start}
-  #timer-box{justify-self:center;margin-top:36px}
+  #timer-box{justify-self:center;margin-top:46px;font-size:18px;padding:7px 18px}
   #coin-box{justify-self:end}
   /* Mobile / small-screen: keep title at the top of the screen, but
      tucked just below the HUD row so the three boxes + title don't
      collide. (Earlier rev pushed it to bottom:46vh, which dumped it
      into the middle of the play area â€” not what we want.) */
   @media (max-width:640px){
-    #title{top:12px;width:min(calc(100vw - 116px),280px);bottom:auto;font-size:clamp(12px,3.8vw,18px);letter-spacing:0.12em;opacity:0.74}
+    #title{top:8px;max-width:min(calc(100vw - 116px),280px);bottom:auto;font-size:clamp(12px,3.6vw,16px);letter-spacing:0.12em;padding:6px 14px}
     #hud{top:8px;left:8px;right:8px;gap:6px}
-    .hud-box{font-size:13px;padding:4px 9px;border-radius:10px}
-    #timer-box{margin-top:42px}
+    .hud-box{font-size:13px;padding:4px 11px}
+    #timer-box{margin-top:46px;padding:5px 14px;font-size:14px}
   }
   @media (max-width:420px){
-    .hud-box{font-size:11px;padding:3px 7px}
-    #title{width:min(calc(100vw - 104px),240px);font-size:clamp(11px,3.7vw,16px)}
-    #timer-box{margin-top:38px}
+    .hud-box{font-size:11px;padding:3px 9px}
+    #title{max-width:min(calc(100vw - 104px),240px);font-size:clamp(11px,3.5vw,14px);padding:5px 12px}
+    #timer-box{margin-top:40px}
   }
 
   /* Paint invasion bar (left side).
@@ -79,9 +112,9 @@
      and the artists have overtaken the arena. */
   #paint-bar{position:fixed;left:14px;top:50%;transform:translateY(-50%);
     width:28px;height:52vh;z-index:14;pointer-events:none;
-    border:2px solid #fff;border-radius:16px;
+    border-radius:14px;
     background:linear-gradient(180deg,#ff3a9a 0%,#d11a70 100%);
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.25),0 6px 16px rgba(0,0,0,0.5);
+    box-shadow:var(--thorn-glow),inset 0 0 0 2px rgba(255,255,255,0.28);
     overflow:hidden}
   #paint-bar::after{content:'';position:absolute;inset:0;
     background:repeating-linear-gradient(180deg,
@@ -126,10 +159,13 @@
     font-size:14px;letter-spacing:0.25em;cursor:pointer;text-transform:uppercase;
     box-shadow:none}
   @keyframes awShimmer{from{background-position:0% 50%}to{background-position:300% 50%}}
-  #kill-box{color:#ffcf5e}
-  #coin-box{color:#FFD700}
-  #timer-box{color:#b5e2fa;font-variant-numeric:tabular-nums}
-  #timer-box.warn{color:#ff8aa8;animation:pulse 0.8s infinite alternate}
+  /* HUD pill text against cream paper background — dark ink for
+     all three, with a coloured emoji icon carrying the meaning. */
+  #kill-box{color:#3a1410}
+  #coin-box{color:#5a3a00}
+  #timer-box{color:#1a1f44;font-variant-numeric:tabular-nums}
+  #timer-box.warn{color:#b3173a;animation:pulse 0.8s infinite alternate;
+    background:linear-gradient(180deg,#ffd9d9 0%,#ffb5b5 100%)}
   @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.08)}}
 
   /* Game controls */
@@ -149,21 +185,25 @@
   #attack-btn{position:absolute;right:24px;bottom:36px;width:84px;height:84px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#ff8fb8 55%,#c03870 100%);
-    border:3px solid #fff;
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.4),0 6px 16px rgba(192,56,112,0.5);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:14px;letter-spacing:2px;
-    color:#fff;text-transform:uppercase;display:flex;align-items:center;justify-content:center;
-    text-shadow:0 2px 2px rgba(0,0,0,0.4)}
+    border:none;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),
+               0 0 0 1.5px var(--neon),
+               0 0 12px rgba(244,238,92,0.55),
+               0 0 24px rgba(255,245,160,0.35),
+               0 8px 18px rgba(192,56,112,0.45);
+    color:#fff;display:flex;align-items:center;justify-content:center}
   #attack-btn:active{transform:scale(0.93)}
   #attack-btn.cooling{opacity:0.55;filter:grayscale(0.3)}
   #jump-btn{position:absolute;right:124px;bottom:36px;width:64px;height:64px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#a8d8ff 55%,#5a8fcf 100%);
-    border:3px solid #fff;
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.4),0 6px 14px rgba(90,143,207,0.5);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:2px;
-    color:#fff;text-transform:uppercase;display:flex;align-items:center;justify-content:center;
-    text-shadow:0 2px 2px rgba(0,0,0,0.4)}
+    border:none;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),
+               0 0 0 1.5px var(--neon),
+               0 0 10px rgba(244,238,92,0.55),
+               0 0 22px rgba(255,245,160,0.35),
+               0 8px 16px rgba(90,143,207,0.45);
+    color:#fff;display:flex;align-items:center;justify-content:center}
   #jump-btn:active{transform:scale(0.92)}
   #clean-btn{position:absolute;right:124px;bottom:112px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
@@ -175,10 +215,14 @@
   #special-btn{position:absolute;right:214px;bottom:42px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fffdd1 0%,#ffe45a 50%,#d99400 100%);
-    border:3px solid #fff;
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.48),0 8px 18px rgba(217,148,0,0.48),0 0 0 4px rgba(255,224,87,0.26);
-    color:#5a3200;display:flex;align-items:center;justify-content:center;
-    text-shadow:0 1px 0 rgba(255,255,255,0.45);padding:0}
+    border:none;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.5),
+               0 0 0 1.5px var(--neon),
+               0 0 12px rgba(244,238,92,0.7),
+               0 0 26px rgba(255,245,160,0.4),
+               0 8px 18px rgba(217,148,0,0.45);
+    color:var(--ink);display:flex;align-items:center;justify-content:center;
+    padding:0}
   #special-btn:active{transform:scale(0.93)}
   #special-btn.cooling{opacity:0.58;filter:saturate(0.7) grayscale(0.15)}
   #special-btn .btn-ico{font-size:28px;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.25)}
@@ -194,10 +238,13 @@
     filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35))}
   #jump-btn .btn-ico-svg{color:#fff}
   #attack-btn .btn-ico-svg{color:#fff}
-  #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:10px 18px;border-radius:999px;
-    border:1px solid rgba(255,255,255,0.72);background:rgba(39,18,41,0.72);color:#ffe48a;
+  #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:9px 22px;border-radius:14px;
+    border:none;
+    background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
+    color:var(--ink);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.22em;cursor:pointer;
-    box-shadow:0 8px 24px rgba(0,0,0,0.35)}
+    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
+    text-shadow:0 1px 0 rgba(255,255,255,0.5)}
   #shop-panel{position:fixed;right:18px;top:144px;width:min(320px,calc(100vw - 36px));z-index:40;
     border-radius:22px;background:linear-gradient(180deg,rgba(40,20,48,0.95),rgba(18,10,22,0.94));
     border:1px solid rgba(255,255,255,0.16);box-shadow:0 18px 40px rgba(0,0,0,0.42);padding:16px 16px 14px;
@@ -232,33 +279,40 @@
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
     pointer-events:auto;cursor:pointer}
   #loadout-toggle .lt-ico{display:block;font-size:28px;line-height:54px;margin:0;text-align:center;color:#fff;font-weight:bold}
-  .loadout-slot{width:70px;min-height:76px;padding:8px 6px;border-radius:18px;background:rgba(28,19,38,0.82);
-    border:1px solid rgba(255,255,255,0.14);box-shadow:0 10px 20px rgba(0,0,0,0.28);color:#f7f0ff;
-    font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
-  .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:0.12em;color:#ffe2f3}
-  .loadout-slot .slot-meta{opacity:0.68;font-size:10px}
-  .loadout-slot .slot-icon{width:28px;height:28px;border-radius:999px;display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(circle at 35% 25%,rgba(255,255,255,0.32),rgba(255,255,255,0.06));box-shadow:inset 0 0 0 1px rgba(255,255,255,0.16);
-    font-size:16px}
-  .loadout-slot button{width:100%;padding:6px 0;border-radius:999px;border:1px solid rgba(255,255,255,0.16);
-    background:rgba(255,255,255,0.08);color:#fff;font-size:10px;letter-spacing:0.16em;cursor:pointer}
-  .loadout-slot.active{outline:3px solid #fffb9a;box-shadow:0 0 0 3px rgba(255,167,38,0.42),0 12px 26px rgba(255,193,7,0.28);background:linear-gradient(180deg,rgba(255,249,196,0.96),rgba(255,167,38,0.88));transform:translateY(-3px)}
-  /* Entire active slot (KIND label, NAME, META, button) rendered in
-     a strong green against the yellow highlight background so the
-     equipped column reads as green at a glance — not just the
-     button. */
+  /* Loadout slots — cream "tag" cards matching the HUD pills.
+     Same neon-thorn glow edge, dark ink text. Active slot still
+     reads green so the equipped column pops at a glance. */
+  .loadout-slot{position:relative;width:74px;min-height:84px;padding:8px 6px;border-radius:14px;
+    background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
+    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
+    color:var(--ink);
+    font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;
+    justify-content:space-between;align-items:center;gap:4px;text-align:center}
+  .loadout-slot .slot-kind{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:9px;letter-spacing:0.18em;color:rgba(26,15,36,0.55)}
+  .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.12em;color:var(--ink)}
+  .loadout-slot .slot-meta{font-size:10px;color:rgba(26,15,36,0.62)}
+  .loadout-slot .slot-icon{width:32px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 35% 25%,#ffffff 0%,#fff5d8 60%,#f0d878 100%);
+    box-shadow:inset 0 0 0 1.5px rgba(180,150,30,0.4),0 0 8px rgba(244,238,92,0.45);
+    font-size:18px;color:var(--ink)}
+  .loadout-slot button{width:88%;padding:5px 0;border-radius:999px;border:none;
+    background:rgba(26,15,36,0.06);color:var(--ink);
+    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-size:10px;letter-spacing:0.16em;cursor:pointer}
+  /* Equipped slot — entire text turns the gallery-green from the
+     reference, on top of a slightly brighter cream so it still
+     reads as "highlighted". */
+  .loadout-slot.active{
+    background:linear-gradient(180deg,#ffffe8 0%,#fff7c4 100%);
+    box-shadow:0 0 0 1.5px var(--neon),0 0 14px rgba(244,238,92,0.7),0 0 26px rgba(255,245,160,0.45),0 8px 18px rgba(0,0,0,0.5),inset 0 0 0 1px rgba(255,255,255,0.7);
+    transform:translateY(-2px)}
   .loadout-slot.active .slot-kind,
   .loadout-slot.active .slot-name,
   .loadout-slot.active .slot-meta,
-  .loadout-slot.active button{color:#0a7d2c;opacity:1;font-weight:bold}
-  .loadout-slot.cleaner{width:92px}
-  .loadout-slot .slot-kind{font-size:9px;opacity:0.58;letter-spacing:0.18em}
-  .loadout-slot.skill-slot{background:linear-gradient(180deg,rgba(255,235,120,0.82),rgba(137,92,0,0.86));border-color:rgba(255,239,166,0.48);color:#4f3200}
-  .loadout-slot.skill-slot .slot-name,.loadout-slot.skill-slot .slot-meta,.loadout-slot.skill-slot .slot-kind{color:#4f3200;opacity:1}
-  .loadout-slot.skill-slot .slot-icon{background:radial-gradient(circle at 35% 25%,rgba(255,255,255,0.78),rgba(255,217,88,0.3));box-shadow:inset 0 0 0 1px rgba(143,103,0,0.22)}
-  .loadout-slot.skill-slot button{background:rgba(91,57,0,0.16);color:#4f3200;border-color:rgba(91,57,0,0.2)}
-  .loadout-slot.burst-slot{background:linear-gradient(180deg,rgba(69,34,88,0.92),rgba(25,39,65,0.9));border-color:rgba(255,173,210,0.24)}
-  .loadout-slot.burst-slot .slot-kind{color:#ffb5d5;opacity:0.92}
+  .loadout-slot.active button{color:#1f9b3a;font-weight:bold;opacity:1}
+  .loadout-slot.cleaner{width:96px}
+  .loadout-slot.skill-slot,
+  .loadout-slot.burst-slot{/* same paper background as base — variants handled via .active only */}
   @media (min-width:641px){
     #loadout-toggle{display:none !important}
   }
@@ -304,13 +358,19 @@
   #intro h1{width:100%;font-size:clamp(26px,5.2vw,44px);margin:0;padding:0 18px 8px;box-sizing:border-box;color:#ffd86b;letter-spacing:0.05em;line-height:1.14;
     text-shadow:0 2px 16px rgba(255,188,73,0.38),0 0 26px rgba(255,120,180,0.16);
     overflow-wrap:break-word;word-break:break-word;hyphens:auto}
-  #intro .tag{color:#ffe3a0;font-size:clamp(11px,1.6vw,13px);letter-spacing:0.26em;opacity:0.78}
+  /* Bristol is the briefing typeface — slightly hand-set,
+     storybook-flavoured. Used for the intro tag rules and the
+     paragraph copy so the loading screen reads like a printed
+     leaflet rather than the GoldenGirdle game UI. */
+  #intro .tag{color:#ffe3a0;font-size:clamp(13px,1.9vw,15px);letter-spacing:0.18em;opacity:0.85;
+    font-family:"Bristol","Trebuchet MS",serif}
   #intro .intro-copy{width:100%;max-height:min(34vh,300px);overflow-y:auto;overflow-x:hidden;padding:4px 12px 4px 4px;
     scrollbar-width:thin;scrollbar-color:rgba(255,216,107,0.8) rgba(255,255,255,0.08)}
   #intro .intro-copy::-webkit-scrollbar{width:10px}
   #intro .intro-copy::-webkit-scrollbar-track{background:rgba(255,255,255,0.08);border-radius:999px}
   #intro .intro-copy::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#ffd86b,#ff8fb8);border-radius:999px}
-  #intro p{margin:0;font-size:clamp(12px,1.45vw,14px);line-height:1.62;max-width:none;letter-spacing:0.03em;opacity:0.94}
+  #intro p{margin:0;font-size:clamp(14px,1.7vw,17px);line-height:1.7;max-width:none;letter-spacing:0.02em;opacity:0.95;
+    font-family:"Bristol","Trebuchet MS",serif}
   #intro-progress{width:min(380px,100%);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
   #intro-progress-text{font-size:12px;letter-spacing:0.22em;color:#ffe7a5;opacity:0.82}
   #intro-progress-track{width:100%;height:10px;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,0.24);
@@ -334,7 +394,7 @@
     #intro h1{font-size:clamp(18px,6.2vw,28px);letter-spacing:0.02em;padding:0 16px 6px;line-height:1.18}
     #intro .tag{font-size:10px;letter-spacing:0.16em}
     #intro .intro-copy{max-height:min(40vh,320px);padding-right:8px}
-    #intro p{font-size:11px;line-height:1.5}
+    #intro p{font-size:13px;line-height:1.62}
     #intro button{padding:11px 30px}
     #intro-progress{width:min(300px,84vw)}
   }
