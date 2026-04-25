@@ -75,69 +75,71 @@
   input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 
-  /* VIEWPORT FRAME — direct overlay of the reference frame asset
-     (img/frame_reference.png). My hand-drawn SVG vines couldn't
-     match the painterly thickness / asymmetric tendril work of
-     the reference, so we just use the actual artwork as a
-     full-bleed background and mask out the centre so gameplay
-     shows through. Pure-CSS, no DOM beyond the wrapper.
-     ----------------------------------------------------------------
-     If the frame artwork ever changes, drop a new file at
-     urban-legend-framework/img/frame_reference.png — same size
-     applies. The radial mask below controls how far inward the
-     ornaments reach. The 75-92% stops are intentionally generous
-     so the thorny tendrils (which sweep ~25% inward from each
-     corner) stay visible. */
-  /* The mask is built from FOUR corner gradients added together,
-     so only the four thorny corner clusters of the reference image
-     are visible. Everything in between (HUD pills, paint bar,
-     SHOP tag, loadout cards, action buttons, central emblems —
-     i.e. all the live UI that already exists in CSS) stays hidden,
-     so the overlay never duplicates real interactive widgets.
-     ----------------------------------------------------------------
-     To enlarge / shrink the visible thorn corners, change every
-     "circle 320px" pair below in lockstep — the inner stop (at 60 %)
-     keeps a hard-edged opaque core, the outer stop (at 100 %) feathers
-     into transparency. Bigger radius → more of the reference image
-     bleeds in toward the centre. */
-  #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    background-image:url("img/frame_reference.png");
-    background-size:100% 100%;
-    background-repeat:no-repeat;
-    background-position:center center;
-    -webkit-mask-image:
-      radial-gradient(circle 320px at 0% 0%,   black 60%,transparent 100%),
-      radial-gradient(circle 320px at 100% 0%, black 60%,transparent 100%),
-      radial-gradient(circle 320px at 0% 100%, black 60%,transparent 100%),
-      radial-gradient(circle 320px at 100% 100%,black 60%,transparent 100%);
-            mask-image:
-      radial-gradient(circle 320px at 0% 0%,   black 60%,transparent 100%),
-      radial-gradient(circle 320px at 100% 0%, black 60%,transparent 100%),
-      radial-gradient(circle 320px at 0% 100%, black 60%,transparent 100%),
-      radial-gradient(circle 320px at 100% 100%,black 60%,transparent 100%);
-    -webkit-mask-composite:source-over;mask-composite:add;
-    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
-  @media (max-width:640px){
-    #viewport-frame{
-      -webkit-mask-image:
-        radial-gradient(circle 200px at 0% 0%,   black 60%,transparent 100%),
-        radial-gradient(circle 200px at 100% 0%, black 60%,transparent 100%),
-        radial-gradient(circle 200px at 0% 100%, black 60%,transparent 100%),
-        radial-gradient(circle 200px at 100% 100%,black 60%,transparent 100%);
-              mask-image:
-        radial-gradient(circle 200px at 0% 0%,   black 60%,transparent 100%),
-        radial-gradient(circle 200px at 100% 0%, black 60%,transparent 100%),
-        radial-gradient(circle 200px at 0% 100%, black 60%,transparent 100%),
-        radial-gradient(circle 200px at 100% 100%,black 60%,transparent 100%);
-    }
+  /* === ORNATE FRAME ATOMS ============================================
+     Single source of truth for the neon-thorn corner artwork. Each
+     UI surface (HUD pill, loadout slot, shop button, action button,
+     viewport edge…) shares the same 4 corner-cluster SVGs, positioned
+     by CSS pseudo-elements so they ALWAYS align with the element's
+     real bounding box — no static PNG that drifts when the layout
+     changes, no distortion when slots are added or removed.
+     -------------------------------------------------------------------
+     CHANGE A SHAPE: edit one of the data-URI SVGs below
+                     (--ornate-tl / --ornate-tr / --ornate-bl /
+                     --ornate-br). Use %23 in place of '#' for hex
+                     colours.
+     CHANGE THE COLOUR: search "stroke='%23fff5a0'" in this block
+                     and replace once globally.
+     CHANGE THE SIZE PER ELEMENT: every consumer has a CSS variable
+                     --ornate-size that defaults to 36 px; set it
+                     locally to override (e.g. action buttons use
+                     22 px, viewport corners use 220 px). When the
+                     user adds a new loadout slot the rule on
+                     .loadout-slot still applies, so the new slot
+                     gets identical frames automatically.
+     =================================================================== */
+  :root{
+    /* Top-left corner thorn-cluster (viewBox 0..60, anchored at 0,0):
+       - 2 main spines that curve inward to ~50 along each axis
+       - thorn branches at irregular intervals along each spine
+       - curl finials at each spine tip
+       - small accents near the corner + glowing origin bead */
+    --ornate-tl:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60' fill='none' stroke='%23fff5a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 2 C 14 10 24 14 38 18'/><path d='M2 2 C 10 14 14 24 18 38'/><path d='M14 8 L18 2 L20 10'/><path d='M22 13 L28 4 L30 16'/><path d='M30 17 L36 8 L38 18'/><path d='M8 14 L2 18 L10 20'/><path d='M13 22 L4 28 L16 30'/><path d='M17 30 L8 36 L18 38'/><path d='M38 18 C46 18 50 26 44 30 C40 32 38 26 42 26'/><path d='M18 38 C18 46 26 50 30 44 C32 40 26 38 26 42'/><path d='M5 5 L10 4 M5 5 L4 10'/><circle cx='2.5' cy='2.5' r='2' fill='%23fff5a0'/></svg>");
+    /* Top-right (mirror-X of TL) */
+    --ornate-tr:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60' fill='none' stroke='%23fff5a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M58 2 C 46 10 36 14 22 18'/><path d='M58 2 C 50 14 46 24 42 38'/><path d='M46 8 L42 2 L40 10'/><path d='M38 13 L32 4 L30 16'/><path d='M30 17 L24 8 L22 18'/><path d='M52 14 L58 18 L50 20'/><path d='M47 22 L56 28 L44 30'/><path d='M43 30 L52 36 L42 38'/><path d='M22 18 C14 18 10 26 16 30 C20 32 22 26 18 26'/><path d='M42 38 C42 46 34 50 30 44 C28 40 34 38 34 42'/><path d='M55 5 L50 4 M55 5 L56 10'/><circle cx='57.5' cy='2.5' r='2' fill='%23fff5a0'/></svg>");
+    /* Bottom-left (mirror-Y of TL) */
+    --ornate-bl:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60' fill='none' stroke='%23fff5a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 58 C 14 50 24 46 38 42'/><path d='M2 58 C 10 46 14 36 18 22'/><path d='M14 52 L18 58 L20 50'/><path d='M22 47 L28 56 L30 44'/><path d='M30 43 L36 52 L38 42'/><path d='M8 46 L2 42 L10 40'/><path d='M13 38 L4 32 L16 30'/><path d='M17 30 L8 24 L18 22'/><path d='M38 42 C46 42 50 34 44 30 C40 28 38 34 42 34'/><path d='M18 22 C18 14 26 10 30 16 C32 20 26 22 26 18'/><path d='M5 55 L10 56 M5 55 L4 50'/><circle cx='2.5' cy='57.5' r='2' fill='%23fff5a0'/></svg>");
+    /* Bottom-right (mirror-XY of TL) */
+    --ornate-br:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60' fill='none' stroke='%23fff5a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M58 58 C 46 50 36 46 22 42'/><path d='M58 58 C 50 46 46 36 42 22'/><path d='M46 52 L42 58 L40 50'/><path d='M38 47 L32 56 L30 44'/><path d='M30 43 L24 52 L22 42'/><path d='M52 46 L58 42 L50 40'/><path d='M47 38 L56 32 L44 30'/><path d='M43 30 L52 24 L42 22'/><path d='M22 42 C14 42 10 34 16 30 C20 28 22 34 18 34'/><path d='M42 22 C42 14 34 10 30 16 C28 20 34 22 34 18'/><path d='M55 55 L50 56 M55 55 L56 50'/><circle cx='57.5' cy='57.5' r='2' fill='%23fff5a0'/></svg>");
   }
-  /* Old SVG corner ornaments are kept in DOM but no longer
-     rendered — the reference overlay supersedes them. */
-  #viewport-frame .vf-corner{display:none}
-  /* Hide the frame whenever the end overlay is up so the
-     ornaments don't poke through the leaderboard's pink
-     backdrop. Intro / art-wins overlays already sit higher
-     on the z-stack. */
+  /* The mixin: any element with .ornate-frame gets an absolutely-
+     positioned ::before that paints the 4 corner ornaments at its
+     real bounding box. Container must be position:relative. */
+  .ornate-frame{position:relative}
+  .ornate-frame::before{content:'';position:absolute;inset:calc(var(--ornate-bleed,8px) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size,36px) var(--ornate-size,36px);
+    pointer-events:none;z-index:1;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7)) drop-shadow(0 0 10px rgba(255,245,160,0.4))}
+  .ornate-frame > *{position:relative;z-index:2}
+
+  /* VIEWPORT FRAME — same 4 corner SVGs as the cards, just much
+     bigger. Used to live as a static PNG overlay; the SVG approach
+     means it scales with the viewport AND uses the exact same art
+     vocabulary as the rest of the UI. */
+  #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
+    --ornate-size:240px;--ornate-bleed:0px;
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    filter:drop-shadow(0 0 8px rgba(244,238,92,0.7)) drop-shadow(0 0 18px rgba(255,245,160,0.45))}
+  @media (max-width:640px){
+    #viewport-frame{--ornate-size:140px}
+  }
+  /* DOM children inside #viewport-frame are no longer used. */
+  #viewport-frame .vf-corner,#viewport-frame > svg{display:none}
   body.game-ended #viewport-frame{display:none}
 
   /* TITLE banner — cream tag suspended at the top of the viewport
@@ -153,7 +155,15 @@
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;text-transform:uppercase;
     z-index:12;pointer-events:none;color:var(--ink);white-space:nowrap;
     text-shadow:0 1px 0 rgba(255,255,255,0.55),0 2px 4px rgba(180,150,30,0.35);
-    transition:opacity 1s ease}
+    transition:opacity 1s ease;
+    --ornate-size:34px;--ornate-bleed:8px}
+  #title::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.65))}
   #title.fade-out{opacity:0.3}
 
   /* HUD — top row of cream "tag" pills + a centre timer pill that
@@ -168,7 +178,18 @@
     color:var(--ink);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:1px;
     font-size:17px;text-shadow:0 1px 0 rgba(255,255,255,0.55);display:inline-flex;
-    align-items:center;gap:6px}
+    align-items:center;gap:6px;
+    /* Each pill carries its own 4-corner thorn cluster. Per-element
+       size override — kept smaller than cards so the pill stays
+       compact. */
+    --ornate-size:24px;--ornate-bleed:6px}
+  .hud-box::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;z-index:1;
+    filter:drop-shadow(0 0 3px rgba(244,238,92,0.6))}
   #kill-box{justify-self:start}
   #timer-box{justify-self:center;margin-top:46px;font-size:18px;padding:7px 18px}
   #coin-box{justify-self:end}
@@ -252,20 +273,12 @@
      timer pill — same neon-yellow stroke language as the corner
      viewport frame, just smaller. Drawn as ::before/::after pseudo
      elements with inline-data SVG so no extra DOM is required. */
-  #timer-box::before,#timer-box::after,
-  #shop-btn::before,#shop-btn::after{
-    content:'';position:absolute;width:22px;height:22px;
-    background-repeat:no-repeat;background-size:contain;background-position:center;
-    pointer-events:none;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' fill='none' stroke='%23fff5a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 4 L20 18'/><path d='M14 8 L20 18 L26 8'/><path d='M4 20 L18 20'/><path d='M8 14 L18 20 L8 26'/><path d='M22 36 L20 22'/><path d='M14 32 L20 22 L26 32'/><path d='M36 20 L22 20'/><path d='M32 14 L22 20 L32 26'/><circle cx='20' cy='20' r='2.4' fill='%23fff5a0'/></svg>");
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))
-  }
+  /* (Removed the old compass-star side flares on #timer-box and
+     #shop-btn — the .hud-box::before / .ornate-frame::before
+     mixins now wrap every pill in 4 corner thorns, which is the
+     consistent treatment we want.) */
   #timer-box{position:relative}
-  #timer-box::before{left:-14px;top:50%;transform:translateY(-50%)}
-  #timer-box::after{right:-14px;top:50%;transform:translateY(-50%)}
   #shop-btn{position:fixed}
-  #shop-btn::before{left:-14px;top:50%;transform:translateY(-50%)}
-  #shop-btn::after{right:-14px;top:50%;transform:translateY(-50%)}
   @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.08)}}
 
   /* Game controls */
@@ -291,7 +304,15 @@
                0 0 12px rgba(244,238,92,0.55),
                0 0 24px rgba(255,245,160,0.35),
                0 8px 18px rgba(192,56,112,0.45);
-    color:#fff;display:flex;align-items:center;justify-content:center}
+    color:#fff;display:flex;align-items:center;justify-content:center;
+    --ornate-size:28px;--ornate-bleed:10px}
+  #attack-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.75))}
   #attack-btn:active{transform:scale(0.93)}
   #attack-btn.cooling{opacity:0.55;filter:grayscale(0.3)}
   #jump-btn{position:absolute;right:124px;bottom:36px;width:64px;height:64px;
@@ -303,7 +324,15 @@
                0 0 10px rgba(244,238,92,0.55),
                0 0 22px rgba(255,245,160,0.35),
                0 8px 16px rgba(90,143,207,0.45);
-    color:#fff;display:flex;align-items:center;justify-content:center}
+    color:#fff;display:flex;align-items:center;justify-content:center;
+    --ornate-size:24px;--ornate-bleed:8px}
+  #jump-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))}
   #jump-btn:active{transform:scale(0.92)}
   #clean-btn{position:absolute;right:124px;bottom:112px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
@@ -322,7 +351,16 @@
                0 0 26px rgba(255,245,160,0.4),
                0 8px 18px rgba(217,148,0,0.45);
     color:var(--ink);display:flex;align-items:center;justify-content:center;
-    padding:0}
+    padding:0;
+    --ornate-size:26px;--ornate-bleed:9px}
+  #special-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.75))}
+  #special-btn .btn-sub{z-index:3}
   #special-btn:active{transform:scale(0.93)}
   #special-btn.cooling{opacity:0.58;filter:saturate(0.7) grayscale(0.15)}
   #special-btn .btn-ico{font-size:28px;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.25)}
@@ -344,7 +382,15 @@
     color:var(--ink);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.22em;cursor:pointer;
     box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
-    text-shadow:0 1px 0 rgba(255,255,255,0.5)}
+    text-shadow:0 1px 0 rgba(255,255,255,0.5);
+    --ornate-size:30px;--ornate-bleed:8px}
+  #shop-btn::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))}
   #shop-panel{position:fixed;right:18px;top:144px;width:min(320px,calc(100vw - 36px));z-index:40;
     border-radius:22px;background:linear-gradient(180deg,rgba(40,20,48,0.95),rgba(18,10,22,0.94));
     border:1px solid rgba(255,255,255,0.16);box-shadow:0 18px 40px rgba(0,0,0,0.42);padding:16px 16px 14px;
@@ -380,14 +426,27 @@
     pointer-events:auto;cursor:pointer}
   #loadout-toggle .lt-ico{display:block;font-size:28px;line-height:54px;margin:0;text-align:center;color:#fff;font-weight:bold}
   /* Loadout slots — cream "tag" cards matching the HUD pills.
-     Same neon-thorn glow edge, dark ink text. Active slot still
-     reads green so the equipped column pops at a glance. */
+     Each slot carries its OWN 4-corner thorn frame via the
+     .ornate-frame mixin, which means the moment a new slot is
+     pushed into the DOM (new skill purchased, new burst effect
+     unlocked, etc.) it automatically gets identical ornaments
+     fitted to its real bounding box — nothing in the renderer
+     needs to know about the thorn art. */
   .loadout-slot{position:relative;width:74px;min-height:84px;padding:8px 6px;border-radius:14px;
     background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
     box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
     color:var(--ink);
     font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;
-    justify-content:space-between;align-items:center;gap:4px;text-align:center}
+    justify-content:space-between;align-items:center;gap:4px;text-align:center;
+    --ornate-size:34px;--ornate-bleed:6px}
+  .loadout-slot::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;z-index:1;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))}
+  .loadout-slot > *{position:relative;z-index:2}
   .loadout-slot .slot-kind{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:9px;letter-spacing:0.18em;color:rgba(26,15,36,0.55)}
   .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.12em;color:var(--ink)}
   .loadout-slot .slot-meta{font-size:10px;color:rgba(26,15,36,0.62)}
@@ -531,11 +590,21 @@
   #end-overlay.scene-view{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-end;padding:14px;pointer-events:none}
   /* Cream "poster" card with the same neon-thorn glow as the
      in-game cards. Replaces the old pink radial-gradient look so
-     the end screen sits in the same family as HUD / loadout. */
+     the end screen sits in the same family as HUD / loadout.
+     Carries its own ornate 4-corner frame too. */
   #end-box{width:min(92vw,460px);
     background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
     border-radius:18px;padding:22px;color:var(--ink);position:relative;pointer-events:auto;
-    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.7)}
+    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.7);
+    --ornate-size:60px;--ornate-bleed:12px}
+  #end-box::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
+    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
+    background-position:top left,top right,bottom left,bottom right;
+    background-repeat:no-repeat;
+    background-size:var(--ornate-size) var(--ornate-size);
+    pointer-events:none;
+    filter:drop-shadow(0 0 6px rgba(244,238,92,0.75))}
+  #end-box > *{position:relative;z-index:2}
   #end-box.minimized{width:auto;min-width:0;padding:10px 14px;border-radius:999px;display:flex;align-items:center;gap:10px}
   #end-box.minimized .sub,
   #end-box.minimized #end-score,
