@@ -79,6 +79,24 @@
   .ui-layout-box{position:fixed;border:2px dashed rgba(255,235,120,0.95);background:rgba(255,235,120,0.08);
     box-shadow:0 0 0 1px rgba(0,0,0,0.4) inset;pointer-events:auto}
   .ui-layout-box.active{border-style:solid;background:rgba(255,235,120,0.14)}
+  .ui-layout-toolbar{position:fixed;right:16px;top:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;z-index:1215}
+  .ui-layout-toolbar button,.ui-layout-export-launcher,.ui-layout-modal button{appearance:none;border:none;border-radius:999px;
+    background:rgba(20,8,32,0.94);color:#fff7c9;padding:10px 14px;font:12px/1.1 monospace;letter-spacing:0.04em;
+    box-shadow:0 10px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(255,235,120,0.22) inset;cursor:pointer}
+  .ui-layout-toolbar button:hover,.ui-layout-export-launcher:hover,.ui-layout-modal button:hover{background:rgba(42,22,58,0.98)}
+  .ui-layout-toolbar button.is-active{background:#fff06a;color:#24142f;box-shadow:0 10px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(36,20,47,0.18) inset}
+  .ui-layout-mode-pill{padding:8px 12px;border-radius:999px;background:rgba(255,240,106,0.12);color:#fff3b2;
+    font:12px/1.1 monospace;letter-spacing:0.04em;box-shadow:0 0 0 1px rgba(255,235,120,0.18) inset}
+  .ui-layout-export-launcher{position:fixed;right:16px;bottom:16px;z-index:1215}
+  .ui-layout-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.62);z-index:1220}
+  .ui-layout-modal-card{width:min(880px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;
+    padding:18px;border-radius:18px;background:rgba(14,8,22,0.98);box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+  .ui-layout-modal h3{margin:0 0 10px;color:#fff3b2;font:600 18px/1.2 "Trebuchet MS",sans-serif}
+  .ui-layout-modal p{margin:0 0 10px;color:#f8efc0;font:12px/1.5 monospace}
+  .ui-layout-modal textarea{width:100%;min-height:320px;resize:vertical;border:none;border-radius:14px;padding:14px;
+    background:#120b1c;color:#fff9d2;font:12px/1.45 Consolas,monospace;box-sizing:border-box}
+  .ui-layout-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
   .ui-layout-label{position:absolute;left:0;top:-22px;padding:2px 7px;border-radius:999px;
     background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap}
   .ui-layout-handle{position:absolute;right:-9px;bottom:-9px;width:18px;height:18px;border-radius:999px;
@@ -5257,6 +5275,10 @@ const weaponBuyButtons={
   bomb:document.getElementById('buy-weapon-bomb-btn'),
 };
 const UI_LAYOUT_STORAGE_KEY='urbanLegendUILayoutV1';
+const UI_LAYOUT_DEFAULTS={
+  desktop:{},
+  mobile:{},
+};
 const UI_LAYOUT_TARGET_DEFS=[
   {id:'kill-box',label:'artist',anchor:'center',minW:84,minH:32},
   {id:'timer-box',label:'timer',anchor:'center',minW:96,minH:32},
@@ -5268,21 +5290,41 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'jump-btn',label:'jump',anchor:'center',minW:42,minH:42},
   {id:'attack-btn',label:'punch',anchor:'center',minW:42,minH:42},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null};
 window.__uiLayoutConfig=uiLayoutState.config;
 
+function cloneUILayoutConfig(config){
+  return JSON.parse(JSON.stringify(config||{desktop:{},mobile:{}}));
+}
+function mergeUILayoutConfig(base,override){
+  return {
+    desktop:{...(base?.desktop||{}),...(override?.desktop||{})},
+    mobile:{...(base?.mobile||{}),...(override?.mobile||{})},
+  };
+}
 function loadUILayoutConfig(){
+  const base=cloneUILayoutConfig(UI_LAYOUT_DEFAULTS);
   try{
     const raw=localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
-    if(!raw) return {desktop:{},mobile:{}};
+    if(!raw) return base;
     const parsed=JSON.parse(raw);
-    return {desktop:parsed.desktop||{},mobile:parsed.mobile||{}};
+    return mergeUILayoutConfig(base,parsed);
   }catch{
-    return {desktop:{},mobile:{}};
+    return base;
   }
 }
-function getUILayoutBucket(){ return mobileLoadoutQuery.matches ? 'mobile' : 'desktop'; }
+function getUILayoutBucket(){ return uiLayoutState.forcedMode || (mobileLoadoutQuery.matches ? 'mobile' : 'desktop'); }
 function getUILayoutStore(){ return uiLayoutState.config[getUILayoutBucket()]||(uiLayoutState.config[getUILayoutBucket()]={}); }
+function getUILayoutAutoBucket(){ return mobileLoadoutQuery.matches ? 'mobile' : 'desktop'; }
+function setUILayoutMode(mode){
+  uiLayoutState.forcedMode=mode==='desktop'||mode==='mobile' ? mode : null;
+  applyUILayoutConfig();
+  refreshUILayoutEditorToolbar();
+  if(uiLayoutState.active) showUILayoutToast(`Layout admin editing ${getUILayoutBucket()}`);
+}
+function formatUILayoutExport(){
+  return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(uiLayoutState.config,null,2)};`;
+}
 function showUILayoutToast(msg){
   let el=uiLayoutState.editor?.querySelector('.ui-layout-toast');
   if(!el){
@@ -5334,12 +5376,103 @@ function applyUILayoutConfig(){
 function saveUILayoutConfig(){
   localStorage.setItem(UI_LAYOUT_STORAGE_KEY,JSON.stringify(uiLayoutState.config));
   window.__uiLayoutConfig=uiLayoutState.config;
-  try{ navigator.clipboard?.writeText(JSON.stringify(uiLayoutState.config,null,2)); }catch{}
+}
+async function copyUILayoutExportToClipboard(){
+  const text=formatUILayoutExport();
+  try{
+    await navigator.clipboard?.writeText(text);
+    showUILayoutToast('Layout export copied');
+    return true;
+  }catch{
+    showUILayoutToast('Clipboard blocked, copy from dialog');
+    return false;
+  }
+}
+function closeUILayoutExportModal(){
+  uiLayoutState.modal?.remove();
+  uiLayoutState.modal=null;
+}
+function showUILayoutExportModal(){
+  closeUILayoutExportModal();
+  const modal=document.createElement('div');
+  modal.className='ui-layout-modal';
+  const code=formatUILayoutExport();
+  modal.innerHTML=`<div class="ui-layout-modal-card">
+    <h3>Export UI Layout</h3>
+    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code> block in <code>urban-legend-framework/index.html</code>.</p>
+    <p>After replacing it, save the file and refresh the game. Desktop and mobile adjustments are both included in this export.</p>
+    <textarea spellcheck="false"></textarea>
+    <div class="ui-layout-modal-actions">
+      <button type="button" data-action="copy">Copy Code</button>
+      <button type="button" data-action="close">Close</button>
+    </div>
+  </div>`;
+  const textarea=modal.querySelector('textarea');
+  textarea.value=code;
+  modal.addEventListener('click',async e=>{
+    const action=e.target?.dataset?.action;
+    if(action==='copy'){
+      textarea.focus();
+      textarea.select();
+      const copied=await copyUILayoutExportToClipboard();
+      if(!copied){
+        try{ document.execCommand('copy'); }catch{}
+      }
+      return;
+    }
+    if(action==='close'||e.target===modal) closeUILayoutExportModal();
+  });
+  document.body.appendChild(modal);
+  textarea.focus();
+  textarea.select();
+  uiLayoutState.modal=modal;
+}
+function ensureUILayoutExportButton(){
+  if(uiLayoutState.exportButton?.isConnected) return uiLayoutState.exportButton;
+  const btn=document.createElement('button');
+  btn.className='ui-layout-export-launcher';
+  btn.type='button';
+  btn.textContent='Export Layout';
+  btn.addEventListener('click',showUILayoutExportModal);
+  document.body.appendChild(btn);
+  uiLayoutState.exportButton=btn;
+  return btn;
+}
+function hideUILayoutExportButton(){
+  uiLayoutState.exportButton?.remove();
+}
+function refreshUILayoutEditorToolbar(){
+  const toolbar=uiLayoutState.editor?.querySelector('.ui-layout-toolbar');
+  if(!toolbar) return;
+  const mode=getUILayoutBucket();
+  const autoMode=getUILayoutAutoBucket();
+  toolbar.querySelector('[data-mode="desktop"]')?.classList.toggle('is-active',mode==='desktop');
+  toolbar.querySelector('[data-mode="mobile"]')?.classList.toggle('is-active',mode==='mobile');
+  const pill=toolbar.querySelector('.ui-layout-mode-pill');
+  if(pill){
+    pill.textContent=uiLayoutState.forcedMode
+      ? `Editing: ${mode} | Viewport: ${autoMode}`
+      : `Editing: ${mode} (auto)`;
+  }
 }
 function buildUILayoutEditor(){
   if(uiLayoutState.editor) return uiLayoutState.editor;
   const editor=document.createElement('div');
   editor.className='ui-layout-editor';
+  const toolbar=document.createElement('div');
+  toolbar.className='ui-layout-toolbar';
+  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
+  toolbar.addEventListener('click',e=>{
+    const action=e.target?.dataset?.action;
+    const mode=e.target?.dataset?.mode;
+    if(mode){
+      setUILayoutMode(mode);
+      return;
+    }
+    if(action==='export') showUILayoutExportModal();
+    if(action==='close') disableUILayoutEditor(true);
+  });
+  editor.appendChild(toolbar);
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=document.createElement('div');
     box.className='ui-layout-box';
@@ -5362,6 +5495,7 @@ function buildUILayoutEditor(){
   window.addEventListener('pointerup',handleUILayoutPointerUp);
   window.addEventListener('pointercancel',handleUILayoutPointerUp);
   uiLayoutState.editor=editor;
+  refreshUILayoutEditorToolbar();
   return editor;
 }
 function refreshUILayoutEditor(){
@@ -5407,20 +5541,26 @@ function handleUILayoutPointerUp(){
 function enableUILayoutEditor(){
   if(uiLayoutState.active) return;
   uiLayoutState.active=true;
+  uiLayoutState.forcedMode=getUILayoutAutoBucket();
   document.body.classList.add('admin-layout-mode');
+  hideUILayoutExportButton();
   document.body.appendChild(buildUILayoutEditor());
   applyUILayoutConfig();
   refreshUILayoutEditor();
+  refreshUILayoutEditorToolbar();
   showUILayoutToast(`Layout admin ON (${getUILayoutBucket()})`);
 }
-function disableUILayoutEditor(){
+function disableUILayoutEditor(openExport=false){
   if(!uiLayoutState.active) return;
   uiLayoutState.active=false;
   document.body.classList.remove('admin-layout-mode');
   uiLayoutState.editor?.remove();
   uiLayoutState.editor=null;
   uiLayoutState.overlays.clear();
+  uiLayoutState.forcedMode=null;
   saveUILayoutConfig();
+  ensureUILayoutExportButton();
+  if(openExport) showUILayoutExportModal();
   showUILayoutToast(`Layout admin saved locally (${getUILayoutBucket()})`);
 }
 function toggleUILayoutEditor(){
@@ -5450,8 +5590,9 @@ function syncLoadoutLayout(forceClosed=false){
   if(!document.body.classList.contains('loadout-open')) setLoadoutExpanded(false);
 }
 mobileLoadoutQuery.addEventListener?.('change',()=>{
-  applyUILayoutConfig();
-  if(uiLayoutState.active) showUILayoutToast(`Layout admin switched to ${getUILayoutBucket()}`);
+  if(!uiLayoutState.forcedMode) applyUILayoutConfig();
+  refreshUILayoutEditorToolbar();
+  if(uiLayoutState.active&&!uiLayoutState.forcedMode) showUILayoutToast(`Layout admin switched to ${getUILayoutBucket()}`);
 });
 applyUILayoutConfig();
 
