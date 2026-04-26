@@ -161,7 +161,7 @@
   #shop-btn::after,#paint-bar::after,#loadout-bar::after,
   #attack-btn::after,#jump-btn::after,#special-btn::after,
   #title::after{background-image:none!important;display:none!important}
-  #hud{display:none!important}
+  #hud{display:block!important;position:static!important;pointer-events:none!important}
 
   /* (3) Slot centres — each element fixed at the centre of its
         ornament cluster in the reference image (2730 × 1536 →
@@ -180,7 +180,7 @@
   #coin-box {left:88.3%;top:9.4%;display:inline-flex!important;
     padding:clamp(4px,0.6vw,10px) clamp(10px,1.6vw,24px);
     font-size:clamp(13px,1.4vw,22px)}
-  #timer-box{left:50%;top:10.4%;display:inline-flex!important;
+  #timer-box{left:50%;top:10.8%;display:inline-flex!important;
     padding:clamp(6px,0.9vw,14px) clamp(16px,2vw,32px);
     font-size:clamp(14px,1.6vw,24px)}
   /* Title banner */
@@ -192,17 +192,17 @@
     padding:clamp(7px,0.9vw,12px) clamp(16px,1.8vw,28px)!important;
     font-size:clamp(11px,1.1vw,16px)!important}
   /* Paint bar (translate-X only because the bar is a tall column) */
-  #paint-bar{left:4%;top:9.15%;
-    transform:translateX(-50%)!important;
-    height:62.5%!important;
-    width:clamp(20px,2.6vw,52px)!important}
+  #paint-bar{left:4.5%;top:50%;
+    transform:translate(-50%,-50%)!important;
+    height:58%!important;
+    width:clamp(30px,3vw,56px)!important}
   /* 3 round action buttons */
   #attack-btn,#jump-btn,#special-btn{
     width:clamp(56px,7vw,128px)!important;
     height:clamp(56px,7vw,128px)!important}
-  #special-btn{left:74.1%;top:83.4%}
-  #jump-btn   {left:84.3%;top:83.4%}
-  #attack-btn {left:94.0%;top:83.4%}
+  #special-btn{left:74.6%;top:83.4%}
+  #jump-btn   {left:84.8%;top:83.4%}
+  #attack-btn {left:94.5%;top:83.4%}
 
   @media (max-width:640px){
     /* Mobile (portrait): slot centres shift because the trace
@@ -213,7 +213,7 @@
     #coin-box {left:87%;top:5%;
       padding:clamp(3px,1.1vw,6px) clamp(8px,2.2vw,16px);
       font-size:clamp(11px,2.6vw,15px)}
-    #timer-box{left:50%;top:6.5%;
+    #timer-box{left:50%;top:7%;
       padding:clamp(5px,1.4vw,9px) clamp(12px,2.6vw,20px);
       font-size:clamp(12px,2.8vw,16px)}
     #title    {left:50%;top:3.5%;max-width:48vw!important;
@@ -222,15 +222,16 @@
     #shop-btn {left:80%;top:11%;
       padding:clamp(5px,1.6vw,9px) clamp(12px,2.8vw,18px)!important;
       font-size:clamp(10px,2.4vw,13px)!important}
-    #paint-bar{left:5%;top:25%;
-      height:42%!important;
-      width:clamp(18px,4.5vw,30px)!important}
+    #paint-bar{left:6%;top:50%;
+      transform:translate(-50%,-50%)!important;
+      height:44%!important;
+      width:clamp(24px,5.4vw,38px)!important}
     #attack-btn,#jump-btn,#special-btn{
       width:clamp(54px,12vw,84px)!important;
       height:clamp(54px,12vw,84px)!important}
-    #special-btn{left:31.2%;top:90.3%}
-    #jump-btn   {left:55.1%;top:90.3%}
-    #attack-btn {left:77.8%;top:90.3%}
+    #special-btn{left:31.8%;top:90.3%}
+    #jump-btn   {left:55.7%;top:90.3%}
+    #attack-btn {left:78.4%;top:90.3%}
   }
 
   /* TITLE banner — cream tag suspended at the top of the viewport
@@ -310,24 +311,29 @@
     background:linear-gradient(180deg,#ff3a9a 0%,#d11a70 100%);
     box-shadow:var(--thorn-glow),inset 0 0 0 2px rgba(255,255,255,0.28);
     overflow:hidden}
+  #paint-bar::before{content:'';position:absolute;left:50%;top:50%;
+    width:220%;height:112%;
+    transform:translate(-50%,-50%);
+    background:url("img/paint_bar_frame_overlay.png") center/100% 100% no-repeat;
+    pointer-events:none;z-index:0;filter:drop-shadow(0 0 10px rgba(255,238,142,0.28))}
   #paint-bar::after{content:'';position:absolute;inset:0;
     background:repeating-linear-gradient(180deg,
       rgba(255,255,255,0.18) 0 3px, transparent 3px 12px);
-    pointer-events:none}
+    pointer-events:none;z-index:3}
   #paint-bar-fill{position:absolute;left:0;right:0;bottom:0;
     height:0%;
     background:linear-gradient(0deg,
       #e40303 0%, #ff8c00 16%, #ffed00 32%, #008026 48%,
       #004dff 66%, #750787 82%, #ff66c4 100%);
     transition:height 0.6s cubic-bezier(.2,.8,.2,1);
-    box-shadow:0 -4px 12px rgba(255,255,255,0.55) inset}
+    box-shadow:0 -4px 12px rgba(255,255,255,0.55) inset;z-index:1}
   #paint-bar-fill::before{content:'';position:absolute;left:0;right:0;top:-6px;height:10px;
     background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0));
     filter:blur(2px)}
   #paint-bar-label{position:absolute;bottom:-22px;left:-4px;width:36px;
     text-align:center;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
     color:#fff;font-size:11px;letter-spacing:2px;
-    text-shadow:0 1px 2px rgba(0,0,0,0.7)}
+    text-shadow:0 1px 2px rgba(0,0,0,0.7);z-index:4}
   @media (max-width:640px){
     #paint-bar{width:22px;left:10px;height:46vh}
     #paint-bar-label{font-size:10px;width:30px}
@@ -492,7 +498,16 @@
   .shop-card.burst-card .shop-buy{background:linear-gradient(90deg,#6d3e7b,#2f4e74)}
   .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
   #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
-    max-width:min(78vw,520px);flex-wrap:wrap}
+    justify-content:center;max-width:min(78vw,520px);flex-wrap:wrap;
+    padding:20px 18px 24px;border-radius:26px;
+    background:linear-gradient(180deg,rgba(31,18,38,0.4),rgba(14,10,19,0.28));
+    box-shadow:0 12px 28px rgba(0,0,0,0.22)}
+  #loadout-bar::before{content:'';position:absolute;left:50%;top:50%;
+    width:calc(100% + 54px);height:calc(100% + 52px);
+    transform:translate(-50%,-50%);
+    background:url("img/skill_panel_frame_overlay.png") center/100% 100% no-repeat;
+    pointer-events:none;z-index:0;filter:drop-shadow(0 0 10px rgba(255,238,142,0.18))}
+  #loadout-bar > *{position:relative;z-index:1}
   #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:999px;
     border:2px solid rgba(209,239,255,0.92);background:radial-gradient(circle at 30% 24%,rgba(237,250,255,0.98),rgba(108,193,255,0.92) 58%,rgba(14,103,196,0.96));
     color:#08386f;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(123,207,255,0.2);
@@ -519,7 +534,7 @@
     background-repeat:no-repeat;
     background-size:var(--ornate-size) var(--ornate-size);
     pointer-events:none;z-index:1;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))}
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7));display:none}
   .loadout-slot > *{position:relative;z-index:2}
   .loadout-slot .slot-kind{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:9px;letter-spacing:0.18em;color:rgba(26,15,36,0.55)}
   .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.12em;color:var(--ink)}
@@ -561,10 +576,11 @@
     #jump-btn{right:94px;bottom:36px;width:45px;height:45px}
     #attack-btn{right:24px;bottom:36px;width:59px;height:59px}
     #loadout-toggle{display:block;left:42px;bottom:154px}
-    #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:11px 10px 12px;
+    #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:18px 16px 18px;
       border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
       backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
       opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .22s ease,transform .22s ease}
+    #loadout-bar::before{width:calc(100% + 30px);height:calc(100% + 36px)}
     body.loadout-open #loadout-bar{opacity:1;pointer-events:auto;transform:translateY(0)}
     .loadout-slot{width:58px;min-height:66px;padding:7px 5px;border-radius:16px;font-size:10px;gap:5px;flex:0 0 auto}
     .loadout-slot.cleaner{width:74px}
