@@ -12,7 +12,7 @@
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="RunArtistRun"/>
 <meta name="twitter:description" content="RunArtistRun"/>
-<link rel="preload" as="font" type="font/ttf" href="FONTS/FFCommaTrial-Regular.ttf" crossorigin>
+<link rel="preload" as="font" type="font/ttf" href="FONTS/hyperion.ttf" crossorigin>
 <link rel="preload" as="fetch" href="mainplayermodel/player_main.glb" crossorigin>
 <link rel="preload" as="fetch" href="field/playground_optimized.glb?v=2026-04-24a" crossorigin>
 <style>
@@ -40,7 +40,7 @@
      ---------------------------------------------------------------- */
   @font-face{
     font-family:"BriefingFont";
-    src:url("FONTS/FFCommaTrial-Regular.ttf") format("truetype");
+    src:url("FONTS/hyperion.ttf") format("truetype");
     font-weight:normal;font-style:normal;font-display:swap;
   }
   :root{
@@ -174,13 +174,13 @@
     right:auto!important;bottom:auto!important;margin:0!important;
     z-index:15}
   /* HUD pills */
-  #kill-box {left:11.7%;top:9.4%;display:inline-flex!important;
+  #kill-box {left:11%;top:9.6%;display:inline-flex!important;
     padding:clamp(4px,0.6vw,10px) clamp(10px,1.6vw,24px);
     font-size:clamp(13px,1.4vw,22px)}
-  #coin-box {left:88.3%;top:9.4%;display:inline-flex!important;
+  #coin-box {left:82.2%;top:9.6%;display:inline-flex!important;
     padding:clamp(4px,0.6vw,10px) clamp(10px,1.6vw,24px);
     font-size:clamp(13px,1.4vw,22px)}
-  #timer-box{left:50%;top:10.8%;display:inline-flex!important;
+  #timer-box{left:50%;top:12.1%;display:inline-flex!important;
     padding:clamp(6px,0.9vw,14px) clamp(16px,2vw,32px);
     font-size:clamp(14px,1.6vw,24px)}
   /* Title banner */
@@ -188,14 +188,14 @@
     padding:clamp(5px,0.8vw,12px) clamp(18px,2.2vw,38px)!important;
     font-size:clamp(13px,1.5vw,22px)!important}
   /* SHOP tag */
-  #shop-btn {left:92.8%;top:19.9%;
+  #shop-btn {left:91%;top:10.2%;
     padding:clamp(7px,0.9vw,12px) clamp(16px,1.8vw,28px)!important;
     font-size:clamp(11px,1.1vw,16px)!important}
   /* Paint bar (translate-X only because the bar is a tall column) */
-  #paint-bar{left:4.5%;top:50%;
+  #paint-bar{left:5.6%;top:50%;
     transform:translate(-50%,-50%)!important;
     height:58%!important;
-    width:clamp(30px,3vw,56px)!important}
+    width:clamp(22px,2.1vw,38px)!important}
   /* 3 round action buttons */
   #attack-btn,#jump-btn,#special-btn{
     width:clamp(56px,7vw,128px)!important;
@@ -207,25 +207,25 @@
   @media (max-width:640px){
     /* Mobile (portrait): slot centres shift because the trace
        stretches taller. UI sizes shrink for thumb-friendly hits. */
-    #kill-box {left:13%;top:5%;
+    #kill-box {left:14%;top:5.4%;
       padding:clamp(3px,1.1vw,6px) clamp(8px,2.2vw,16px);
       font-size:clamp(11px,2.6vw,15px)}
-    #coin-box {left:87%;top:5%;
+    #coin-box {left:74%;top:5.4%;
       padding:clamp(3px,1.1vw,6px) clamp(8px,2.2vw,16px);
       font-size:clamp(11px,2.6vw,15px)}
-    #timer-box{left:50%;top:7%;
+    #timer-box{left:50%;top:8.2%;
       padding:clamp(5px,1.4vw,9px) clamp(12px,2.6vw,20px);
       font-size:clamp(12px,2.8vw,16px)}
     #title    {left:50%;top:3.5%;max-width:48vw!important;
       padding:clamp(4px,1.4vw,8px) clamp(12px,3.2vw,22px)!important;
       font-size:clamp(11px,2.8vw,16px)!important}
-    #shop-btn {left:80%;top:11%;
+    #shop-btn {left:86%;top:6.3%;
       padding:clamp(5px,1.6vw,9px) clamp(12px,2.8vw,18px)!important;
       font-size:clamp(10px,2.4vw,13px)!important}
-    #paint-bar{left:6%;top:50%;
+    #paint-bar{left:8.5%;top:50%;
       transform:translate(-50%,-50%)!important;
       height:44%!important;
-      width:clamp(24px,5.4vw,38px)!important}
+      width:clamp(18px,3.6vw,24px)!important}
     #attack-btn,#jump-btn,#special-btn{
       width:clamp(54px,12vw,84px)!important;
       height:clamp(54px,12vw,84px)!important}
@@ -248,7 +248,7 @@
     z-index:12;pointer-events:none;color:var(--ink);white-space:nowrap;
     text-shadow:0 1px 0 rgba(255,255,255,0.55),0 2px 4px rgba(180,150,30,0.35);
     transition:opacity 1s ease;
-    --ornate-size:34px;--ornate-bleed:8px}
+    --ornate-size:34px;--ornate-bleed:8px;display:none!important}
   #title::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
     background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
     background-position:top left,top right,bottom left,bottom right;
@@ -263,6 +263,26 @@
      edge so the heads-up display reads as one coherent set. */
   #hud{position:fixed;top:12px;left:12px;right:12px;z-index:15;pointer-events:none;
     display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px}
+  #kill-box,#coin-box,#shop-btn{
+    min-width:112px!important;
+    height:44px!important;
+    justify-content:center!important;
+    align-items:center!important;
+    border:none!important;
+    background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%)!important;
+    box-shadow:none!important;
+    border-radius:18px!important;
+    overflow:visible;
+    isolation:isolate;
+  }
+  #kill-box::before,#coin-box::before,#shop-btn::before{
+    content:'';position:absolute;left:50%;top:50%;
+    width:calc(100% + 30px);height:calc(100% + 26px);
+    transform:translate(-50%,-50%);
+    background:url("img/hud_small_frame_overlay.png") center/100% 100% no-repeat;
+    pointer-events:none;z-index:0;
+  }
+  #kill-box > *,#coin-box > *,#shop-btn > *{position:relative;z-index:1}
   .hud-box{position:relative;
     background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
     border-radius:999px;padding:5px 14px;
@@ -281,24 +301,24 @@
     background-repeat:no-repeat;
     background-size:var(--ornate-size) var(--ornate-size);
     pointer-events:none;z-index:1;
-    filter:drop-shadow(0 0 3px rgba(244,238,92,0.6))}
+    filter:drop-shadow(0 0 3px rgba(244,238,92,0.6));display:none}
   #kill-box{justify-self:start}
-  #timer-box{justify-self:center;margin-top:46px;font-size:18px;padding:7px 18px}
+  #timer-box{justify-self:center;margin-top:28px;font-size:18px;padding:7px 18px}
   #coin-box{justify-self:end}
   /* Mobile / small-screen: keep title at the top of the screen, but
      tucked just below the HUD row so the three boxes + title don't
      collide. (Earlier rev pushed it to bottom:46vh, which dumped it
      into the middle of the play area â€” not what we want.) */
   @media (max-width:640px){
-    #title{top:8px;max-width:min(calc(100vw - 116px),280px);bottom:auto;font-size:clamp(12px,3.6vw,16px);letter-spacing:0.12em;padding:6px 14px}
+    #title{display:none!important}
     #hud{top:8px;left:8px;right:8px;gap:6px}
     .hud-box{font-size:13px;padding:4px 11px}
-    #timer-box{margin-top:46px;padding:5px 14px;font-size:14px}
+    #timer-box{margin-top:20px;padding:5px 14px;font-size:14px}
   }
   @media (max-width:420px){
     .hud-box{font-size:11px;padding:3px 9px}
-    #title{max-width:min(calc(100vw - 104px),240px);font-size:clamp(11px,3.5vw,14px);padding:5px 12px}
-    #timer-box{margin-top:40px}
+    #title{display:none!important}
+    #timer-box{margin-top:18px}
   }
 
   /* Paint invasion bar (left side).
@@ -306,13 +326,13 @@
      pumps rainbow graffiti paint up from the bottom. 10 completions
      and the artists have overtaken the arena. */
   #paint-bar{position:fixed;left:14px;top:50%;transform:translateY(-50%);
-    width:28px;height:52vh;z-index:14;pointer-events:none;
-    border-radius:14px;
+    width:18px;height:48vh;z-index:14;pointer-events:none;
+    border-radius:999px;
     background:linear-gradient(180deg,#ff3a9a 0%,#d11a70 100%);
-    box-shadow:var(--thorn-glow),inset 0 0 0 2px rgba(255,255,255,0.28);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.28);
     overflow:hidden}
   #paint-bar::before{content:'';position:absolute;left:50%;top:50%;
-    width:220%;height:112%;
+    width:280%;height:122%;
     transform:translate(-50%,-50%);
     background:url("img/paint_bar_frame_overlay.png") center/100% 100% no-repeat;
     pointer-events:none;z-index:0;filter:drop-shadow(0 0 10px rgba(255,238,142,0.28))}
@@ -330,13 +350,13 @@
   #paint-bar-fill::before{content:'';position:absolute;left:0;right:0;top:-6px;height:10px;
     background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0));
     filter:blur(2px)}
-  #paint-bar-label{position:absolute;bottom:-22px;left:-4px;width:36px;
+  #paint-bar-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);width:44px;
     text-align:center;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
     color:#fff;font-size:11px;letter-spacing:2px;
     text-shadow:0 1px 2px rgba(0,0,0,0.7);z-index:4}
   @media (max-width:640px){
-    #paint-bar{width:22px;left:10px;height:46vh}
-    #paint-bar-label{font-size:10px;width:30px}
+    #paint-bar{width:14px;left:10px;height:43vh}
+    #paint-bar-label{font-size:10px;width:34px}
   }
 
   /* ART WINS â€” fade to black cutscene when the bar fills */
@@ -912,7 +932,7 @@
   border:1px solid rgba(142,245,142,0.35);letter-spacing:0.5px;white-space:pre"></div>
 
 <div id="art-wins">
-  <div class="aw-text">RUN OVER</div>
+  <div class="aw-text">ART WINS</div>
   <div class="aw-sub">THE ARTISTS TOOK THE SPACE BENEATH THE BRIDGE</div>
   <button class="aw-btn" id="art-wins-retry">RETRY</button>
 </div>
