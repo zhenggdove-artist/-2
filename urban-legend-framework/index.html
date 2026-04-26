@@ -178,47 +178,85 @@
      position:fixed + left/top % + translate(-50%) so the element's
      centre lands exactly on the trace ring centre. Pixel sizes are
      kept so buttons stay touch-friendly. */
+  /* Button sizes scale with the viewport so they FILL the
+     ornament rings (rather than sitting as small dots inside
+     them). The trace's rings are roughly 7-8 % of viewport
+     width across, so the buttons use clamp(64,8vw,140) — big
+     enough to fully occupy the ring on desktop, still
+     thumb-friendly on phones. Same vw-based math for paint
+     bar width and the HUD pills' surrounding ornament. */
   #attack-btn,#jump-btn,#special-btn{
     position:fixed!important;right:auto!important;bottom:auto!important;
-    transform:translate(-50%,-50%)!important;z-index:16}
-  #special-btn{left:74.2%!important;top:83.2%!important;width:88px;height:88px}
-  #jump-btn   {left:84.8%!important;top:83.2%!important;width:88px;height:88px}
-  #attack-btn {left:95.4%!important;top:83.2%!important;width:88px;height:88px}
+    transform:translate(-50%,-50%)!important;z-index:16;
+    width:clamp(64px,8vw,140px)!important;
+    height:clamp(64px,8vw,140px)!important}
+  #special-btn{left:74.4%!important;top:84%!important}
+  #jump-btn   {left:84.8%!important;top:84%!important}
+  #attack-btn {left:95.5%!important;top:84%!important}
+  /* Paint bar: width fills the slot, height spans the slot's
+     vertical run. */
   #paint-bar  {position:fixed!important;left:4%!important;top:9.15%!important;
-    bottom:auto!important;height:62.5%!important;width:38px!important;
+    bottom:auto!important;height:62.5%!important;
+    width:clamp(24px,3.2vw,68px)!important;
     transform:translateX(-50%)!important}
   #shop-btn   {position:fixed!important;left:92.8%!important;top:19.9%!important;
     right:auto!important;bottom:auto!important;
-    transform:translate(-50%,-50%)!important}
+    transform:translate(-50%,-50%)!important;
+    padding:clamp(8px,0.9vw,14px) clamp(18px,2vw,32px)!important;
+    font-size:clamp(11px,1.1vw,16px)!important}
   /* HUD pills: kill at hud_left centre, coin at hud_right centre.
      Existing #hud grid still wraps them but we override to fixed
      positioning so each lands on its slot regardless of how the
      grid wraps. timer-box stays inside #hud and is centred via
      the timer slot. */
-  #hud{display:none}  /* grid is bypassed in favour of per-pill fixed positions */
+  #hud{display:none}  /* grid bypassed; per-pill fixed positions below */
+  /* HUD pills: padding + font-size both fluid so they grow into
+     the trace's hud_left / hud_right ovals on big screens and
+     compress on phones. */
   #kill-box,#coin-box,#timer-box{
     position:fixed!important;
     transform:translate(-50%,-50%)!important;z-index:15;
-    display:inline-flex!important}
+    display:inline-flex!important;
+    padding:clamp(5px,0.7vw,12px) clamp(12px,1.8vw,28px)!important;
+    font-size:clamp(13px,1.4vw,22px)!important}
   #kill-box {left:11.7%!important;top:9.4%!important}
   #coin-box {left:88.3%!important;top:9.4%!important}
-  #timer-box{left:50%!important;top:10.4%!important;margin:0!important}
+  #timer-box{left:50%!important;top:10.4%!important;margin:0!important;
+    padding:clamp(7px,1vw,16px) clamp(18px,2.2vw,38px)!important;
+    font-size:clamp(14px,1.6vw,24px)!important}
   #title{position:fixed!important;left:50%!important;top:8.5%!important;
     right:auto!important;bottom:auto!important;
-    transform:translate(-50%,-50%)!important;width:auto;max-width:36vw}
+    transform:translate(-50%,-50%)!important;width:auto;max-width:36vw;
+    padding:clamp(6px,0.9vw,14px) clamp(20px,2.4vw,42px)!important;
+    font-size:clamp(14px,1.7vw,26px)!important}
   @media (max-width:640px){
-    /* Mobile (portrait): the trace stretches, so ring centres
-       move. Re-anchored to those new centres below. Same %
-       conventions, different numbers. */
-    #special-btn{left:30%!important;top:90%!important;width:60px;height:60px}
-    #jump-btn   {left:55%!important;top:90%!important;width:60px;height:60px}
-    #attack-btn {left:80%!important;top:90%!important;width:60px;height:60px}
-    #paint-bar  {left:6%!important;top:30%!important;height:40%!important;width:26px!important}
-    #shop-btn   {left:80%!important;top:11%!important}
-    #kill-box{left:14%!important;top:5.5%!important}
-    #coin-box{left:86%!important;top:5.5%!important}
-    #timer-box{left:50%!important;top:7%!important}
-    #title{left:50%!important;top:5.5%!important;max-width:50vw}
+    /* Mobile (portrait): the trace stretches taller, so the
+       ring centres shift. Anchored to those new positions, with
+       fluid sizing tuned for narrow screens. */
+    #special-btn,#jump-btn,#attack-btn{
+      width:clamp(58px,14vw,92px)!important;
+      height:clamp(58px,14vw,92px)!important
+    }
+    #special-btn{left:30%!important;top:90%!important}
+    #jump-btn   {left:55%!important;top:90%!important}
+    #attack-btn {left:80%!important;top:90%!important}
+    #paint-bar  {left:6%!important;top:30%!important;height:40%!important;
+      width:clamp(20px,5vw,38px)!important}
+    #shop-btn   {left:80%!important;top:11%!important;
+      padding:clamp(6px,1.6vw,12px) clamp(14px,3vw,22px)!important;
+      font-size:clamp(11px,2.4vw,14px)!important}
+    #kill-box,#coin-box{
+      padding:clamp(4px,1.2vw,8px) clamp(10px,2.4vw,18px)!important;
+      font-size:clamp(11px,2.6vw,15px)!important
+    }
+    #kill-box {left:14%!important;top:5.5%!important}
+    #coin-box {left:86%!important;top:5.5%!important}
+    #timer-box{left:50%!important;top:7%!important;
+      padding:clamp(5px,1.4vw,10px) clamp(14px,3vw,24px)!important;
+      font-size:clamp(13px,2.8vw,17px)!important}
+    #title{left:50%!important;top:5.5%!important;max-width:50vw;
+      padding:clamp(5px,1.5vw,10px) clamp(14px,3.4vw,26px)!important;
+      font-size:clamp(12px,3vw,18px)!important}
   }
 
   /* TITLE banner — cream tag suspended at the top of the viewport
