@@ -537,12 +537,13 @@
     justify-content:flex-start;max-width:min(78vw,520px);flex-wrap:wrap;
     padding:8px 8px 10px;border-radius:26px;
     background:transparent;box-shadow:none}
-  #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:999px;
-    border:2px solid rgba(209,239,255,0.92);background:radial-gradient(circle at 30% 24%,rgba(237,250,255,0.98),rgba(108,193,255,0.92) 58%,rgba(14,103,196,0.96));
-    color:#08386f;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(123,207,255,0.2);
+  #loadout-toggle{display:block;position:fixed;left:6.6%;top:81%;transform:translate(-50%,-50%);z-index:26;width:54px;height:54px;border-radius:999px;
+    border:2px solid rgba(255,215,235,0.92);background:radial-gradient(circle at 30% 24%,rgba(255,244,251,0.98),rgba(255,122,191,0.96) 55%,rgba(203,22,112,0.98));
+    color:#fff;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(255,138,201,0.18);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
     pointer-events:auto;cursor:pointer}
-  #loadout-toggle .lt-ico{display:block;font-size:28px;line-height:54px;margin:0;text-align:center;color:#fff;font-weight:bold}
+  #loadout-toggle .lt-ico{display:block;font-size:26px;line-height:50px;margin:0;text-align:center;color:#fff;font-weight:bold;
+    text-shadow:0 2px 8px rgba(103,0,55,0.42)}
   /* Loadout slots — cream "tag" cards matching the HUD pills.
      Each slot carries its OWN 4-corner thorn frame via the
      .ornate-frame mixin, which means the moment a new slot is
@@ -589,9 +590,6 @@
   .loadout-slot.cleaner{width:96px}
   .loadout-slot.skill-slot,
   .loadout-slot.burst-slot{/* same paper background as base — variants handled via .active only */}
-  @media (min-width:641px){
-    #loadout-toggle{display:none !important}
-  }
   @media (max-width:640px){
     #art-wins{justify-content:center;align-items:center;padding:0 8vw}
     #art-wins .aw-text{font-size:clamp(38px,13vw,74px);letter-spacing:0.18em}
@@ -603,7 +601,7 @@
     #special-btn .btn-sub{min-width:18px;height:18px;font-size:10px;line-height:18px;padding:0 5px;top:-3px;right:-3px}
     #jump-btn{right:94px;bottom:36px;width:45px;height:45px}
     #attack-btn{right:24px;bottom:36px;width:59px;height:59px}
-    #loadout-toggle{display:block;left:42px;bottom:154px}
+    #loadout-toggle{left:14%;top:85%;width:48px;height:48px}
     #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 8px 12px;
       border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
       backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
@@ -618,7 +616,7 @@
     .loadout-slot button{padding:5px 0;font-size:8px}
   }
   @media (max-width:420px){
-    #loadout-toggle{left:42px;bottom:148px;width:54px;height:54px}
+    #loadout-toggle{width:46px;height:46px}
     #loadout-bar{left:8px;right:8px;bottom:198px}
   }
 
@@ -629,10 +627,10 @@
   #ui-frame-layer{position:fixed;inset:0;pointer-events:none;z-index:14}
   .ui-deco-frame{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
     background-position:center;background-repeat:no-repeat;background-size:100% 100%}
-  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:contain}
+  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%}
   .hud-small-frame{background-image:url("img/hud_small_frame_overlay.png")}
   .hud-coin-frame{background-image:url("img/hud_small_frame_overlay.png")}
-  .paint-frame{background-image:url("img/paint_bar_frame_overlay.png");background-size:contain}
+  .paint-frame{background-image:url("img/paint_bar_frame_overlay.png");background-size:100% 100%}
   #attack-btn::before,#jump-btn::before,#special-btn::before,
   #kill-box::before,#coin-box::before,#shop-btn::before,
   .loadout-slot::before,#paint-bar::before,#paint-bar::after{content:none!important;display:none!important}
@@ -653,6 +651,8 @@
     display:inline-flex!important;align-items:center!important;justify-content:center!important;
     box-sizing:border-box!important
   }
+  #kill-box,#coin-box,#shop-btn{font-size:calc(14px * var(--ui-scale,1))!important}
+  #timer-box{font-size:calc(16px * var(--ui-scale,1))!important}
   #paint-bar-frame{left:5.6%;top:50%;width:74px;height:334px}
   #paint-bar{left:5.6%;top:50%;width:74px!important;height:334px!important;background:transparent!important;
     box-shadow:none!important;border-radius:0!important;overflow:visible!important}
@@ -672,6 +672,7 @@
   #jump-btn{left:84.8%;top:83.4%;width:74px!important;height:74px!important}
   #attack-btn-frame{left:94.5%;top:83.4%;width:152px;height:152px}
   #attack-btn{left:94.5%;top:83.4%;width:74px!important;height:74px!important}
+  #loadout-toggle-frame{left:6.6%;top:81%;width:116px;height:116px}
 
   #loadout-bar{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;top:auto!important;
     width:auto!important;height:auto!important;max-width:none!important;padding:0!important;background:none!important;
@@ -681,16 +682,28 @@
   .loadout-slot{position:fixed!important;transform:translate(-50%,-50%)!important;min-height:0!important;height:148px!important;
     width:106px!important;padding:12px 9px!important;border-radius:20px!important;z-index:15;pointer-events:auto;
     box-sizing:border-box!important}
+  #loadout-bar .loadout-slot,#loadout-bar .loadout-slot-frame{
+    opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;
+    transform:translate(-50%,12px)}
+  body.loadout-open #loadout-bar .loadout-slot,
+  body.loadout-open #loadout-bar .loadout-slot-frame{
+    opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
   #soap-slot-frame{left:8.2%;top:73.5%;width:150px;height:200px}
   #soap-slot-card{left:8.2%;top:73.5%}
   #burst-slot-amber-frame{left:8.2%;top:90.2%;width:150px;height:200px}
   #burst-slot-amber-card{left:8.2%;top:90.2%}
   .loadout-slot.cleaner{width:106px!important}
-  .loadout-slot .slot-kind{font-size:10px!important}
-  .loadout-slot .slot-name{font-size:16px!important}
-  .loadout-slot .slot-meta{font-size:10px!important}
-  .loadout-slot .slot-icon{width:38px!important;height:38px!important}
-  .loadout-slot button{font-size:10px!important}
+  .loadout-slot .slot-kind{font-size:calc(10px * var(--ui-scale,1))!important}
+  .loadout-slot .slot-name{font-size:calc(16px * var(--ui-scale,1))!important}
+  .loadout-slot .slot-meta{font-size:calc(10px * var(--ui-scale,1))!important}
+  .loadout-slot .slot-icon{width:calc(38px * var(--ui-scale,1))!important;height:calc(38px * var(--ui-scale,1))!important;
+    font-size:calc(18px * var(--ui-scale,1))!important}
+  .loadout-slot button{font-size:calc(10px * var(--ui-scale,1))!important}
+  #special-btn .btn-ico{font-size:calc(28px * var(--ui-scale,1))}
+  #special-btn .btn-sub{min-width:calc(20px * var(--ui-scale,1));height:calc(20px * var(--ui-scale,1));
+    padding:0 calc(6px * var(--ui-scale,1));font-size:calc(11px * var(--ui-scale,1));line-height:calc(20px * var(--ui-scale,1))}
+  .btn-ico-svg{width:calc(52% * var(--ui-scale,1));height:calc(52% * var(--ui-scale,1))}
+  #loadout-toggle .lt-ico{font-size:calc(26px * var(--ui-scale,1));line-height:calc(50px * var(--ui-scale,1))}
 
   @media (max-width:640px){
     #kill-box-frame{left:14%;top:5.4%;width:142px;height:76px}
@@ -710,16 +723,11 @@
     #jump-btn{left:55.7%;top:90.3%;width:56px!important;height:56px!important}
     #attack-btn-frame{left:78.4%;top:90.3%;width:120px;height:120px}
     #attack-btn{left:78.4%;top:90.3%;width:56px!important;height:56px!important}
+    #loadout-toggle-frame{left:14%;top:85%;width:98px;height:98px}
     #soap-slot-frame{left:20%;top:71%;width:126px;height:170px}
     #soap-slot-card{left:20%;top:71%;width:90px!important;height:126px!important}
     #burst-slot-amber-frame{left:20%;top:87.5%;width:126px;height:170px}
     #burst-slot-amber-card{left:20%;top:87.5%;width:90px!important;height:126px!important}
-    #loadout-bar .loadout-slot,#loadout-bar .loadout-slot-frame{
-      opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;
-      transform:translate(-50%,12px)}
-    body.loadout-open #loadout-bar .loadout-slot,
-    body.loadout-open #loadout-bar .loadout-slot-frame{
-      opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
   }
   body.game-ended #ui-frame-layer,
   body.game-ended #loadout-bar .loadout-slot-frame{display:none!important}
@@ -1038,6 +1046,7 @@
   <div id="special-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="jump-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="attack-btn-frame" class="ui-deco-frame action-frame"></div>
+  <div id="loadout-toggle-frame" class="ui-deco-frame action-frame"></div>
 </div>
 
 <div id="paint-bar">
@@ -5389,32 +5398,278 @@ const weaponBuyButtons={
   ice:document.getElementById('buy-weapon-ice-btn'),
   bomb:document.getElementById('buy-weapon-bomb-btn'),
 };
+const layoutQuery=new URLSearchParams(window.location.search);
+const isLayoutPreviewWindow=layoutQuery.get('layoutPreview')==='1';
 const UI_LAYOUT_STORAGE_KEY='urbanLegendUILayoutV1';
 const UI_LAYOUT_DEFAULTS={
-  desktop:{},
-  mobile:{},
+  "desktop": {
+    "kill-box-frame": {
+      "x": 10.637,
+      "y": 14.088,
+      "w": 156.36363220214844,
+      "h": 84.36366271972656
+    },
+    "kill-box": {
+      "x": 11.108,
+      "y": 13.858,
+      "w": 95.45454406738281,
+      "h": 32.545448303222656
+    },
+    "timer-box-frame": {
+      "x": 50.013,
+      "y": 12.099,
+      "w": 246,
+      "h": 108
+    },
+    "timer-box": {
+      "x": 49.908,
+      "y": 15.206,
+      "w": 40,
+      "h": 18
+    },
+    "coin-box-frame": {
+      "x": 77.897,
+      "y": 15.124,
+      "w": 152.0001220703125,
+      "h": 74.18180847167969
+    },
+    "coin-box": {
+      "x": 78.626,
+      "y": 15.008,
+      "w": 84.54541015625,
+      "h": 29.63634490966797
+    },
+    "shop-btn-frame": {
+      "x": 90.189,
+      "y": 15.032,
+      "w": 154,
+      "h": 84
+    },
+    "shop-btn": {
+      "x": 90.763,
+      "y": 14.802,
+      "w": 85.0909423828125,
+      "h": 31.81818389892578
+    },
+    "paint-bar-frame": {
+      "x": 5.497,
+      "y": 45.973,
+      "w": 108.9090805053711,
+      "h": 412.54547119140625
+    },
+    "paint-bar": {
+      "x": 5.601,
+      "y": 50,
+      "w": 94.36363983154297,
+      "h": 271.4544677734375
+    },
+    "soap-slot-frame": {
+      "x": 28.26,
+      "y": 69.126,
+      "w": 128.90911865234375,
+      "h": 178.18182373046875
+    },
+    "soap-slot-card": {
+      "x": 28.207,
+      "y": 69.126,
+      "w": 87.81817626953125,
+      "h": 125.45458984375
+    },
+    "burst-slot-amber-frame": {
+      "x": 15.964,
+      "y": 69.486,
+      "w": 150,
+      "h": 200
+    },
+    "burst-slot-amber-card": {
+      "x": 15.756,
+      "y": 69.601,
+      "w": 106,
+      "h": 148
+    },
+    "special-btn-frame": {
+      "x": 74.619,
+      "y": 83.399,
+      "w": 152,
+      "h": 152
+    },
+    "special-btn": {
+      "x": 74.619,
+      "y": 83.399,
+      "w": 74,
+      "h": 74
+    },
+    "jump-btn-frame": {
+      "x": 84.822,
+      "y": 83.399,
+      "w": 152,
+      "h": 152
+    },
+    "jump-btn": {
+      "x": 84.822,
+      "y": 83.399,
+      "w": 74,
+      "h": 74
+    },
+    "attack-btn-frame": {
+      "x": 94.524,
+      "y": 83.399,
+      "w": 152,
+      "h": 152
+    },
+    "attack-btn": {
+      "x": 94.524,
+      "y": 83.399,
+      "w": 74,
+      "h": 74
+    }
+  },
+  "mobile": {
+    "kill-box-frame": {
+      "x": 10.587,
+      "y": 10.751,
+      "w": 156.36,
+      "h": 84.36
+    },
+    "kill-box": {
+      "x": 11.006,
+      "y": 10.061,
+      "w": 95.45,
+      "h": 32.53
+    },
+    "timer-box-frame": {
+      "x": 46.606,
+      "y": 11.965,
+      "w": 246,
+      "h": 108
+    },
+    "timer-box": {
+      "x": 49.92,
+      "y": 15.204,
+      "w": 40,
+      "h": 18
+    },
+    "coin-box-frame": {
+      "x": 72.916,
+      "y": 17.769,
+      "w": 138.181884765625,
+      "h": 71.98815338134766
+    },
+    "coin-box": {
+      "x": 73.332,
+      "y": 17.538,
+      "w": 103.4393017578125,
+      "h": 28.902735595703124
+    },
+    "shop-btn-frame": {
+      "x": 72.759,
+      "y": 29.991,
+      "w": 154,
+      "h": 84
+    },
+    "shop-btn": {
+      "x": 73.594,
+      "y": 29.531,
+      "w": 85.09,
+      "h": 31.82
+    },
+    "paint-bar-frame": {
+      "x": 5.498,
+      "y": 45.972,
+      "w": 108.9,
+      "h": 412.55
+    },
+    "paint-bar": {
+      "x": 5.602,
+      "y": 50,
+      "w": 94.36,
+      "h": 271.44
+    },
+    "soap-slot-frame": {
+      "x": 16.233,
+      "y": 37.02,
+      "w": 128.91,
+      "h": 178.18
+    },
+    "soap-slot-card": {
+      "x": 16.231,
+      "y": 37.826,
+      "w": 87.81,
+      "h": 125.45
+    },
+    "burst-slot-amber-frame": {
+      "x": 15.968,
+      "y": 69.485,
+      "w": 150,
+      "h": 200
+    },
+    "burst-slot-amber-card": {
+      "x": 15.759,
+      "y": 71.18,
+      "w": 106,
+      "h": 148
+    },
+    "special-btn-frame": {
+      "x": 76.664,
+      "y": 80.632,
+      "w": 103.27276611328125,
+      "h": 85.0909423828125
+    },
+    "special-btn": {
+      "x": 76.617,
+      "y": 80.292,
+      "w": 37.6363525390625,
+      "h": 39.0909423828125
+    },
+    "jump-btn-frame": {
+      "x": 82.3,
+      "y": 68.19,
+      "w": 78.12136840820312,
+      "h": 99.15142822265625
+    },
+    "jump-btn": {
+      "x": 82.184,
+      "y": 67.914,
+      "w": 34.0001220703125,
+      "h": 34.72723388671875
+    },
+    "attack-btn-frame": {
+      "x": 77.129,
+      "y": 56.6,
+      "w": 77.0909423828125,
+      "h": 84.36355590820312
+    },
+    "attack-btn": {
+      "x": 77.085,
+      "y": 56.42,
+      "w": 36.9091796875,
+      "h": 35.45452880859375
+    }
+  }
 };
 const UI_LAYOUT_TARGET_DEFS=[
-  {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40},
-  {id:'kill-box',label:'artist',anchor:'center',minW:40,minH:18},
-  {id:'timer-box-frame',label:'timer frame',anchor:'center',minW:90,minH:40},
-  {id:'timer-box',label:'timer',anchor:'center',minW:40,minH:18},
-  {id:'coin-box-frame',label:'coin frame',anchor:'center',minW:80,minH:40},
-  {id:'coin-box',label:'coin',anchor:'center',minW:40,minH:18},
-  {id:'shop-btn-frame',label:'shop frame',anchor:'center',minW:72,minH:36},
-  {id:'shop-btn',label:'shop',anchor:'center',minW:36,minH:18},
-  {id:'paint-bar-frame',label:'paint frame',anchor:'center',minW:30,minH:120},
-  {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:80},
-  {id:'soap-slot-frame',label:'soap frame',anchor:'center',minW:72,minH:96},
-  {id:'soap-slot-card',label:'soap card',anchor:'center',minW:54,minH:72},
-  {id:'burst-slot-amber-frame',label:'fx frame',anchor:'center',minW:72,minH:96},
-  {id:'burst-slot-amber-card',label:'fx card',anchor:'center',minW:54,minH:72},
-  {id:'special-btn-frame',label:'skill frame',anchor:'center',minW:56,minH:56},
-  {id:'special-btn',label:'skill btn',anchor:'center',minW:24,minH:24},
-  {id:'jump-btn-frame',label:'jump frame',anchor:'center',minW:56,minH:56},
-  {id:'jump-btn',label:'jump btn',anchor:'center',minW:24,minH:24},
-  {id:'attack-btn-frame',label:'punch frame',anchor:'center',minW:56,minH:56},
-  {id:'attack-btn',label:'punch btn',anchor:'center',minW:24,minH:24},
+  {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40,baseW:156.36,baseH:84.36},
+  {id:'kill-box',label:'artist',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
+  {id:'timer-box-frame',label:'timer frame',anchor:'center',minW:90,minH:40,baseW:246,baseH:108},
+  {id:'timer-box',label:'timer',anchor:'center',minW:24,minH:12,baseW:40,baseH:18},
+  {id:'coin-box-frame',label:'coin frame',anchor:'center',minW:80,minH:40,baseW:152,baseH:74.18},
+  {id:'coin-box',label:'coin',anchor:'center',minW:40,minH:18,baseW:84.55,baseH:29.64},
+  {id:'shop-btn-frame',label:'shop frame',anchor:'center',minW:72,minH:36,baseW:154,baseH:84},
+  {id:'shop-btn',label:'shop',anchor:'center',minW:36,minH:18,baseW:85.09,baseH:31.82},
+  {id:'paint-bar-frame',label:'paint frame',anchor:'center',minW:30,minH:120,baseW:108.91,baseH:412.55},
+  {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:80,baseW:94.36,baseH:271.45},
+  {id:'soap-slot-frame',label:'soap frame',anchor:'center',minW:72,minH:96,baseW:128.91,baseH:178.18},
+  {id:'soap-slot-card',label:'soap card',anchor:'center',minW:54,minH:72,baseW:87.82,baseH:125.45},
+  {id:'burst-slot-amber-frame',label:'fx frame',anchor:'center',minW:72,minH:96,baseW:150,baseH:200},
+  {id:'burst-slot-amber-card',label:'fx card',anchor:'center',minW:54,minH:72,baseW:106,baseH:148},
+  {id:'special-btn-frame',label:'skill frame',anchor:'center',minW:56,minH:56,baseW:152,baseH:152},
+  {id:'special-btn',label:'skill btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
+  {id:'jump-btn-frame',label:'jump frame',anchor:'center',minW:56,minH:56,baseW:152,baseH:152},
+  {id:'jump-btn',label:'jump btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
+  {id:'attack-btn-frame',label:'punch frame',anchor:'center',minW:56,minH:56,baseW:152,baseH:152},
+  {id:'attack-btn',label:'punch btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
+  {id:'loadout-toggle-frame',label:'E frame',anchor:'center',minW:56,minH:56,baseW:116,baseH:116},
+  {id:'loadout-toggle',label:'E btn',anchor:'center',minW:24,minH:24,baseW:54,baseH:54},
 ];
 const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null};
 window.__uiLayoutConfig=uiLayoutState.config;
@@ -5443,6 +5698,18 @@ function getUILayoutBucket(){ return uiLayoutState.forcedMode || (mobileLoadoutQ
 function getUILayoutStore(){ return uiLayoutState.config[getUILayoutBucket()]||(uiLayoutState.config[getUILayoutBucket()]={}); }
 function getUILayoutAutoBucket(){ return mobileLoadoutQuery.matches ? 'mobile' : 'desktop'; }
 function setUILayoutMode(mode){
+  if(mode==='mobile' && !isLayoutPreviewWindow && window.innerWidth>640){
+    const previewUrl=new URL(window.location.href);
+    previewUrl.searchParams.set('layoutMode','mobile');
+    previewUrl.searchParams.set('layoutAdmin','1');
+    previewUrl.searchParams.set('layoutPreview','1');
+    const popup=window.open(previewUrl.toString(),'UILayoutMobilePreview','popup=yes,width=430,height=932');
+    if(popup){
+      popup.focus?.();
+      showUILayoutToast('Opened mobile preview window');
+      return;
+    }
+  }
   uiLayoutState.forcedMode=mode==='desktop'||mode==='mobile' ? mode : null;
   applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
@@ -5479,14 +5746,22 @@ function ensureUILayoutMetrics(def){
 function applyUILayoutMetrics(def,metrics){
   const el=document.getElementById(def.id);
   if(!el||!metrics) return;
+  const width=Math.max(def.minW,metrics.w);
+  const height=Math.max(def.minH,metrics.h);
+  const scaleX=def.baseW ? width/def.baseW : 1;
+  const scaleY=def.baseH ? height/def.baseH : 1;
+  const textScale=Math.max(0.42,Math.min(scaleX,scaleY));
   el.style.setProperty('right','auto','important');
   el.style.setProperty('bottom','auto','important');
   el.style.setProperty('left',`${metrics.x}%`,'important');
   el.style.setProperty('top',`${metrics.y}%`,'important');
-  el.style.setProperty('width',`${Math.max(def.minW,metrics.w)}px`,'important');
-  el.style.setProperty('height',`${Math.max(def.minH,metrics.h)}px`,'important');
+  el.style.setProperty('width',`${width}px`,'important');
+  el.style.setProperty('height',`${height}px`,'important');
   el.style.setProperty('margin','0','important');
   el.style.setProperty('transform',def.anchor==='topLeft'?'none':'translate(-50%,-50%)','important');
+  el.style.setProperty('--ui-scale-x',`${scaleX.toFixed(3)}`,'important');
+  el.style.setProperty('--ui-scale-y',`${scaleY.toFixed(3)}`,'important');
+  el.style.setProperty('--ui-scale',`${textScale.toFixed(3)}`,'important');
   if(def.id==='loadout-bar'){
     el.style.setProperty('max-width','none','important');
     el.style.setProperty('flex-wrap',mobileLoadoutQuery.matches?'nowrap':'wrap','important');
@@ -5705,10 +5980,6 @@ function setLoadoutExpanded(open){
   loadoutToggle?.setAttribute('aria-expanded',open?'true':'false');
 }
 function syncLoadoutLayout(forceClosed=false){
-  if(!mobileLoadoutQuery.matches){
-    setLoadoutExpanded(true);
-    return;
-  }
   if(forceClosed){
     setLoadoutExpanded(false);
     return;
@@ -5721,6 +5992,9 @@ mobileLoadoutQuery.addEventListener?.('change',()=>{
   if(uiLayoutState.active&&!uiLayoutState.forcedMode) showUILayoutToast(`Layout admin switched to ${getUILayoutBucket()}`);
 });
 applyUILayoutConfig();
+if(layoutQuery.get('layoutMode')==='mobile'){
+  uiLayoutState.forcedMode='mobile';
+}
 
 let lastSpecialBtnHTML='';
 let lastSpecialBtnCooling=null;
@@ -6086,6 +6360,12 @@ specialBtn?.addEventListener('pointerleave',e=>{
 loadoutToggle?.addEventListener('click',()=>setLoadoutExpanded(!document.body.classList.contains('loadout-open')));
 mobileLoadoutQuery.addEventListener?.('change',()=>syncLoadoutLayout(true));
 syncLoadoutLayout(true);
+if(layoutQuery.get('layoutAdmin')==='1'){
+  window.addEventListener('load',()=>{
+    if(!uiLayoutState.active) enableUILayoutEditor();
+    if(layoutQuery.get('layoutMode')==='mobile') setUILayoutMode('mobile');
+  },{once:true});
+}
 renderShopState();
 
 function updateCoins(dt,now){
