@@ -159,32 +159,66 @@
     background-image:none!important;filter:none!important;display:none
   }
 
-  /* === RINGS — desktop (16:9) ======================================
-     The trace was rendered against a 2730 × 1536 design, so each
-     ring's centre is read straight off that bitmap and converted
-     to a % of the live viewport. Move a ring? change its right /
-     bottom / left / top below. The buttons keep their existing
-     pixel dimensions so they stay touch-friendly; only the
-     anchor point moves into the trace's circled slot.
+  /* === RINGS — exact slot centres from trace ======================
+     Each UI element is anchored at the CENTRE of its corresponding
+     ornament cluster from the trace (regions defined in
+     tools/slice_frame.py REGIONS, converted from 2730 × 1536
+     reference coords to % of viewport):
+       hud_left      centre 11.7 %  / 9.4 %      (skull + folder pills)
+       hud_right     centre 88.3 %  / 9.4 %      (coin + folder pills)
+       title         centre 50.0 %  / 8.5 %      (top banner)
+       timer         centre 50.0 %  / 10.4 %     (timer pill)
+       shop          centre 92.8 %  / 19.9 %     (right SHOP tag)
+       paint_bar     centre  4.0 %  / 40.4 %     (left vertical bar)
+       loadout       centre 15.4 %  / 81.9 %     (UTILITY + BURST cards)
+       title_emblem  centre 50.0 %  / 80.0 %     (bottom-centre emblem)
+       actions       3 rings at y 83.2 % :
+                       skill  74.2 %     jump   84.8 %     punch  95.4 %
      ----------------------------------------------------------------
-     Punch (rightmost ring):  centre ≈ (2540 / 1290)
-     Jump  (middle ring):     centre ≈ (2270 / 1290)
-     Skill (leftmost ring):   centre ≈ (2010 / 1290)
-     Paint bar slot:          left edge 2.9 %, top 14 %, height 52 %
-     ============================================================== */
-  #attack-btn{right:6%!important;bottom:13.5%!important;width:84px;height:84px}
-  #jump-btn  {right:16%!important;bottom:13.5%!important;width:64px;height:64px}
-  #special-btn{right:26%!important;bottom:13.5%!important;width:72px;height:72px}
-  #paint-bar{left:2.4%!important;top:14%!important;height:52%!important;
-    transform:none!important;width:28px}
+     position:fixed + left/top % + translate(-50%) so the element's
+     centre lands exactly on the trace ring centre. Pixel sizes are
+     kept so buttons stay touch-friendly. */
+  #attack-btn,#jump-btn,#special-btn{
+    position:fixed!important;right:auto!important;bottom:auto!important;
+    transform:translate(-50%,-50%)!important;z-index:16}
+  #special-btn{left:74.2%!important;top:83.2%!important;width:88px;height:88px}
+  #jump-btn   {left:84.8%!important;top:83.2%!important;width:88px;height:88px}
+  #attack-btn {left:95.4%!important;top:83.2%!important;width:88px;height:88px}
+  #paint-bar  {position:fixed!important;left:4%!important;top:9.15%!important;
+    bottom:auto!important;height:62.5%!important;width:38px!important;
+    transform:translateX(-50%)!important}
+  #shop-btn   {position:fixed!important;left:92.8%!important;top:19.9%!important;
+    right:auto!important;bottom:auto!important;
+    transform:translate(-50%,-50%)!important}
+  /* HUD pills: kill at hud_left centre, coin at hud_right centre.
+     Existing #hud grid still wraps them but we override to fixed
+     positioning so each lands on its slot regardless of how the
+     grid wraps. timer-box stays inside #hud and is centred via
+     the timer slot. */
+  #hud{display:none}  /* grid is bypassed in favour of per-pill fixed positions */
+  #kill-box,#coin-box,#timer-box{
+    position:fixed!important;
+    transform:translate(-50%,-50%)!important;z-index:15;
+    display:inline-flex!important}
+  #kill-box {left:11.7%!important;top:9.4%!important}
+  #coin-box {left:88.3%!important;top:9.4%!important}
+  #timer-box{left:50%!important;top:10.4%!important;margin:0!important}
+  #title{position:fixed!important;left:50%!important;top:8.5%!important;
+    right:auto!important;bottom:auto!important;
+    transform:translate(-50%,-50%)!important;width:auto;max-width:36vw}
   @media (max-width:640px){
-    /* Mobile (portrait): the trace stretches taller, so the
-       rings shift accordingly. % positions still hit them since
-       both layers scale together. Buttons shrink for thumbs. */
-    #attack-btn{right:5%!important;bottom:5%!important;width:64px;height:64px}
-    #jump-btn{right:23%!important;bottom:5%!important;width:50px;height:50px}
-    #special-btn{right:40%!important;bottom:5.5%!important;width:56px;height:56px}
-    #paint-bar{left:3%!important;top:14%!important;height:48%!important;width:22px}
+    /* Mobile (portrait): the trace stretches, so ring centres
+       move. Re-anchored to those new centres below. Same %
+       conventions, different numbers. */
+    #special-btn{left:30%!important;top:90%!important;width:60px;height:60px}
+    #jump-btn   {left:55%!important;top:90%!important;width:60px;height:60px}
+    #attack-btn {left:80%!important;top:90%!important;width:60px;height:60px}
+    #paint-bar  {left:6%!important;top:30%!important;height:40%!important;width:26px!important}
+    #shop-btn   {left:80%!important;top:11%!important}
+    #kill-box{left:14%!important;top:5.5%!important}
+    #coin-box{left:86%!important;top:5.5%!important}
+    #timer-box{left:50%!important;top:7%!important}
+    #title{left:50%!important;top:5.5%!important;max-width:50vw}
   }
 
   /* TITLE banner — cream tag suspended at the top of the viewport
