@@ -622,6 +622,108 @@
     #loadout-bar{left:8px;right:8px;bottom:198px}
   }
 
+  /* Independent frame/content layout overrides.
+     These rules replace the earlier pseudo-element approach so the
+     admin editor can move/resize the ornament frame and the UI body
+     separately. */
+  #ui-frame-layer{position:fixed;inset:0;pointer-events:none;z-index:14}
+  .ui-deco-frame{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
+    background-position:center;background-repeat:no-repeat;background-size:100% 100%}
+  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:contain}
+  .hud-small-frame{background-image:url("img/hud_small_frame_overlay.png")}
+  .hud-coin-frame{background-image:url("img/hud_small_frame_overlay.png")}
+  .paint-frame{background-image:url("img/paint_bar_frame_overlay.png");background-size:contain}
+  #attack-btn::before,#jump-btn::before,#special-btn::before,
+  #kill-box::before,#coin-box::before,#shop-btn::before,
+  .loadout-slot::before,#paint-bar::before,#paint-bar::after{content:none!important;display:none!important}
+
+  #kill-box,#timer-box,#coin-box,#shop-btn,#paint-bar,#attack-btn,#jump-btn,#special-btn{
+    z-index:15!important;
+  }
+  #kill-box-frame{left:11%;top:9.6%;width:176px;height:96px}
+  #kill-box{left:11%;top:9.6%;width:118px!important;height:42px!important;padding:0 14px!important}
+  #timer-box-frame{left:50%;top:12.1%;width:246px;height:108px}
+  #timer-box{left:50%;top:12.1%;width:164px!important;height:38px!important;padding:0 14px!important;
+    font-size:clamp(11px,1.35vw,22px)!important}
+  #coin-box-frame{left:82.2%;top:9.6%;width:176px;height:96px}
+  #coin-box{left:82.2%;top:9.6%;width:118px!important;height:42px!important;padding:0 14px!important}
+  #shop-btn-frame{left:91%;top:10.2%;width:154px;height:84px}
+  #shop-btn{left:91%;top:10.2%;width:88px!important;height:34px!important;padding:0 10px!important}
+  #kill-box,#coin-box,#timer-box,#shop-btn{
+    display:inline-flex!important;align-items:center!important;justify-content:center!important;
+    box-sizing:border-box!important
+  }
+  #paint-bar-frame{left:5.6%;top:50%;width:74px;height:334px}
+  #paint-bar{left:5.6%;top:50%;width:74px!important;height:334px!important;background:transparent!important;
+    box-shadow:none!important;border-radius:0!important;overflow:visible!important}
+  #paint-bar-track{position:absolute;left:50%;top:18px;transform:translateX(-50%);width:22px;height:calc(100% - 54px);
+    border-radius:999px;overflow:hidden;background:linear-gradient(180deg,#ffbadf 0%,#ef76bc 100%);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,0.35),0 0 12px rgba(255,159,222,0.28)}
+  #paint-bar-fill{left:0;right:0;bottom:0;
+    background:linear-gradient(0deg,#ff4f9b 0%,#ff76bd 22%,#f8a4da 100%)!important;
+    box-shadow:0 -4px 12px rgba(255,255,255,0.55) inset!important}
+  #paint-bar-fill::before{display:none!important}
+  #paint-bar-label{bottom:2px!important;left:50%;transform:translateX(-50%);width:58px;
+    font-size:10px!important;letter-spacing:0.14em}
+
+  #special-btn-frame{left:74.6%;top:83.4%;width:152px;height:152px}
+  #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important}
+  #jump-btn-frame{left:84.8%;top:83.4%;width:152px;height:152px}
+  #jump-btn{left:84.8%;top:83.4%;width:74px!important;height:74px!important}
+  #attack-btn-frame{left:94.5%;top:83.4%;width:152px;height:152px}
+  #attack-btn{left:94.5%;top:83.4%;width:74px!important;height:74px!important}
+
+  #loadout-bar{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;top:auto!important;
+    width:auto!important;height:auto!important;max-width:none!important;padding:0!important;background:none!important;
+    box-shadow:none!important;border:none!important;pointer-events:none!important;z-index:25}
+  .loadout-slot-frame{position:fixed;transform:translate(-50%,-50%);pointer-events:none;z-index:14;
+    background:url("img/skill_panel_frame_overlay.png") center/100% 100% no-repeat}
+  .loadout-slot{position:fixed!important;transform:translate(-50%,-50%)!important;min-height:0!important;height:148px!important;
+    width:106px!important;padding:12px 9px!important;border-radius:20px!important;z-index:15;pointer-events:auto;
+    box-sizing:border-box!important}
+  #soap-slot-frame{left:8.2%;top:73.5%;width:150px;height:200px}
+  #soap-slot-card{left:8.2%;top:73.5%}
+  #burst-slot-amber-frame{left:8.2%;top:90.2%;width:150px;height:200px}
+  #burst-slot-amber-card{left:8.2%;top:90.2%}
+  .loadout-slot.cleaner{width:106px!important}
+  .loadout-slot .slot-kind{font-size:10px!important}
+  .loadout-slot .slot-name{font-size:16px!important}
+  .loadout-slot .slot-meta{font-size:10px!important}
+  .loadout-slot .slot-icon{width:38px!important;height:38px!important}
+  .loadout-slot button{font-size:10px!important}
+
+  @media (max-width:640px){
+    #kill-box-frame{left:14%;top:5.4%;width:142px;height:76px}
+    #kill-box{left:14%;top:5.4%;width:96px!important;height:32px!important}
+    #timer-box-frame{left:50%;top:8.2%;width:188px;height:82px}
+    #timer-box{left:50%;top:8.2%;width:126px!important;height:28px!important;font-size:12px!important}
+    #coin-box-frame{left:74%;top:5.4%;width:142px;height:76px}
+    #coin-box{left:74%;top:5.4%;width:96px!important;height:32px!important}
+    #shop-btn-frame{left:86%;top:6.3%;width:124px;height:66px}
+    #shop-btn{left:86%;top:6.3%;width:72px!important;height:28px!important;font-size:10px!important}
+    #paint-bar-frame{left:8.5%;top:50%;width:58px;height:252px}
+    #paint-bar{left:8.5%;top:50%;width:58px!important;height:252px!important}
+    #paint-bar-track{top:16px;width:18px;height:calc(100% - 44px)}
+    #special-btn-frame{left:31.8%;top:90.3%;width:120px;height:120px}
+    #special-btn{left:31.8%;top:90.3%;width:56px!important;height:56px!important}
+    #jump-btn-frame{left:55.7%;top:90.3%;width:120px;height:120px}
+    #jump-btn{left:55.7%;top:90.3%;width:56px!important;height:56px!important}
+    #attack-btn-frame{left:78.4%;top:90.3%;width:120px;height:120px}
+    #attack-btn{left:78.4%;top:90.3%;width:56px!important;height:56px!important}
+    #soap-slot-frame{left:20%;top:71%;width:126px;height:170px}
+    #soap-slot-card{left:20%;top:71%;width:90px!important;height:126px!important}
+    #burst-slot-amber-frame{left:20%;top:87.5%;width:126px;height:170px}
+    #burst-slot-amber-card{left:20%;top:87.5%;width:90px!important;height:126px!important}
+    #loadout-bar .loadout-slot,#loadout-bar .loadout-slot-frame{
+      opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;
+      transform:translate(-50%,12px)}
+    body.loadout-open #loadout-bar .loadout-slot,
+    body.loadout-open #loadout-bar .loadout-slot-frame{
+      opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+  }
+  body.game-ended #ui-frame-layer,
+  body.game-ended #loadout-bar .loadout-slot-frame{display:none!important}
+
   /* Intro overlay */
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
     z-index:400;display:flex;align-items:center;justify-content:center;
@@ -927,8 +1029,21 @@
   <div class="hud-box" id="coin-box">&#x1FA99; <span id="coin-count">0</span></div>
 </div>
 
+<div id="ui-frame-layer" aria-hidden="true">
+  <div id="kill-box-frame" class="ui-deco-frame hud-coin-frame"></div>
+  <div id="timer-box-frame" class="ui-deco-frame hud-small-frame"></div>
+  <div id="coin-box-frame" class="ui-deco-frame hud-coin-frame"></div>
+  <div id="shop-btn-frame" class="ui-deco-frame hud-coin-frame"></div>
+  <div id="paint-bar-frame" class="ui-deco-frame paint-frame"></div>
+  <div id="special-btn-frame" class="ui-deco-frame action-frame"></div>
+  <div id="jump-btn-frame" class="ui-deco-frame action-frame"></div>
+  <div id="attack-btn-frame" class="ui-deco-frame action-frame"></div>
+</div>
+
 <div id="paint-bar">
-  <div id="paint-bar-fill"></div>
+  <div id="paint-bar-track">
+    <div id="paint-bar-fill"></div>
+  </div>
   <div id="paint-bar-label">0/10</div>
 </div>
 
@@ -5280,15 +5395,26 @@ const UI_LAYOUT_DEFAULTS={
   mobile:{},
 };
 const UI_LAYOUT_TARGET_DEFS=[
-  {id:'kill-box',label:'artist',anchor:'center',minW:84,minH:32},
-  {id:'timer-box',label:'timer',anchor:'center',minW:96,minH:32},
-  {id:'coin-box',label:'coin',anchor:'center',minW:84,minH:32},
-  {id:'shop-btn',label:'shop',anchor:'center',minW:84,minH:34},
-  {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:120},
-  {id:'loadout-bar',label:'loadout',anchor:'topLeft',minW:120,minH:72},
-  {id:'special-btn',label:'skill',anchor:'center',minW:42,minH:42},
-  {id:'jump-btn',label:'jump',anchor:'center',minW:42,minH:42},
-  {id:'attack-btn',label:'punch',anchor:'center',minW:42,minH:42},
+  {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40},
+  {id:'kill-box',label:'artist',anchor:'center',minW:40,minH:18},
+  {id:'timer-box-frame',label:'timer frame',anchor:'center',minW:90,minH:40},
+  {id:'timer-box',label:'timer',anchor:'center',minW:40,minH:18},
+  {id:'coin-box-frame',label:'coin frame',anchor:'center',minW:80,minH:40},
+  {id:'coin-box',label:'coin',anchor:'center',minW:40,minH:18},
+  {id:'shop-btn-frame',label:'shop frame',anchor:'center',minW:72,minH:36},
+  {id:'shop-btn',label:'shop',anchor:'center',minW:36,minH:18},
+  {id:'paint-bar-frame',label:'paint frame',anchor:'center',minW:30,minH:120},
+  {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:80},
+  {id:'soap-slot-frame',label:'soap frame',anchor:'center',minW:72,minH:96},
+  {id:'soap-slot-card',label:'soap card',anchor:'center',minW:54,minH:72},
+  {id:'burst-slot-amber-frame',label:'fx frame',anchor:'center',minW:72,minH:96},
+  {id:'burst-slot-amber-card',label:'fx card',anchor:'center',minW:54,minH:72},
+  {id:'special-btn-frame',label:'skill frame',anchor:'center',minW:56,minH:56},
+  {id:'special-btn',label:'skill btn',anchor:'center',minW:24,minH:24},
+  {id:'jump-btn-frame',label:'jump frame',anchor:'center',minW:56,minH:56},
+  {id:'jump-btn',label:'jump btn',anchor:'center',minW:24,minH:24},
+  {id:'attack-btn-frame',label:'punch frame',anchor:'center',minW:56,minH:56},
+  {id:'attack-btn',label:'punch btn',anchor:'center',minW:24,minH:24},
 ];
 const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null};
 window.__uiLayoutConfig=uiLayoutState.config;
@@ -5714,7 +5840,8 @@ function renderLoadoutBar(){
   if(debugCheatMode) applyCheatInventory();
   const parts=[];
   parts.push(
-    `<div class="loadout-slot cleaner">
+    `<div id="soap-slot-frame" class="loadout-slot-frame"></div>
+    <div class="loadout-slot cleaner" id="soap-slot-card">
       <div class="slot-kind">UTILITY</div>
       <div class="slot-icon">${getSkillIconSafe('soap','utility')}</div>
       <div class="slot-name">SOAP</div>
@@ -5726,7 +5853,8 @@ function renderLoadoutBar(){
     if(!purchasedBurstEffects.has(item.id)) continue;
     const active=item.id===equippedBurstEffect?' active':'';
     parts.push(
-      `<div class="loadout-slot burst-slot${active}" data-burst-slot="${item.id}">
+      `<div id="burst-slot-${item.id}-frame" class="loadout-slot-frame"></div>
+      <div class="loadout-slot burst-slot${active}" id="burst-slot-${item.id}-card" data-burst-slot="${item.id}">
         <div class="slot-kind">BURST FX</div>
         <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'burst')}</div>
         <div class="slot-name">${item.name}</div>
@@ -5769,6 +5897,7 @@ function renderLoadoutBar(){
       if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
     });
   });
+  applyUILayoutConfig();
 }
 
 function renderShopState(){
