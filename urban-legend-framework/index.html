@@ -144,11 +144,11 @@
      anything older that might still be lurking elsewhere in the
      style sheet. */
 
-  /* (1) Full-bleed traced frame */
+  /* (1) Full-bleed frame from the user's painted PNG. Claude's
+     traced yellow glow is fully retired here. */
   #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    background:url("img/frame_traced.svg") center/100% 100% no-repeat;
-    filter:drop-shadow(0 0 8px rgba(244,238,92,0.55))
-           drop-shadow(0 0 18px rgba(255,245,160,0.35))}
+    background:url("img/viewport_frame_overlay.png") center/100% 100% no-repeat;
+    filter:none}
   #viewport-frame .vf-corner,#viewport-frame > svg{display:none}
   body.game-ended #viewport-frame{display:none}
 
@@ -200,9 +200,9 @@
   #attack-btn,#jump-btn,#special-btn{
     width:clamp(56px,7vw,128px)!important;
     height:clamp(56px,7vw,128px)!important}
-  #special-btn{left:74.4%;top:84%}
-  #jump-btn   {left:84.8%;top:84%}
-  #attack-btn {left:94.6%;top:84%}
+  #special-btn{left:74.1%;top:83.4%}
+  #jump-btn   {left:84.3%;top:83.4%}
+  #attack-btn {left:94.0%;top:83.4%}
 
   @media (max-width:640px){
     /* Mobile (portrait): slot centres shift because the trace
@@ -228,9 +228,9 @@
     #attack-btn,#jump-btn,#special-btn{
       width:clamp(54px,12vw,84px)!important;
       height:clamp(54px,12vw,84px)!important}
-    #special-btn{left:32%;top:91%}
-    #jump-btn   {left:56%;top:91%}
-    #attack-btn {left:78.8%;top:91%}
+    #special-btn{left:31.2%;top:90.3%}
+    #jump-btn   {left:55.1%;top:90.3%}
+    #attack-btn {left:77.8%;top:90.3%}
   }
 
   /* TITLE banner — cream tag suspended at the top of the viewport
@@ -391,24 +391,17 @@
     background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#ff8fb8 55%,#c03870 100%);
     border:none;
     box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),
-               0 0 0 1.5px var(--neon),
-               0 0 12px rgba(244,238,92,0.55),
-               0 0 24px rgba(255,245,160,0.35),
                0 8px 18px rgba(192,56,112,0.45);
     color:#fff;display:flex;align-items:center;justify-content:center;
     overflow:visible;isolation:isolate;
-    --ornate-size:28px;--ornate-bleed:10px;--action-frame-scale:1.92}
+    --ornate-size:28px;--ornate-bleed:10px;--action-frame-scale:1.92;
+    --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #attack-btn::before,#jump-btn::before,#special-btn::before{content:'';position:absolute;left:50%;top:50%;
     width:calc(100% * var(--action-frame-scale));height:calc(100% * var(--action-frame-scale));
-    transform:translate(-50%,-50%);background:url('img/action_frame_overlay.png') center/contain no-repeat;
-    pointer-events:none;z-index:2;filter:drop-shadow(0 0 10px rgba(244,238,92,0.24))}
-  #attack-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
-    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
-    background-position:top left,top right,bottom left,bottom right;
-    background-repeat:no-repeat;
-    background-size:var(--ornate-size) var(--ornate-size);
-    pointer-events:none;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.75))}
+    transform:translate(calc(-50% + var(--action-frame-shift-x)),calc(-50% + var(--action-frame-shift-y)));
+    background:url('img/action_frame_overlay.png') center/contain no-repeat;
+    pointer-events:none;z-index:2;filter:drop-shadow(0 0 8px rgba(244,238,92,0.18))}
+  #attack-btn::after,#jump-btn::after,#special-btn::after{content:none!important;display:none!important}
   #attack-btn:active{transform:scale(0.93)}
   #attack-btn.cooling{opacity:0.55;filter:grayscale(0.3)}
   #jump-btn{position:absolute;right:124px;bottom:36px;width:64px;height:64px;
@@ -416,20 +409,11 @@
     background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#a8d8ff 55%,#5a8fcf 100%);
     border:none;
     box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),
-               0 0 0 1.5px var(--neon),
-               0 0 10px rgba(244,238,92,0.55),
-               0 0 22px rgba(255,245,160,0.35),
                0 8px 16px rgba(90,143,207,0.45);
     color:#fff;display:flex;align-items:center;justify-content:center;
     overflow:visible;isolation:isolate;
-    --ornate-size:24px;--ornate-bleed:8px;--action-frame-scale:1.92}
-  #jump-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
-    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
-    background-position:top left,top right,bottom left,bottom right;
-    background-repeat:no-repeat;
-    background-size:var(--ornate-size) var(--ornate-size);
-    pointer-events:none;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))}
+    --ornate-size:24px;--ornate-bleed:8px;--action-frame-scale:1.92;
+    --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #jump-btn:active{transform:scale(0.92)}
   #clean-btn{position:absolute;right:124px;bottom:112px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
@@ -443,21 +427,12 @@
     background:radial-gradient(circle at 30% 20%,#fffdd1 0%,#ffe45a 50%,#d99400 100%);
     border:none;
     box-shadow:inset 0 0 0 2px rgba(255,255,255,0.5),
-               0 0 0 1.5px var(--neon),
-               0 0 12px rgba(244,238,92,0.7),
-               0 0 26px rgba(255,245,160,0.4),
                0 8px 18px rgba(217,148,0,0.45);
     color:var(--ink);display:flex;align-items:center;justify-content:center;
     padding:0;
     overflow:visible;isolation:isolate;
-    --ornate-size:26px;--ornate-bleed:9px;--action-frame-scale:1.92}
-  #special-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
-    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
-    background-position:top left,top right,bottom left,bottom right;
-    background-repeat:no-repeat;
-    background-size:var(--ornate-size) var(--ornate-size);
-    pointer-events:none;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.75))}
+    --ornate-size:26px;--ornate-bleed:9px;--action-frame-scale:1.92;
+    --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #special-btn .btn-sub{z-index:4}
   #special-btn:active{transform:scale(0.93)}
   #special-btn.cooling{opacity:0.58;filter:saturate(0.7) grayscale(0.15)}
