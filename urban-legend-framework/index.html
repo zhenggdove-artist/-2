@@ -128,136 +128,84 @@
      bigger. Used to live as a static PNG overlay; the SVG approach
      means it scales with the viewport AND uses the exact same art
      vocabulary as the rest of the UI. */
-  /* === FRAME = AUTHORITY =========================================
-     Reverted to the full-bleed traced overlay. Instead of moving
-     ornaments to chase live UI, the frame is pinned to the
-     viewport and the LIVE UI is repositioned (per the % rules
-     further down) to land inside the rings the trace draws.
+  /* === FRAME = STICKERS ON UI ====================================
+     Reverted approach: full-bleed trace OFF, original UI positions
+     kept, ornament shards reattached as STICKERS on each UI
+     element's outline. Each shard scales with its host element
+     (background-size:100% 100%) and bleeds past the bounding box
+     via inset:-Xpx so the vine tendrils hang off the element's
+     real edges — like a custom border decoration that follows the
+     UI wherever it sits.
      -------------------------------------------------------------
-     The frame stretches 100 % × 100 % so on any aspect ratio the
-     ring positions and the % positions of the live UI scale
-     together. Tweak the ring percentages by editing the rules
-     in the "RINGS" block below and re-loading. */
+     The full-bleed #viewport-frame overlay is hidden because its
+     coordinate system can't be reconciled with the live UI's CSS
+     coordinates. The 4 outer-corner shards are kept as a thin
+     screen-edge wreath. */
   #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    background-image:url("img/frame_traced.svg");
-    background-size:100% 100%;
+    background-image:
+      url("img/frame_corner_tl.svg"),
+      url("img/frame_corner_tr.svg"),
+      url("img/frame_corner_bl.svg"),
+      url("img/frame_corner_br.svg");
+    background-position:top left,top right,bottom left,bottom right;
     background-repeat:no-repeat;
-    background-position:center center;
-    filter:drop-shadow(0 0 8px rgba(244,238,92,0.55)) drop-shadow(0 0 18px rgba(255,245,160,0.35))}
+    background-size:clamp(120px,16vw,240px) clamp(120px,16vw,240px);
+    filter:drop-shadow(0 0 6px rgba(244,238,92,0.5)) drop-shadow(0 0 14px rgba(255,245,160,0.3))}
   #viewport-frame .vf-corner,#viewport-frame > svg{display:none}
   body.game-ended #viewport-frame{display:none}
 
-  /* Neutralise every per-element ornament from earlier iterations
-     (data-URI corners + sliced shards) so they don't double up
-     with the full-bleed frame. */
+  /* Neutralise the data-URI hand-drawn corners I added in much
+     earlier passes — they're superseded by the per-element
+     stickers below. */
   .ornate-frame::before,.hud-box::before,#shop-btn::before,
-  .loadout-slot::before,#title::before,#end-box::before,
+  .loadout-slot::before,#title::before,#end-box::before{
+    background-image:none!important;filter:none!important
+  }
+
+  /* === PER-ELEMENT FRAME STICKERS =================================
+     Each ::after wraps its host element with a sliced shard from
+     the trace (img/frame_<region>.svg). The shard is sized
+     100 % × 100 % of the host's bounding box plus a generous
+     bleed so the vine tendrils overflow the edge. Order:
+       inset    — how far past the box edge the sticker reaches
+       z-index  — 0 keeps the sticker BEHIND the element's content
+                  but in front of the playfield. Children get
+                  z-index:2 to stay clickable / readable.
+     ============================================================== */
+  #kill-box,#coin-box,#timer-box,#shop-btn,#paint-bar,
+  #loadout-bar,#attack-btn,#jump-btn,#special-btn,#title{position:relative}
   #kill-box::after,#coin-box::after,#timer-box::after,
   #shop-btn::after,#paint-bar::after,#loadout-bar::after,
   #attack-btn::after,#jump-btn::after,#special-btn::after,
   #title::after{
-    background-image:none!important;filter:none!important;display:none
+    content:'';position:absolute;pointer-events:none;
+    background-repeat:no-repeat;background-position:center;background-size:100% 100%;
+    filter:drop-shadow(0 0 4px rgba(244,238,92,0.65));z-index:0
   }
+  #kill-box>*,#coin-box>*,#timer-box>*,#shop-btn>*,
+  #title>*,#end-box>*{position:relative;z-index:2}
+  /* Bleeds tuned per element: bigger inset for elements whose
+     ornament tendrils sweep further outside the bbox. */
+  #kill-box::after  {background-image:url("img/frame_hud_left.svg");  inset:-26px -32px}
+  #coin-box::after  {background-image:url("img/frame_hud_right.svg"); inset:-26px -32px}
+  #timer-box::after {background-image:url("img/frame_timer.svg");     inset:-22px -28px}
+  #shop-btn::after  {background-image:url("img/frame_shop.svg");      inset:-20px -24px}
+  #paint-bar::after {background-image:url("img/frame_paint_bar.svg"); inset:-44px -38px}
+  #loadout-bar::after{background-image:url("img/frame_loadout.svg");  inset:-26px}
+  #title::after     {background-image:url("img/frame_title.svg");     inset:-32px -40px}
+  /* Three round buttons share the action cluster shard, scoped
+     so each button gets the part of the cluster around its own
+     ring. The shard is anchored to the rightmost button and
+     extended LEFT to span all three, the same way the reference
+     image draws all three rings as one continuous tendril. */
+  #attack-btn::after{background-image:url("img/frame_actions.svg");
+    inset:-30px;left:-340px;background-size:auto 100%}
+  #jump-btn::after  {background-image:none}
+  #special-btn::after{background-image:none}
 
-  /* === RINGS — exact slot centres from trace ======================
-     Each UI element is anchored at the CENTRE of its corresponding
-     ornament cluster from the trace (regions defined in
-     tools/slice_frame.py REGIONS, converted from 2730 × 1536
-     reference coords to % of viewport):
-       hud_left      centre 11.7 %  / 9.4 %      (skull + folder pills)
-       hud_right     centre 88.3 %  / 9.4 %      (coin + folder pills)
-       title         centre 50.0 %  / 8.5 %      (top banner)
-       timer         centre 50.0 %  / 10.4 %     (timer pill)
-       shop          centre 92.8 %  / 19.9 %     (right SHOP tag)
-       paint_bar     centre  4.0 %  / 40.4 %     (left vertical bar)
-       loadout       centre 15.4 %  / 81.9 %     (UTILITY + BURST cards)
-       title_emblem  centre 50.0 %  / 80.0 %     (bottom-centre emblem)
-       actions       3 rings at y 83.2 % :
-                       skill  74.2 %     jump   84.8 %     punch  95.4 %
-     ----------------------------------------------------------------
-     position:fixed + left/top % + translate(-50%) so the element's
-     centre lands exactly on the trace ring centre. Pixel sizes are
-     kept so buttons stay touch-friendly. */
-  /* Button sizes scale with the viewport so they FILL the
-     ornament rings (rather than sitting as small dots inside
-     them). The trace's rings are roughly 7-8 % of viewport
-     width across, so the buttons use clamp(64,8vw,140) — big
-     enough to fully occupy the ring on desktop, still
-     thumb-friendly on phones. Same vw-based math for paint
-     bar width and the HUD pills' surrounding ornament. */
-  #attack-btn,#jump-btn,#special-btn{
-    position:fixed!important;right:auto!important;bottom:auto!important;
-    transform:translate(-50%,-50%)!important;z-index:16;
-    width:clamp(64px,8vw,140px)!important;
-    height:clamp(64px,8vw,140px)!important}
-  #special-btn{left:74.4%!important;top:84%!important}
-  #jump-btn   {left:84.8%!important;top:84%!important}
-  #attack-btn {left:95.5%!important;top:84%!important}
-  /* Paint bar: width fills the slot, height spans the slot's
-     vertical run. */
-  #paint-bar  {position:fixed!important;left:4%!important;top:9.15%!important;
-    bottom:auto!important;height:62.5%!important;
-    width:clamp(24px,3.2vw,68px)!important;
-    transform:translateX(-50%)!important}
-  #shop-btn   {position:fixed!important;left:92.8%!important;top:19.9%!important;
-    right:auto!important;bottom:auto!important;
-    transform:translate(-50%,-50%)!important;
-    padding:clamp(8px,0.9vw,14px) clamp(18px,2vw,32px)!important;
-    font-size:clamp(11px,1.1vw,16px)!important}
-  /* HUD pills: kill at hud_left centre, coin at hud_right centre.
-     Existing #hud grid still wraps them but we override to fixed
-     positioning so each lands on its slot regardless of how the
-     grid wraps. timer-box stays inside #hud and is centred via
-     the timer slot. */
-  #hud{display:none}  /* grid bypassed; per-pill fixed positions below */
-  /* HUD pills: padding + font-size both fluid so they grow into
-     the trace's hud_left / hud_right ovals on big screens and
-     compress on phones. */
-  #kill-box,#coin-box,#timer-box{
-    position:fixed!important;
-    transform:translate(-50%,-50%)!important;z-index:15;
-    display:inline-flex!important;
-    padding:clamp(5px,0.7vw,12px) clamp(12px,1.8vw,28px)!important;
-    font-size:clamp(13px,1.4vw,22px)!important}
-  #kill-box {left:11.7%!important;top:9.4%!important}
-  #coin-box {left:88.3%!important;top:9.4%!important}
-  #timer-box{left:50%!important;top:10.4%!important;margin:0!important;
-    padding:clamp(7px,1vw,16px) clamp(18px,2.2vw,38px)!important;
-    font-size:clamp(14px,1.6vw,24px)!important}
-  #title{position:fixed!important;left:50%!important;top:8.5%!important;
-    right:auto!important;bottom:auto!important;
-    transform:translate(-50%,-50%)!important;width:auto;max-width:36vw;
-    padding:clamp(6px,0.9vw,14px) clamp(20px,2.4vw,42px)!important;
-    font-size:clamp(14px,1.7vw,26px)!important}
-  @media (max-width:640px){
-    /* Mobile (portrait): the trace stretches taller, so the
-       ring centres shift. Anchored to those new positions, with
-       fluid sizing tuned for narrow screens. */
-    #special-btn,#jump-btn,#attack-btn{
-      width:clamp(58px,14vw,92px)!important;
-      height:clamp(58px,14vw,92px)!important
-    }
-    #special-btn{left:30%!important;top:90%!important}
-    #jump-btn   {left:55%!important;top:90%!important}
-    #attack-btn {left:80%!important;top:90%!important}
-    #paint-bar  {left:6%!important;top:30%!important;height:40%!important;
-      width:clamp(20px,5vw,38px)!important}
-    #shop-btn   {left:80%!important;top:11%!important;
-      padding:clamp(6px,1.6vw,12px) clamp(14px,3vw,22px)!important;
-      font-size:clamp(11px,2.4vw,14px)!important}
-    #kill-box,#coin-box{
-      padding:clamp(4px,1.2vw,8px) clamp(10px,2.4vw,18px)!important;
-      font-size:clamp(11px,2.6vw,15px)!important
-    }
-    #kill-box {left:14%!important;top:5.5%!important}
-    #coin-box {left:86%!important;top:5.5%!important}
-    #timer-box{left:50%!important;top:7%!important;
-      padding:clamp(5px,1.4vw,10px) clamp(14px,3vw,24px)!important;
-      font-size:clamp(13px,2.8vw,17px)!important}
-    #title{left:50%!important;top:5.5%!important;max-width:50vw;
-      padding:clamp(5px,1.5vw,10px) clamp(14px,3.4vw,26px)!important;
-      font-size:clamp(12px,3vw,18px)!important}
-  }
+  /* (Removed the "RINGS" position-override block. Live UI keeps
+     its original CSS positions; the per-element stickers above
+     follow each element wherever it sits.) */
 
   /* TITLE banner — cream tag suspended at the top of the viewport
      with a chartreuse glow halo. Replaces the previous pink
