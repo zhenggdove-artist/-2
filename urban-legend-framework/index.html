@@ -128,84 +128,110 @@
      bigger. Used to live as a static PNG overlay; the SVG approach
      means it scales with the viewport AND uses the exact same art
      vocabulary as the rest of the UI. */
-  /* === FRAME = STICKERS ON UI ====================================
-     Reverted approach: full-bleed trace OFF, original UI positions
-     kept, ornament shards reattached as STICKERS on each UI
-     element's outline. Each shard scales with its host element
-     (background-size:100% 100%) and bleeds past the bounding box
-     via inset:-Xpx so the vine tendrils hang off the element's
-     real edges — like a custom border decoration that follows the
-     UI wherever it sits.
+  /* === FINAL UI ORCHESTRATION ====================================
+     One source of truth: the reference image. Two layers:
+       1) #viewport-frame paints the cream/yellow vine ornaments
+          as a single full-bleed traced SVG, scaled 100 %×100 %.
+       2) Each live UI element is fixed-positioned at the CENTRE
+          of its corresponding slot in that trace, with fluid
+          sizing (vw / clamp) so it grows to fill the slot at any
+          viewport size.
      -------------------------------------------------------------
-     The full-bleed #viewport-frame overlay is hidden because its
-     coordinate system can't be reconciled with the live UI's CSS
-     coordinates. The 4 outer-corner shards are kept as a thin
-     screen-edge wreath. */
+     Earlier attempts left a tangle of stickers, !important
+     overrides, and per-element ornament data URIs fighting each
+     other. This block is THE final layer — it replaces every
+     prior frame/UI rule and uses very wide selectors to neutralise
+     anything older that might still be lurking elsewhere in the
+     style sheet. */
+
+  /* (1) Full-bleed traced frame */
   #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    background-image:
-      url("img/frame_corner_tl.svg"),
-      url("img/frame_corner_tr.svg"),
-      url("img/frame_corner_bl.svg"),
-      url("img/frame_corner_br.svg");
-    background-position:top left,top right,bottom left,bottom right;
-    background-repeat:no-repeat;
-    background-size:clamp(120px,16vw,240px) clamp(120px,16vw,240px);
-    filter:drop-shadow(0 0 6px rgba(244,238,92,0.5)) drop-shadow(0 0 14px rgba(255,245,160,0.3))}
+    background:url("img/frame_traced.svg") center/100% 100% no-repeat;
+    filter:drop-shadow(0 0 8px rgba(244,238,92,0.55))
+           drop-shadow(0 0 18px rgba(255,245,160,0.35))}
   #viewport-frame .vf-corner,#viewport-frame > svg{display:none}
   body.game-ended #viewport-frame{display:none}
 
-  /* Neutralise the data-URI hand-drawn corners I added in much
-     earlier passes — they're superseded by the per-element
-     stickers below. */
+  /* (2) Disable every legacy ornament pseudo-element + grid
+        wrapper so the new fixed-positioned UI doesn't double up
+        with old stickers / corner thorns / hud grid. */
   .ornate-frame::before,.hud-box::before,#shop-btn::before,
-  .loadout-slot::before,#title::before,#end-box::before{
-    background-image:none!important;filter:none!important
-  }
-
-  /* === PER-ELEMENT FRAME STICKERS =================================
-     Each ::after wraps its host element with a sliced shard from
-     the trace (img/frame_<region>.svg). The shard is sized
-     100 % × 100 % of the host's bounding box plus a generous
-     bleed so the vine tendrils overflow the edge. Order:
-       inset    — how far past the box edge the sticker reaches
-       z-index  — 0 keeps the sticker BEHIND the element's content
-                  but in front of the playfield. Children get
-                  z-index:2 to stay clickable / readable.
-     ============================================================== */
-  #kill-box,#coin-box,#timer-box,#shop-btn,#paint-bar,
-  #loadout-bar,#attack-btn,#jump-btn,#special-btn,#title{position:relative}
+  .loadout-slot::before,#title::before,#end-box::before,
   #kill-box::after,#coin-box::after,#timer-box::after,
   #shop-btn::after,#paint-bar::after,#loadout-bar::after,
   #attack-btn::after,#jump-btn::after,#special-btn::after,
-  #title::after{
-    content:'';position:absolute;pointer-events:none;
-    background-repeat:no-repeat;background-position:center;background-size:100% 100%;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.65));z-index:0
-  }
-  #kill-box>*,#coin-box>*,#timer-box>*,#shop-btn>*,
-  #title>*,#end-box>*{position:relative;z-index:2}
-  /* Bleeds tuned per element: bigger inset for elements whose
-     ornament tendrils sweep further outside the bbox. */
-  #kill-box::after  {background-image:url("img/frame_hud_left.svg");  inset:-26px -32px}
-  #coin-box::after  {background-image:url("img/frame_hud_right.svg"); inset:-26px -32px}
-  #timer-box::after {background-image:url("img/frame_timer.svg");     inset:-22px -28px}
-  #shop-btn::after  {background-image:url("img/frame_shop.svg");      inset:-20px -24px}
-  #paint-bar::after {background-image:url("img/frame_paint_bar.svg"); inset:-44px -38px}
-  #loadout-bar::after{background-image:url("img/frame_loadout.svg");  inset:-26px}
-  #title::after     {background-image:url("img/frame_title.svg");     inset:-32px -40px}
-  /* Three round buttons share the action cluster shard, scoped
-     so each button gets the part of the cluster around its own
-     ring. The shard is anchored to the rightmost button and
-     extended LEFT to span all three, the same way the reference
-     image draws all three rings as one continuous tendril. */
-  #attack-btn::after{background-image:url("img/frame_actions.svg");
-    inset:-30px;left:-340px;background-size:auto 100%}
-  #jump-btn::after  {background-image:none}
-  #special-btn::after{background-image:none}
+  #title::after{background-image:none!important;display:none!important}
+  #hud{display:none!important}
 
-  /* (Removed the "RINGS" position-override block. Live UI keeps
-     its original CSS positions; the per-element stickers above
-     follow each element wherever it sits.) */
+  /* (3) Slot centres — each element fixed at the centre of its
+        ornament cluster in the reference image (2730 × 1536 →
+        % of viewport). Live UI's original right/bottom rules
+        are explicitly cleared so the new left/top wins. */
+  #kill-box,#coin-box,#timer-box,#title,#shop-btn,
+  #paint-bar,#attack-btn,#jump-btn,#special-btn{
+    position:fixed!important;
+    transform:translate(-50%,-50%)!important;
+    right:auto!important;bottom:auto!important;margin:0!important;
+    z-index:15}
+  /* HUD pills */
+  #kill-box {left:11.7%;top:9.4%;display:inline-flex!important;
+    padding:clamp(4px,0.6vw,10px) clamp(10px,1.6vw,24px);
+    font-size:clamp(13px,1.4vw,22px)}
+  #coin-box {left:88.3%;top:9.4%;display:inline-flex!important;
+    padding:clamp(4px,0.6vw,10px) clamp(10px,1.6vw,24px);
+    font-size:clamp(13px,1.4vw,22px)}
+  #timer-box{left:50%;top:10.4%;display:inline-flex!important;
+    padding:clamp(6px,0.9vw,14px) clamp(16px,2vw,32px);
+    font-size:clamp(14px,1.6vw,24px)}
+  /* Title banner */
+  #title    {left:50%;top:7.5%;max-width:30vw!important;width:auto!important;
+    padding:clamp(5px,0.8vw,12px) clamp(18px,2.2vw,38px)!important;
+    font-size:clamp(13px,1.5vw,22px)!important}
+  /* SHOP tag */
+  #shop-btn {left:92.8%;top:19.9%;
+    padding:clamp(7px,0.9vw,12px) clamp(16px,1.8vw,28px)!important;
+    font-size:clamp(11px,1.1vw,16px)!important}
+  /* Paint bar (translate-X only because the bar is a tall column) */
+  #paint-bar{left:4%;top:9.15%;
+    transform:translateX(-50%)!important;
+    height:62.5%!important;
+    width:clamp(20px,2.6vw,52px)!important}
+  /* 3 round action buttons */
+  #attack-btn,#jump-btn,#special-btn{
+    width:clamp(56px,7vw,128px)!important;
+    height:clamp(56px,7vw,128px)!important}
+  #special-btn{left:74.4%;top:84%}
+  #jump-btn   {left:84.8%;top:84%}
+  #attack-btn {left:94.6%;top:84%}
+
+  @media (max-width:640px){
+    /* Mobile (portrait): slot centres shift because the trace
+       stretches taller. UI sizes shrink for thumb-friendly hits. */
+    #kill-box {left:13%;top:5%;
+      padding:clamp(3px,1.1vw,6px) clamp(8px,2.2vw,16px);
+      font-size:clamp(11px,2.6vw,15px)}
+    #coin-box {left:87%;top:5%;
+      padding:clamp(3px,1.1vw,6px) clamp(8px,2.2vw,16px);
+      font-size:clamp(11px,2.6vw,15px)}
+    #timer-box{left:50%;top:6.5%;
+      padding:clamp(5px,1.4vw,9px) clamp(12px,2.6vw,20px);
+      font-size:clamp(12px,2.8vw,16px)}
+    #title    {left:50%;top:3.5%;max-width:48vw!important;
+      padding:clamp(4px,1.4vw,8px) clamp(12px,3.2vw,22px)!important;
+      font-size:clamp(11px,2.8vw,16px)!important}
+    #shop-btn {left:80%;top:11%;
+      padding:clamp(5px,1.6vw,9px) clamp(12px,2.8vw,18px)!important;
+      font-size:clamp(10px,2.4vw,13px)!important}
+    #paint-bar{left:5%;top:25%;
+      height:42%!important;
+      width:clamp(18px,4.5vw,30px)!important}
+    #attack-btn,#jump-btn,#special-btn{
+      width:clamp(54px,12vw,84px)!important;
+      height:clamp(54px,12vw,84px)!important}
+    #special-btn{left:32%;top:91%}
+    #jump-btn   {left:56%;top:91%}
+    #attack-btn {left:78.8%;top:91%}
+  }
 
   /* TITLE banner — cream tag suspended at the top of the viewport
      with a chartreuse glow halo. Replaces the previous pink
@@ -370,7 +396,12 @@
                0 0 24px rgba(255,245,160,0.35),
                0 8px 18px rgba(192,56,112,0.45);
     color:#fff;display:flex;align-items:center;justify-content:center;
-    --ornate-size:28px;--ornate-bleed:10px}
+    overflow:visible;isolation:isolate;
+    --ornate-size:28px;--ornate-bleed:10px;--action-frame-scale:1.92}
+  #attack-btn::before,#jump-btn::before,#special-btn::before{content:'';position:absolute;left:50%;top:50%;
+    width:calc(100% * var(--action-frame-scale));height:calc(100% * var(--action-frame-scale));
+    transform:translate(-50%,-50%);background:url('img/action_frame_overlay.png') center/contain no-repeat;
+    pointer-events:none;z-index:2;filter:drop-shadow(0 0 10px rgba(244,238,92,0.24))}
   #attack-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
     background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
     background-position:top left,top right,bottom left,bottom right;
@@ -390,7 +421,8 @@
                0 0 22px rgba(255,245,160,0.35),
                0 8px 16px rgba(90,143,207,0.45);
     color:#fff;display:flex;align-items:center;justify-content:center;
-    --ornate-size:24px;--ornate-bleed:8px}
+    overflow:visible;isolation:isolate;
+    --ornate-size:24px;--ornate-bleed:8px;--action-frame-scale:1.92}
   #jump-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
     background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
     background-position:top left,top right,bottom left,bottom right;
@@ -417,7 +449,8 @@
                0 8px 18px rgba(217,148,0,0.45);
     color:var(--ink);display:flex;align-items:center;justify-content:center;
     padding:0;
-    --ornate-size:26px;--ornate-bleed:9px}
+    overflow:visible;isolation:isolate;
+    --ornate-size:26px;--ornate-bleed:9px;--action-frame-scale:1.92}
   #special-btn::after{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
     background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
     background-position:top left,top right,bottom left,bottom right;
@@ -425,7 +458,7 @@
     background-size:var(--ornate-size) var(--ornate-size);
     pointer-events:none;
     filter:drop-shadow(0 0 4px rgba(244,238,92,0.75))}
-  #special-btn .btn-sub{z-index:3}
+  #special-btn .btn-sub{z-index:4}
   #special-btn:active{transform:scale(0.93)}
   #special-btn.cooling{opacity:0.58;filter:saturate(0.7) grayscale(0.15)}
   #special-btn .btn-ico{font-size:28px;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.25)}
@@ -439,6 +472,7 @@
      button face so the mobile & desktop sizes scale together. */
   .btn-ico-svg{width:52%;height:52%;display:block;stroke-width:2.6;
     filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35))}
+  #attack-btn .btn-ico-svg,#jump-btn .btn-ico-svg,#special-btn .btn-ico{position:relative;z-index:3}
   #jump-btn .btn-ico-svg{color:#fff}
   #attack-btn .btn-ico-svg{color:#fff}
   #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:9px 22px;border-radius:14px;
