@@ -183,10 +183,6 @@
   #timer-box{left:50%;top:12.1%;display:inline-flex!important;
     padding:clamp(6px,0.9vw,14px) clamp(16px,2vw,32px);
     font-size:clamp(14px,1.6vw,24px)}
-  /* Title banner */
-  #title    {left:50%;top:7.5%;max-width:30vw!important;width:auto!important;
-    padding:clamp(5px,0.8vw,12px) clamp(18px,2.2vw,38px)!important;
-    font-size:clamp(13px,1.5vw,22px)!important}
   /* SHOP tag */
   #shop-btn {left:91%;top:10.2%;
     padding:clamp(7px,0.9vw,12px) clamp(16px,1.8vw,28px)!important;
@@ -216,9 +212,6 @@
     #timer-box{left:50%;top:8.2%;
       padding:clamp(5px,1.4vw,9px) clamp(12px,2.6vw,20px);
       font-size:clamp(12px,2.8vw,16px)}
-    #title    {left:50%;top:3.5%;max-width:48vw!important;
-      padding:clamp(4px,1.4vw,8px) clamp(12px,3.2vw,22px)!important;
-      font-size:clamp(11px,2.8vw,16px)!important}
     #shop-btn {left:86%;top:6.3%;
       padding:clamp(5px,1.6vw,9px) clamp(12px,2.8vw,18px)!important;
       font-size:clamp(10px,2.4vw,13px)!important}
@@ -264,7 +257,7 @@
   #hud{position:fixed;top:12px;left:12px;right:12px;z-index:15;pointer-events:none;
     display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px}
   #kill-box,#coin-box,#shop-btn{
-    min-width:112px!important;
+    width:118px!important;
     height:44px!important;
     justify-content:center!important;
     align-items:center!important;
@@ -481,16 +474,9 @@
     background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
     color:var(--ink);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.22em;cursor:pointer;
-    box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.65);
     text-shadow:0 1px 0 rgba(255,255,255,0.5);
     --ornate-size:30px;--ornate-bleed:8px}
-  #shop-btn::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
-    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
-    background-position:top left,top right,bottom left,bottom right;
-    background-repeat:no-repeat;
-    background-size:var(--ornate-size) var(--ornate-size);
-    pointer-events:none;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7))}
   #shop-panel{position:fixed;right:18px;top:144px;width:min(320px,calc(100vw - 36px));z-index:40;
     border-radius:22px;background:linear-gradient(180deg,rgba(40,20,48,0.95),rgba(18,10,22,0.94));
     border:1px solid rgba(255,255,255,0.16);box-shadow:0 18px 40px rgba(0,0,0,0.42);padding:16px 16px 14px;
@@ -518,16 +504,9 @@
   .shop-card.burst-card .shop-buy{background:linear-gradient(90deg,#6d3e7b,#2f4e74)}
   .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
   #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
-    justify-content:center;max-width:min(78vw,520px);flex-wrap:wrap;
-    padding:20px 18px 24px;border-radius:26px;
-    background:linear-gradient(180deg,rgba(31,18,38,0.4),rgba(14,10,19,0.28));
-    box-shadow:0 12px 28px rgba(0,0,0,0.22)}
-  #loadout-bar::before{content:'';position:absolute;left:50%;top:50%;
-    width:calc(100% + 54px);height:calc(100% + 52px);
-    transform:translate(-50%,-50%);
-    background:url("img/skill_panel_frame_overlay.png") center/100% 100% no-repeat;
-    pointer-events:none;z-index:0;filter:drop-shadow(0 0 10px rgba(255,238,142,0.18))}
-  #loadout-bar > *{position:relative;z-index:1}
+    justify-content:flex-start;max-width:min(78vw,520px);flex-wrap:wrap;
+    padding:8px 8px 10px;border-radius:26px;
+    background:transparent;box-shadow:none}
   #loadout-toggle{display:none;position:fixed;left:14px;bottom:134px;z-index:26;width:58px;height:58px;border-radius:999px;
     border:2px solid rgba(209,239,255,0.92);background:radial-gradient(circle at 30% 24%,rgba(237,250,255,0.98),rgba(108,193,255,0.92) 58%,rgba(14,103,196,0.96));
     color:#08386f;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(123,207,255,0.2);
@@ -548,13 +527,12 @@
     font-size:11px;letter-spacing:0.08em;display:flex;flex-direction:column;
     justify-content:space-between;align-items:center;gap:4px;text-align:center;
     --ornate-size:34px;--ornate-bleed:6px}
-  .loadout-slot::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
-    background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
-    background-position:top left,top right,bottom left,bottom right;
-    background-repeat:no-repeat;
-    background-size:var(--ornate-size) var(--ornate-size);
+  .loadout-slot::before{content:'';position:absolute;left:50%;top:50%;
+    width:calc(100% + 26px);height:calc(100% + 22px);
+    transform:translate(-50%,-50%);
+    background:url("img/skill_panel_frame_overlay.png") center/100% 100% no-repeat;
     pointer-events:none;z-index:1;
-    filter:drop-shadow(0 0 4px rgba(244,238,92,0.7));display:none}
+    filter:drop-shadow(0 0 8px rgba(255,238,142,0.16))}
   .loadout-slot > *{position:relative;z-index:2}
   .loadout-slot .slot-kind{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:9px;letter-spacing:0.18em;color:rgba(26,15,36,0.55)}
   .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.12em;color:var(--ink)}
@@ -596,11 +574,10 @@
     #jump-btn{right:94px;bottom:36px;width:45px;height:45px}
     #attack-btn{right:24px;bottom:36px;width:59px;height:59px}
     #loadout-toggle{display:block;left:42px;bottom:154px}
-    #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:18px 16px 18px;
+    #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 8px 12px;
       border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
       backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
       opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .22s ease,transform .22s ease}
-    #loadout-bar::before{width:calc(100% + 30px);height:calc(100% + 36px)}
     body.loadout-open #loadout-bar{opacity:1;pointer-events:auto;transform:translateY(0)}
     .loadout-slot{width:58px;min-height:66px;padding:7px 5px;border-radius:16px;font-size:10px;gap:5px;flex:0 0 auto}
     .loadout-slot.cleaner{width:74px}
