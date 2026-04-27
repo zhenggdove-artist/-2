@@ -76,14 +76,14 @@
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
   body.admin-layout-mode *{cursor:default}
   .ui-layout-editor{position:fixed;inset:0;pointer-events:none;z-index:1200}
-  .ui-layout-box{position:fixed;border:2px dashed rgba(255,235,120,0.95);background:rgba(255,235,120,0.08);
-    box-shadow:0 0 0 1px rgba(0,0,0,0.4) inset;pointer-events:auto}
+  .ui-layout-box{position:fixed;border:2px solid transparent;background:transparent;
+    box-shadow:none;pointer-events:auto}
   .ui-layout-box.selected{border-style:solid;border-color:#7cf8ff;background:rgba(124,248,255,0.12);
     box-shadow:0 0 0 1px rgba(124,248,255,0.5) inset,0 0 0 2px rgba(0,0,0,0.3)}
   .ui-layout-box.active{border-style:solid;background:rgba(255,235,120,0.14)}
-  .ui-layout-box.is-hidden{border-color:rgba(255,120,120,0.95);background:rgba(255,80,80,0.12)}
-  .ui-layout-box.is-locked{border-color:rgba(164,176,199,0.92);background:rgba(130,140,166,0.14)}
-  .ui-layout-toolbar{position:fixed;right:16px;top:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;z-index:1215}
+  .ui-layout-box.is-hidden.selected,.ui-layout-box.is-hidden.active{border-color:rgba(255,120,120,0.95);background:rgba(255,80,80,0.12)}
+  .ui-layout-box.is-locked.selected,.ui-layout-box.is-locked.active{border-color:rgba(164,176,199,0.92);background:rgba(130,140,166,0.14)}
+  .ui-layout-toolbar{position:fixed;right:16px;top:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;z-index:2000001}
   .ui-layout-toolbar button,.ui-layout-export-launcher,.ui-layout-modal button{appearance:none;border:none;border-radius:999px;
     background:rgba(20,8,32,0.94);color:#fff7c9;padding:10px 14px;font:12px/1.1 monospace;letter-spacing:0.04em;
     box-shadow:0 10px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(255,235,120,0.22) inset;cursor:pointer}
@@ -102,7 +102,9 @@
     background:#120b1c;color:#fff9d2;font:12px/1.45 Consolas,monospace;box-sizing:border-box}
   .ui-layout-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
   .ui-layout-label{position:absolute;left:0;top:-22px;padding:2px 7px;border-radius:999px;
-    background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap}
+    background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap;
+    opacity:0;pointer-events:none}
+  .ui-layout-box.selected .ui-layout-label,.ui-layout-box.active .ui-layout-label{opacity:1}
   .ui-layout-handle,.ui-layout-object-panel-resize{position:absolute;border-radius:999px;
     background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45)}
   .ui-layout-handle{width:10px;height:10px;opacity:0;pointer-events:none}
@@ -112,13 +114,17 @@
   .ui-layout-handle[data-corner="ne"]{right:-5px;top:-5px;cursor:nesw-resize}
   .ui-layout-handle[data-corner="sw"]{left:-5px;bottom:-5px;cursor:nesw-resize}
   .ui-layout-handle[data-corner="se"]{right:-5px;bottom:-5px;cursor:nwse-resize}
+  .ui-layout-handle[data-corner="n"]{left:calc(50% - 5px);top:-5px;cursor:ns-resize}
+  .ui-layout-handle[data-corner="e"]{right:-5px;top:calc(50% - 5px);cursor:ew-resize}
+  .ui-layout-handle[data-corner="s"]{left:calc(50% - 5px);bottom:-5px;cursor:ns-resize}
+  .ui-layout-handle[data-corner="w"]{left:-5px;top:calc(50% - 5px);cursor:ew-resize}
   .ui-layout-object-panel-resize[data-corner="nw"]{left:-12px;top:-12px;cursor:nwse-resize}
   .ui-layout-object-panel-resize[data-corner="ne"]{right:-12px;top:-12px;cursor:nesw-resize}
   .ui-layout-object-panel-resize[data-corner="sw"]{left:-12px;bottom:-12px;cursor:nesw-resize}
   .ui-layout-object-panel-resize[data-corner="se"]{right:-12px;bottom:-12px;cursor:nwse-resize}
   .ui-layout-object-panel{position:fixed;left:16px;top:16px;width:min(340px,calc(100vw - 32px));height:min(520px,calc(100vh - 32px));
     display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:rgba(14,8,22,0.95);
-    box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:1216}
+    box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:2000002}
   .ui-layout-object-panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:move}
   .ui-layout-object-panel-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
   .ui-layout-object-panel h3{margin:0;color:#fff3b2;font:600 16px/1.2 "Trebuchet MS",sans-serif}
@@ -5919,7 +5925,6 @@ function setUILayoutMode(mode){
   uiLayoutState.forcedMode=mode==='desktop'||mode==='mobile' ? mode : null;
   applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
-  if(uiLayoutState.active) showUILayoutToast(`Layout admin editing ${getUILayoutBucket()}`);
 }
 function formatUILayoutExport(){
   return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
@@ -6393,7 +6398,7 @@ function buildUILayoutEditor(){
     const box=document.createElement('div');
     box.className='ui-layout-box';
     box.dataset.targetId=def.id;
-    box.innerHTML=`<div class="ui-layout-label">${def.label}</div><div class="ui-layout-handle" data-corner="nw"></div><div class="ui-layout-handle" data-corner="ne"></div><div class="ui-layout-handle" data-corner="sw"></div><div class="ui-layout-handle" data-corner="se"></div>`;
+    box.innerHTML=`<div class="ui-layout-label">${def.label}</div><div class="ui-layout-handle" data-corner="nw"></div><div class="ui-layout-handle" data-corner="n"></div><div class="ui-layout-handle" data-corner="ne"></div><div class="ui-layout-handle" data-corner="e"></div><div class="ui-layout-handle" data-corner="se"></div><div class="ui-layout-handle" data-corner="s"></div><div class="ui-layout-handle" data-corner="sw"></div><div class="ui-layout-handle" data-corner="w"></div>`;
     box.addEventListener('pointerdown',e=>{
       e.preventDefault();
       e.stopPropagation();
@@ -6624,9 +6629,8 @@ function enableUILayoutEditor(){
   document.body.appendChild(buildUILayoutEditor());
   applyUILayoutConfig();
   refreshUILayoutEditor();
-  setUILayoutSelection(uiLayoutState.selectedId||UI_LAYOUT_TARGET_DEFS[0]?.id||null);
+  setUILayoutSelection(null);
   refreshUILayoutEditorToolbar();
-  showUILayoutToast(`Layout admin ON (${getUILayoutBucket()})`);
 }
 function disableUILayoutEditor(openExport=false){
   if(!uiLayoutState.active) return;
@@ -6701,7 +6705,6 @@ function syncLoadoutLayout(forceClosed=false){
 mobileLoadoutQuery.addEventListener?.('change',()=>{
   if(!uiLayoutState.forcedMode) applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
-  if(uiLayoutState.active&&!uiLayoutState.forcedMode) showUILayoutToast(`Layout admin switched to ${getUILayoutBucket()}`);
 });
 applyUILayoutConfig();
 if(layoutQuery.get('layoutMode')==='mobile'){
