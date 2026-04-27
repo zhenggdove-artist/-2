@@ -82,6 +82,7 @@
     box-shadow:0 0 0 1px rgba(124,248,255,0.5) inset,0 0 0 2px rgba(0,0,0,0.3)}
   .ui-layout-box.active{border-style:solid;background:rgba(255,235,120,0.14)}
   .ui-layout-box.is-hidden{border-color:rgba(255,120,120,0.95);background:rgba(255,80,80,0.12)}
+  .ui-layout-box.is-locked{border-color:rgba(164,176,199,0.92);background:rgba(130,140,166,0.14)}
   .ui-layout-toolbar{position:fixed;right:16px;top:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;z-index:1215}
   .ui-layout-toolbar button,.ui-layout-export-launcher,.ui-layout-modal button{appearance:none;border:none;border-radius:999px;
     background:rgba(20,8,32,0.94);color:#fff7c9;padding:10px 14px;font:12px/1.1 monospace;letter-spacing:0.04em;
@@ -104,6 +105,24 @@
     background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap}
   .ui-layout-handle{position:absolute;right:-9px;bottom:-9px;width:18px;height:18px;border-radius:999px;
     background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:nwse-resize}
+  .ui-layout-object-panel{position:fixed;left:16px;top:16px;width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 32px);
+    display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:rgba(14,8,22,0.95);
+    box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:1216}
+  .ui-layout-object-panel h3{margin:0;color:#fff3b2;font:600 16px/1.2 "Trebuchet MS",sans-serif}
+  .ui-layout-object-panel p{margin:0;color:#f8efc0;font:11px/1.45 monospace;opacity:0.82}
+  .ui-layout-object-list{overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+  .ui-layout-object-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;
+    padding:8px 10px;border-radius:12px;background:rgba(255,255,255,0.04);box-shadow:0 0 0 1px rgba(255,235,120,0.1) inset}
+  .ui-layout-object-row.is-selected{background:rgba(124,248,255,0.12);box-shadow:0 0 0 1px rgba(124,248,255,0.34) inset}
+  .ui-layout-object-row.is-hidden{background:rgba(255,80,80,0.12)}
+  .ui-layout-object-row.is-locked{background:rgba(130,140,166,0.18)}
+  .ui-layout-object-meta{min-width:0}
+  .ui-layout-object-name{display:block;color:#fff7c9;font:12px/1.3 monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ui-layout-object-state{display:block;color:#d7cfff;font:10px/1.25 monospace;opacity:0.88}
+  .ui-layout-object-actions,.ui-layout-object-order{display:flex;gap:4px;align-items:center}
+  .ui-layout-object-panel button{appearance:none;border:none;border-radius:999px;background:rgba(20,8,32,0.94);color:#fff7c9;
+    padding:7px 10px;font:11px/1 monospace;letter-spacing:0.04em;box-shadow:0 0 0 1px rgba(255,235,120,0.18) inset;cursor:pointer}
+  .ui-layout-object-panel button.is-active{background:#7cf8ff;color:#1a0f24;box-shadow:0 0 0 1px rgba(0,0,0,0.18) inset}
   .ui-layout-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:1210;
     padding:10px 14px;border-radius:12px;background:rgba(18,10,26,0.92);color:#fff7c9;
     font:12px/1.35 monospace;letter-spacing:0.04em;box-shadow:0 10px 28px rgba(0,0,0,0.35)}
@@ -5878,9 +5897,36 @@ function getUILayoutBoxRect(def,metrics){
     height,
   };
 }
+function getUILayoutDefaultLayer(def){
+  const el=document.getElementById(def.id);
+  const computed=Number.parseInt(window.getComputedStyle(el).zIndex||'',10);
+  const base=Number.isFinite(computed) ? computed : 0;
+  return base*100+UI_LAYOUT_TARGET_DEFS.indexOf(def);
+}
+function getUILayoutLayer(def,metrics){
+  return Number.isFinite(metrics?.z) ? metrics.z : getUILayoutDefaultLayer(def);
+}
+function getUILayoutStateFlags(metrics){
+  const parts=[];
+  if(metrics?.locked) parts.push('locked');
+  if(metrics?.hidden) parts.push('hidden');
+  parts.push(`z ${getUILayoutLayer({id:''},metrics)}`);
+  return parts.join(' | ');
+}
+function getUILayoutOrderedDefs(desc=false){
+  const defs=[...UI_LAYOUT_TARGET_DEFS];
+  defs.sort((a,b)=>{
+    const za=getUILayoutLayer(a,ensureUILayoutMetrics(a));
+    const zb=getUILayoutLayer(b,ensureUILayoutMetrics(b));
+    if(za!==zb) return desc ? zb-za : za-zb;
+    return UI_LAYOUT_TARGET_DEFS.indexOf(a)-UI_LAYOUT_TARGET_DEFS.indexOf(b);
+  });
+  return defs;
+}
 function ensureUILayoutMetrics(def){
   const store=getUILayoutStore();
   if(!store[def.id]) store[def.id]=currentUILayoutMetrics(def);
+  if(store[def.id] && !Number.isFinite(store[def.id].z)) store[def.id].z=getUILayoutDefaultLayer(def);
   return store[def.id];
 }
 function applyUILayoutMetrics(def,metrics){
@@ -5907,6 +5953,7 @@ function applyUILayoutMetrics(def,metrics){
   el.style.setProperty('--ui-scale-x',`${scaleX.toFixed(3)}`,'important');
   el.style.setProperty('--ui-scale-y',`${scaleY.toFixed(3)}`,'important');
   el.style.setProperty('--ui-scale',`${textScale.toFixed(3)}`,'important');
+  el.style.setProperty('z-index',String(getUILayoutLayer(def,metrics)),'important');
   if(def.id==='loadout-bar'){
     el.style.setProperty('max-width','none','important');
     el.style.setProperty('flex-wrap',mobileLoadoutQuery.matches?'nowrap':'wrap','important');
@@ -6002,11 +6049,95 @@ function refreshUILayoutEditorToolbar(){
       : `Editing: ${mode} (auto)`;
   }
 }
+function toggleUILayoutLock(targetId){
+  const def=getUILayoutDef(targetId);
+  if(!def) return false;
+  pushUILayoutHistory('lock');
+  const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+  metrics.locked=!metrics.locked;
+  const store=getUILayoutStore();
+  store[def.id]=metrics;
+  applyUILayoutMetrics(def,metrics);
+  if(metrics.locked && uiLayoutState.selectedId===def.id) setUILayoutSelection(null);
+  refreshUILayoutEditor();
+  showUILayoutToast(`${def.label} ${metrics.locked?'locked':'unlocked'}`);
+  return true;
+}
+function moveUILayoutLayer(targetId,direction){
+  const defs=getUILayoutOrderedDefs(true);
+  const index=defs.findIndex(def=>def.id===targetId);
+  const swapIndex=direction==='up' ? index-1 : index+1;
+  if(index<0||swapIndex<0||swapIndex>=defs.length) return false;
+  const current=defs[index];
+  const other=defs[swapIndex];
+  pushUILayoutHistory(direction==='up'?'layer up':'layer down');
+  const currentMetrics={...(ensureUILayoutMetrics(current)||currentUILayoutMetrics(current))};
+  const otherMetrics={...(ensureUILayoutMetrics(other)||currentUILayoutMetrics(other))};
+  const currentZ=getUILayoutLayer(current,currentMetrics);
+  const otherZ=getUILayoutLayer(other,otherMetrics);
+  currentMetrics.z=otherZ;
+  otherMetrics.z=currentZ;
+  const store=getUILayoutStore();
+  store[current.id]=currentMetrics;
+  store[other.id]=otherMetrics;
+  applyUILayoutMetrics(current,currentMetrics);
+  applyUILayoutMetrics(other,otherMetrics);
+  refreshUILayoutEditor();
+  showUILayoutToast(`${current.label} moved ${direction}`);
+  return true;
+}
+function refreshUILayoutObjectPanel(){
+  const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
+  const list=panel?.querySelector('.ui-layout-object-list');
+  if(!list) return;
+  list.innerHTML='';
+  for(const def of getUILayoutOrderedDefs(true)){
+    const metrics=ensureUILayoutMetrics(def);
+    const row=document.createElement('div');
+    row.className='ui-layout-object-row';
+    row.classList.toggle('is-selected',uiLayoutState.selectedId===def.id);
+    row.classList.toggle('is-hidden',!!metrics.hidden);
+    row.classList.toggle('is-locked',!!metrics.locked);
+    row.innerHTML=`<div class="ui-layout-object-meta">
+      <span class="ui-layout-object-name">${def.label}</span>
+      <span class="ui-layout-object-state">${getUILayoutStateFlags(metrics)}</span>
+    </div>
+    <div class="ui-layout-object-actions">
+      <button type="button" data-action="lock" class="${metrics.locked?'is-active':''}">${metrics.locked?'Unlock':'Lock'}</button>
+    </div>
+    <div class="ui-layout-object-order">
+      <button type="button" data-action="up">↑</button>
+      <button type="button" data-action="down">↓</button>
+    </div>`;
+    row.addEventListener('click',e=>{
+      const action=e.target?.dataset?.action;
+      if(action==='lock'){
+        e.stopPropagation();
+        toggleUILayoutLock(def.id);
+        return;
+      }
+      if(action==='up'){
+        e.stopPropagation();
+        moveUILayoutLayer(def.id,'up');
+        return;
+      }
+      if(action==='down'){
+        e.stopPropagation();
+        moveUILayoutLayer(def.id,'down');
+        return;
+      }
+      setUILayoutSelection(def.id);
+      refreshUILayoutEditor();
+    });
+    list.appendChild(row);
+  }
+}
 function setUILayoutSelection(targetId){
   uiLayoutState.selectedId=targetId||null;
   for(const [id,box] of uiLayoutState.overlays.entries()){
     box.classList.toggle('selected',id===uiLayoutState.selectedId);
   }
+  refreshUILayoutObjectPanel();
 }
 function buildUILayoutEditor(){
   if(uiLayoutState.editor) return uiLayoutState.editor;
@@ -6026,6 +6157,10 @@ function buildUILayoutEditor(){
     if(action==='close') disableUILayoutEditor(true);
   });
   editor.appendChild(toolbar);
+  const panel=document.createElement('div');
+  panel.className='ui-layout-object-panel';
+  panel.innerHTML='<h3>Layout Objects</h3><p>Lock to ignore canvas selection. Use arrows to move front/back.</p><div class="ui-layout-object-list"></div>';
+  editor.appendChild(panel);
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=document.createElement('div');
     box.className='ui-layout-box';
@@ -6034,6 +6169,11 @@ function buildUILayoutEditor(){
     box.addEventListener('pointerdown',e=>{
       e.preventDefault();
       e.stopPropagation();
+      const locked=!!ensureUILayoutMetrics(def)?.locked;
+      if(locked){
+        showUILayoutToast(`${def.label} is locked`);
+        return;
+      }
       setUILayoutSelection(def.id);
       pushUILayoutHistory('move');
       const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
@@ -6049,6 +6189,7 @@ function buildUILayoutEditor(){
   window.addEventListener('pointercancel',handleUILayoutPointerUp);
   uiLayoutState.editor=editor;
   refreshUILayoutEditorToolbar();
+  refreshUILayoutObjectPanel();
   return editor;
 }
 function refreshUILayoutEditor(){
@@ -6063,9 +6204,17 @@ function refreshUILayoutEditor(){
     box.style.top=`${r.top}px`;
     box.style.width=`${r.width}px`;
     box.style.height=`${r.height}px`;
+    box.style.zIndex=String(getUILayoutLayer(def,metrics));
     box.classList.toggle('is-hidden',!!metrics.hidden);
+    box.classList.toggle('is-locked',!!metrics.locked);
     box.querySelector('.ui-layout-label').textContent=`${def.label}${metrics.hidden?' [hidden]':''}`;
   }
+  for(const def of getUILayoutOrderedDefs(false)){
+    const box=uiLayoutState.overlays.get(def.id);
+    if(box) uiLayoutState.editor.appendChild(box);
+  }
+  const panel=uiLayoutState.editor.querySelector('.ui-layout-object-panel');
+  if(panel) uiLayoutState.editor.appendChild(panel);
   setUILayoutSelection(uiLayoutState.selectedId);
 }
 function handleUILayoutPointerMove(e){
