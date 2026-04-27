@@ -6109,6 +6109,7 @@ function toggleUILayoutLock(targetId){
   applyUILayoutMetrics(def,metrics);
   if(metrics.locked && uiLayoutState.selectedId===def.id) setUILayoutSelection(null);
   refreshUILayoutEditor();
+  refreshUILayoutObjectPanel();
   showUILayoutToast(`${def.label} ${metrics.locked?'locked':'unlocked'}`);
   return true;
 }
