@@ -76,6 +76,11 @@
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
   body.admin-layout-mode *{cursor:default}
   .ui-layout-editor{position:fixed;inset:0;pointer-events:none;z-index:1200}
+  .ui-layout-guide{position:fixed;background:rgba(255,240,106,0.22);pointer-events:none;opacity:0;transition:opacity .08s ease;z-index:1999999}
+  .ui-layout-guide.is-visible{opacity:1}
+  .ui-layout-guide.is-snap{background:rgba(124,248,255,0.88);box-shadow:0 0 12px rgba(124,248,255,0.45)}
+  .ui-layout-guide.guide-v{top:0;bottom:0;width:1px}
+  .ui-layout-guide.guide-h{left:0;right:0;height:1px}
   .ui-layout-box{position:fixed;border:2px solid transparent;background:transparent;
     box-shadow:none;pointer-events:auto}
   .ui-layout-box.selected{border-style:solid;border-color:#7cf8ff;background:rgba(124,248,255,0.12);
@@ -84,9 +89,11 @@
   .ui-layout-box.is-hidden.selected,.ui-layout-box.is-hidden.active{border-color:rgba(255,120,120,0.95);background:rgba(255,80,80,0.12)}
   .ui-layout-box.is-locked.selected,.ui-layout-box.is-locked.active{border-color:rgba(164,176,199,0.92);background:rgba(130,140,166,0.14)}
   .ui-layout-toolbar{position:fixed;right:16px;top:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;z-index:2000001}
+  .ui-layout-toolbar.is-mobile-minimal{right:10px;top:10px;gap:0;padding:4px 6px;border-radius:999px;background:rgba(18,10,28,0.34);backdrop-filter:blur(6px)}
   .ui-layout-toolbar button,.ui-layout-export-launcher,.ui-layout-modal button{appearance:none;border:none;border-radius:999px;
     background:rgba(20,8,32,0.94);color:#fff7c9;padding:10px 14px;font:12px/1.1 monospace;letter-spacing:0.04em;
     box-shadow:0 10px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(255,235,120,0.22) inset;cursor:pointer}
+  .ui-layout-toolbar.is-mobile-minimal button{padding:7px 11px;background:rgba(20,8,32,0.52);font-size:10px;opacity:0.78;box-shadow:0 0 0 1px rgba(255,235,120,0.16) inset}
   .ui-layout-toolbar button:hover,.ui-layout-export-launcher:hover,.ui-layout-modal button:hover{background:rgba(42,22,58,0.98)}
   .ui-layout-toolbar button.is-active{background:#fff06a;color:#24142f;box-shadow:0 10px 24px rgba(0,0,0,0.35),0 0 0 1px rgba(36,20,47,0.18) inset}
   .ui-layout-mode-pill{padding:8px 12px;border-radius:999px;background:rgba(255,240,106,0.12);color:#fff3b2;
@@ -553,11 +560,12 @@
   #attack-btn .btn-ico-svg,#jump-btn .btn-ico-svg,#special-btn .btn-ico{position:relative;z-index:3}
   #jump-btn .btn-ico-svg{color:#fff}
   #attack-btn .btn-ico-svg{color:#fff}
-  #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:9px 22px;border-radius:14px;
+  #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:0 12px;border-radius:14px;
     border:none;
     background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
     color:var(--ink);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.22em;cursor:pointer;
+    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:calc(13px * var(--ui-scale,1));letter-spacing:calc(0.22em * var(--ui-scale,1));cursor:pointer;
+    display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1;
     box-shadow:inset 0 0 0 1px rgba(255,255,255,0.65);
     text-shadow:0 1px 0 rgba(255,255,255,0.5);
     --ornate-size:30px;--ornate-bleed:8px}
@@ -678,7 +686,7 @@
      These rules replace the earlier pseudo-element approach so the
      admin editor can move/resize the ornament frame and the UI body
      separately. */
-  #ui-frame-layer{position:fixed;inset:0;pointer-events:none;z-index:14}
+  #ui-frame-layer{position:fixed;inset:0;pointer-events:none}
   .ui-deco-frame{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
     background-position:center;background-repeat:no-repeat;background-size:100% 100%}
   .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%}
@@ -712,6 +720,9 @@
   #paint-bar-track{position:absolute;left:0;right:0;top:0;bottom:0;
     border-radius:inherit;overflow:hidden;background:linear-gradient(180deg,#ffe6f4 0%,#f7b7d9 40%,#ef76bc 100%);
     box-shadow:inset 0 0 0 2px rgba(255,255,255,0.28),0 0 12px rgba(255,159,222,0.22)}
+  #paint-bar-grid{position:absolute;inset:0;display:grid;grid-template-rows:repeat(15,minmax(0,1fr));z-index:2;pointer-events:none}
+  #paint-bar-grid span{border-top:1px dashed rgba(255,255,255,0.55)}
+  #paint-bar-grid span:first-child{border-top:none}
   #paint-bar-fill{left:0;right:0;bottom:0;
     background:linear-gradient(0deg,#ff4f9b 0%,#ff76bd 22%,#f8a4da 100%)!important;
     box-shadow:0 -4px 12px rgba(255,255,255,0.55) inset!important}
@@ -1111,6 +1122,7 @@
 
 <div id="paint-bar">
   <div id="paint-bar-track">
+    <div id="paint-bar-grid" aria-hidden="true"></div>
     <div id="paint-bar-fill"></div>
   </div>
   <div id="paint-bar-label">0/10</div>
@@ -5468,7 +5480,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 14.088,
       "w": 131.6363525390625,
       "h": 72.72730255126953,
-      "z": 800,
+      "z": 1000,
       "locked": true
     },
     "kill-box": {
@@ -5476,21 +5488,23 @@ const UI_LAYOUT_DEFAULTS={
       "y": 13.858,
       "w": 70,
       "h": 26.727279663085938,
-      "z": 2000
+      "z": 200,
+      "locked": true
     },
     "timer-box": {
       "x": 49.648,
       "y": 15.781,
       "w": 63.272705078125,
       "h": 20.909095764160156,
-      "z": 2100
+      "z": 300,
+      "locked": true
     },
     "coin-box-frame": {
       "x": 77.897,
       "y": 15.124,
       "w": 142.5455322265625,
       "h": 63.999977111816406,
-      "z": 900,
+      "z": 1100,
       "locked": true
     },
     "coin-box": {
@@ -5505,7 +5519,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 15.032,
       "w": 129.9998779296875,
       "h": 68.72724914550781,
-      "z": 1000,
+      "z": 1200,
       "locked": true
     },
     "shop-btn": {
@@ -5516,19 +5530,19 @@ const UI_LAYOUT_DEFAULTS={
       "z": 2300
     },
     "paint-bar-frame": {
-      "x": 5.236,
-      "y": 43.211,
-      "w": 40.54544448852539,
-      "h": 291.09092712402344,
-      "z": 1100,
-      "locked": false
+      "x": 5.6,
+      "y": 48.167,
+      "w": 39.09090042114258,
+      "h": 355.0908660888672,
+      "z": 1300,
+      "locked": true
     },
     "paint-bar": {
-      "x": 5.184,
-      "y": 44.591,
-      "w": 25.272708892822266,
-      "h": 200.18173217773438,
-      "z": 100,
+      "x": 5.496,
+      "y": 49.978,
+      "w": 25.999980926513672,
+      "h": 240.9090118408203,
+      "z": 400,
       "locked": true
     },
     "soap-slot-frame": {
@@ -5536,35 +5550,35 @@ const UI_LAYOUT_DEFAULTS={
       "y": 69.126,
       "w": 128.90911865234375,
       "h": 178.18182373046875,
-      "z": 1200
+      "z": 1400
     },
     "soap-slot-card": {
       "x": 28.207,
       "y": 69.126,
       "w": 87.81817626953125,
       "h": 125.45458984375,
-      "z": 1300
+      "z": 1500
     },
     "weapon-cycle-frame": {
       "x": 15.964,
       "y": 69.486,
       "w": 150,
       "h": 200,
-      "z": 1400
+      "z": 1600
     },
     "weapon-cycle-card": {
       "x": 15.756,
       "y": 69.601,
       "w": 106,
       "h": 148,
-      "z": 1500
+      "z": 1700
     },
     "clean-btn-frame": {
       "x": 94.093,
       "y": 58.695,
       "w": 132,
       "h": 132,
-      "z": 200,
+      "z": 500,
       "locked": true
     },
     "clean-btn": {
@@ -5572,7 +5586,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": -3.1,
       "w": 64,
       "h": 64,
-      "z": 300,
+      "z": 600,
       "locked": true
     },
     "special-btn-frame": {
@@ -5580,7 +5594,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 83.399,
       "w": 152,
       "h": 152,
-      "z": 1600
+      "z": 1800
     },
     "special-btn": {
       "x": 74.619,
@@ -5594,7 +5608,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 83.399,
       "w": 152,
       "h": 152,
-      "z": 1700
+      "z": 1900
     },
     "jump-btn": {
       "x": 84.822,
@@ -5608,7 +5622,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 83.399,
       "w": 152,
       "h": 152,
-      "z": 1800
+      "z": 2000
     },
     "attack-btn": {
       "x": 94.524,
@@ -5619,18 +5633,18 @@ const UI_LAYOUT_DEFAULTS={
     },
     "viewport-frame-top": {
       "x": 50,
-      "y": 18.632,
+      "y": 18.093,
       "w": 1395.2727272510529,
       "h": 219.2436627197266,
-      "z": 600,
-      "locked": false
+      "z": 100,
+      "locked": true
     },
     "viewport-frame-bottom": {
       "x": 50,
       "y": 80.092,
       "w": 1396,
       "h": 252.8,
-      "z": 700,
+      "z": 900,
       "locked": true
     },
     "viewport-frame-left": {
@@ -5638,7 +5652,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 50,
       "w": 307.12,
       "h": 632,
-      "z": 500,
+      "z": 800,
       "locked": true
     },
     "viewport-frame-right": {
@@ -5646,7 +5660,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 50,
       "w": 307.12,
       "h": 632,
-      "z": 400,
+      "z": 700,
       "locked": true
     },
     "loadout-toggle-frame": {
@@ -5654,7 +5668,7 @@ const UI_LAYOUT_DEFAULTS={
       "y": 84.807,
       "w": 76.0000057220459,
       "h": 74.54544067382812,
-      "z": 1900,
+      "z": 2100,
       "locked": true
     },
     "loadout-toggle": {
@@ -5668,154 +5682,216 @@ const UI_LAYOUT_DEFAULTS={
   },
   "mobile": {
     "kill-box-frame": {
-      "x": 10.587,
-      "y": 10.751,
-      "w": 156.36,
-      "h": 84.36
+      "x": 19.056,
+      "y": 17.62,
+      "w": 80,
+      "h": 40,
+      "z": 1000,
+      "locked": true
     },
     "kill-box": {
-      "x": 11.006,
-      "y": 10.061,
-      "w": 95.45,
-      "h": 32.53
+      "x": 19.66,
+      "y": 17.435,
+      "w": 48.17727203369141,
+      "h": 21.6363525390625,
+      "z": 600,
+      "locked": true
     },
     "timer-box": {
       "x": 49.92,
-      "y": 15.204,
+      "y": 7.931,
       "w": 40,
-      "h": 18
+      "h": 18,
+      "z": 700,
+      "locked": true
     },
     "coin-box-frame": {
-      "x": 72.916,
-      "y": 17.769,
-      "w": 138.181884765625,
-      "h": 71.98815338134766
+      "x": 79.176,
+      "y": 17.87,
+      "w": 80,
+      "h": 40,
+      "z": 1100,
+      "locked": true
     },
     "coin-box": {
-      "x": 73.332,
-      "y": 17.538,
-      "w": 103.4393017578125,
-      "h": 28.902735595703124
+      "x": 79.96,
+      "y": 17.74,
+      "w": 40,
+      "h": 18,
+      "z": 800,
+      "locked": true
     },
     "shop-btn-frame": {
-      "x": 72.759,
-      "y": 29.991,
-      "w": 154,
-      "h": 84
+      "x": 79.756,
+      "y": 24.738,
+      "w": 72,
+      "h": 36,
+      "z": 1200,
+      "locked": true
     },
     "shop-btn": {
-      "x": 73.594,
-      "y": 29.531,
-      "w": 85.09,
-      "h": 31.82
+      "x": 80.407,
+      "y": 24.48,
+      "w": 36,
+      "h": 18,
+      "z": 900,
+      "locked": true
     },
     "paint-bar-frame": {
-      "x": 5.498,
-      "y": 45.972,
-      "w": 108.9,
-      "h": 412.55
+      "x": 9.365,
+      "y": 47.184,
+      "w": 36.1727279663086,
+      "h": 355.0955322265625,
+      "z": 200,
+      "locked": true
     },
     "paint-bar": {
-      "x": 5.602,
-      "y": 50,
-      "w": 94.36,
-      "h": 271.44
+      "x": 9.469,
+      "y": 49.495,
+      "w": 24.541820392608642,
+      "h": 243.80366271972656,
+      "z": 100,
+      "locked": true
     },
     "soap-slot-frame": {
-      "x": 16.233,
-      "y": 37.02,
-      "w": 128.91,
-      "h": 178.18
+      "x": 20,
+      "y": 71,
+      "w": 72,
+      "h": 96,
+      "z": 1300
     },
     "soap-slot-card": {
-      "x": 16.231,
-      "y": 37.826,
-      "w": 87.81,
-      "h": 125.45
+      "x": 20,
+      "y": 71,
+      "w": 90,
+      "h": 126,
+      "z": 1400
     },
     "weapon-cycle-frame": {
-      "x": 15.968,
-      "y": 69.485,
-      "w": 150,
-      "h": 200
+      "x": 44,
+      "y": 71,
+      "w": 126,
+      "h": 170,
+      "z": 1500
     },
     "weapon-cycle-card": {
-      "x": 15.759,
-      "y": 71.18,
-      "w": 106,
-      "h": 148
+      "x": 44,
+      "y": 71,
+      "w": 90,
+      "h": 126,
+      "z": 1600
     },
     "clean-btn-frame": {
-      "x": 20,
-      "y": 62,
-      "w": 110,
-      "h": 110
+      "x": 87.755,
+      "y": 57.758,
+      "w": 56,
+      "h": 56,
+      "z": 1700,
+      "locked": true
     },
     "clean-btn": {
-      "x": 20,
-      "y": 62,
-      "w": 52,
-      "h": 52
+      "x": 87.756,
+      "y": -5.778,
+      "w": 31.6363525390625,
+      "h": 36,
+      "z": 2300,
+      "locked": true
     },
     "special-btn-frame": {
-      "x": 76.664,
-      "y": 80.632,
-      "w": 103.27276611328125,
-      "h": 85.0909423828125
+      "x": 76.48,
+      "y": 66.087,
+      "w": 61.09095764160156,
+      "h": 60.3636474609375,
+      "z": 1800,
+      "locked": true
     },
     "special-btn": {
-      "x": 76.617,
-      "y": 80.292,
+      "x": 76.249,
+      "y": 65.746,
       "w": 37.6363525390625,
-      "h": 39.0909423828125
+      "h": 39.0909423828125,
+      "z": 2400,
+      "locked": true
     },
     "jump-btn-frame": {
-      "x": 82.3,
-      "y": 68.19,
-      "w": 78.12136840820312,
-      "h": 99.15142822265625
+      "x": 89.664,
+      "y": 70.412,
+      "w": 56,
+      "h": 56,
+      "z": 1900,
+      "locked": true
     },
     "jump-btn": {
-      "x": 82.184,
-      "y": 67.914,
+      "x": 89.548,
+      "y": 70.338,
       "w": 34.0001220703125,
-      "h": 34.72723388671875
+      "h": 34.72723388671875,
+      "z": 2500,
+      "locked": true
     },
     "attack-btn-frame": {
-      "x": 77.129,
-      "y": 56.6,
-      "w": 77.0909423828125,
-      "h": 84.36355590820312
+      "x": 83.021,
+      "y": 78.317,
+      "w": 56,
+      "h": 56,
+      "z": 2000,
+      "locked": true
     },
     "attack-btn": {
-      "x": 77.085,
-      "y": 56.42,
-      "w": 36.9091796875,
-      "h": 35.45452880859375
+      "x": 82.977,
+      "y": 78.036,
+      "w": 36.909149169921875,
+      "h": 36.1817626953125,
+      "z": 2600,
+      "locked": true
     },
     "viewport-frame-top": {
       "x": 50,
       "y": 8.4,
       "w": 1396,
-      "h": 214.88000000000002
+      "h": 214.88000000000002,
+      "z": 2200,
+      "locked": true
     },
     "viewport-frame-bottom": {
-      "x": 50,
-      "y": 91.6,
-      "w": 1396,
-      "h": 252.8
+      "x": 50.552,
+      "y": 89.681,
+      "w": 1395.2727355957031,
+      "h": 195.3455017089844,
+      "z": 500,
+      "locked": true
     },
     "viewport-frame-left": {
-      "x": 11,
-      "y": 50,
-      "w": 307.12,
-      "h": 632
+      "x": 20.39,
+      "y": 50.505,
+      "w": 163.84727012634278,
+      "h": 782.545349240303,
+      "z": 300,
+      "locked": true
     },
     "viewport-frame-right": {
-      "x": 89,
-      "y": 50,
-      "w": 307.12,
-      "h": 632
+      "x": 77.952,
+      "y": 51.819,
+      "w": 171.84723388671875,
+      "h": 749.818265914917,
+      "z": 400,
+      "locked": true
+    },
+    "loadout-toggle-frame": {
+      "x": 33.513,
+      "y": 71.667,
+      "w": 56,
+      "h": 56,
+      "z": 2100,
+      "locked": true
+    },
+    "loadout-toggle": {
+      "x": 33.328,
+      "y": 71.566,
+      "w": 34.363616943359375,
+      "h": 34.363555908203125,
+      "z": 2700,
+      "locked": true
     }
   }
 };
@@ -5930,7 +6006,7 @@ function formatUILayoutExport(){
   return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
 }
 function showUILayoutToast(msg){
-  let el=uiLayoutState.editor?.querySelector('.ui-layout-toast');
+  let el=document.querySelector('.ui-layout-toast');
   if(!el){
     el=document.createElement('div');
     el.className='ui-layout-toast';
@@ -5938,7 +6014,7 @@ function showUILayoutToast(msg){
   }
   el.textContent=msg;
   window.clearTimeout(uiLayoutState.toastTimer);
-  uiLayoutState.toastTimer=window.setTimeout(()=>el.remove(),2200);
+  uiLayoutState.toastTimer=window.setTimeout(()=>el.remove(),850);
 }
 function currentUILayoutMetrics(def){
   const el=document.getElementById(def.id);
@@ -6067,6 +6143,11 @@ function applyUILayoutMetrics(def,metrics){
   el.style.setProperty('--ui-scale-y',`${scaleY.toFixed(3)}`,'important');
   el.style.setProperty('--ui-scale',`${textScale.toFixed(3)}`,'important');
   el.style.setProperty('z-index',String(getUILayoutLayer(def,metrics)),'important');
+  if(def.id==='shop-btn'){
+    el.style.setProperty('padding','0 6px','important');
+    el.style.setProperty('font-size',`${Math.max(8,13*textScale)}px`,'important');
+    el.style.setProperty('letter-spacing',`${Math.max(0.06,0.22*textScale)}em`,'important');
+  }
   if(def.id==='loadout-bar'){
     el.style.setProperty('max-width','none','important');
     el.style.setProperty('flex-wrap',mobileLoadoutQuery.matches?'nowrap':'wrap','important');
@@ -6153,10 +6234,21 @@ function refreshUILayoutEditorToolbar(){
   if(!toolbar) return;
   const mode=getUILayoutBucket();
   const autoMode=getUILayoutAutoBucket();
-  toolbar.querySelector('[data-mode="desktop"]')?.classList.toggle('is-active',mode==='desktop');
-  toolbar.querySelector('[data-mode="mobile"]')?.classList.toggle('is-active',mode==='mobile');
+  const desktopBtn=toolbar.querySelector('[data-mode="desktop"]');
+  const mobileBtn=toolbar.querySelector('[data-mode="mobile"]');
+  const exportBtn=toolbar.querySelector('[data-action="export"]');
+  const closeBtn=toolbar.querySelector('[data-action="close"]');
+  const isMobileEditor=mode==='mobile';
+  toolbar.classList.toggle('is-mobile-minimal',isMobileEditor);
+  desktopBtn?.classList.toggle('is-active',mode==='desktop');
+  mobileBtn?.classList.toggle('is-active',mode==='mobile');
+  if(desktopBtn) desktopBtn.hidden=isMobileEditor;
+  if(mobileBtn) mobileBtn.hidden=isMobileEditor;
+  if(exportBtn) exportBtn.hidden=isMobileEditor;
+  if(closeBtn) closeBtn.textContent=isMobileEditor?'SAVE':'Save & Exit';
   const pill=toolbar.querySelector('.ui-layout-mode-pill');
   if(pill){
+    pill.hidden=isMobileEditor;
     pill.textContent=uiLayoutState.forcedMode
       ? `Editing: ${mode} | Viewport: ${autoMode}`
       : `Editing: ${mode} (auto)`;
@@ -6231,6 +6323,30 @@ function captureUILayoutObjectPanelScroll(){
 function restoreUILayoutObjectPanelScroll(){
   const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
   if(list) list.scrollTop=uiLayoutState.objectPanelScrollTop||0;
+}
+function refreshUILayoutGuides(){
+  const editor=uiLayoutState.editor;
+  if(!editor) return;
+  const guideV=editor.querySelector('.ui-layout-guide.guide-v');
+  const guideH=editor.querySelector('.ui-layout-guide.guide-h');
+  if(!guideV||!guideH) return;
+  const selectedBox=uiLayoutState.selectedId ? uiLayoutState.overlays.get(uiLayoutState.selectedId) : null;
+  if(!uiLayoutState.active||!selectedBox){
+    guideV.classList.remove('is-visible','is-snap');
+    guideH.classList.remove('is-visible','is-snap');
+    return;
+  }
+  const rect=selectedBox.getBoundingClientRect();
+  const cx=rect.left+rect.width*0.5;
+  const cy=rect.top+rect.height*0.5;
+  const snapX=Math.abs(cx-window.innerWidth*0.5)<=8;
+  const snapY=Math.abs(cy-window.innerHeight*0.5)<=8;
+  guideV.style.left=`${window.innerWidth*0.5}px`;
+  guideH.style.top=`${window.innerHeight*0.5}px`;
+  guideV.classList.add('is-visible');
+  guideH.classList.add('is-visible');
+  guideV.classList.toggle('is-snap',snapX);
+  guideH.classList.toggle('is-snap',snapY);
 }
 function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
@@ -6320,6 +6436,7 @@ function refreshUILayoutObjectPanel(){
   }
   restoreUILayoutObjectPanelScroll();
   syncUILayoutSelectionStyles();
+  refreshUILayoutGuides();
 }
 function setUILayoutSelection(targetId,options={}){
   const {additive=false}=options;
@@ -6337,11 +6454,13 @@ function setUILayoutSelection(targetId,options={}){
     uiLayoutState.selectedIds=[targetId];
   }
   syncUILayoutSelectionStyles();
+  refreshUILayoutGuides();
 }
 function buildUILayoutEditor(){
   if(uiLayoutState.editor) return uiLayoutState.editor;
   const editor=document.createElement('div');
   editor.className='ui-layout-editor';
+  editor.innerHTML='<div class="ui-layout-guide guide-v"></div><div class="ui-layout-guide guide-h"></div>';
   const toolbar=document.createElement('div');
   toolbar.className='ui-layout-toolbar';
   toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
@@ -6453,6 +6572,7 @@ function refreshUILayoutEditor(){
   if(panel) uiLayoutState.editor.appendChild(panel);
   restoreUILayoutObjectPanelScroll();
   syncUILayoutSelectionStyles();
+  refreshUILayoutGuides();
 }
 function handleUILayoutPointerMove(e){
   if(uiLayoutState.listDrag){
@@ -6645,7 +6765,6 @@ function disableUILayoutEditor(openExport=false){
   saveUILayoutConfig();
   ensureUILayoutExportButton();
   if(openExport) showUILayoutExportModal();
-  showUILayoutToast(`Layout admin saved locally (${getUILayoutBucket()})`);
 }
 function toggleUILayoutEditor(){
   if(uiLayoutState.active) disableUILayoutEditor();
@@ -7606,7 +7725,14 @@ const timerEl=document.getElementById('timer-text');
 const timerBox=document.getElementById('timer-box');
 const paintBarFill=document.getElementById('paint-bar-fill');
 const paintBarLabel=document.getElementById('paint-bar-label');
+const paintBarGrid=document.getElementById('paint-bar-grid');
 const artWinsOverlay=document.getElementById('art-wins');
+if(paintBarGrid&&!paintBarGrid.children.length){
+  for(let i=0;i<PAINT_FILL_GOAL;i++){
+    const tick=document.createElement('span');
+    paintBarGrid.appendChild(tick);
+  }
+}
 
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
