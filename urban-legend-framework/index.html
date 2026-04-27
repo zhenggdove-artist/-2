@@ -6150,6 +6150,15 @@ function moveSelectedUILayoutItems(edge){
   showUILayoutToast(`Moved ${moving.length} item(s) to ${edge}`);
   return true;
 }
+function syncUILayoutSelectionStyles(){
+  for(const [id,box] of uiLayoutState.overlays.entries()){
+    box.classList.toggle('selected',uiLayoutState.selectedIds.includes(id));
+  }
+  const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
+  list?.querySelectorAll?.('.ui-layout-object-row').forEach(row=>{
+    row.classList.toggle('is-selected',uiLayoutState.selectedIds.includes(row.dataset.targetId));
+  });
+}
 function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
   const list=panel?.querySelector('.ui-layout-object-list');
@@ -6238,6 +6247,7 @@ function refreshUILayoutObjectPanel(){
     list.appendChild(row);
   }
   list.scrollTop=scrollTop;
+  syncUILayoutSelectionStyles();
 }
 function setUILayoutSelection(targetId,options={}){
   const {additive=false}=options;
@@ -6254,10 +6264,7 @@ function setUILayoutSelection(targetId,options={}){
     uiLayoutState.selectedId=targetId;
     uiLayoutState.selectedIds=[targetId];
   }
-  for(const [id,box] of uiLayoutState.overlays.entries()){
-    box.classList.toggle('selected',uiLayoutState.selectedIds.includes(id));
-  }
-  refreshUILayoutObjectPanel();
+  syncUILayoutSelectionStyles();
 }
 function buildUILayoutEditor(){
   if(uiLayoutState.editor) return uiLayoutState.editor;
@@ -6368,7 +6375,7 @@ function refreshUILayoutEditor(){
   }
   const panel=uiLayoutState.editor.querySelector('.ui-layout-object-panel');
   if(panel) uiLayoutState.editor.appendChild(panel);
-  setUILayoutSelection(uiLayoutState.selectedId);
+  syncUILayoutSelectionStyles();
 }
 function handleUILayoutPointerMove(e){
   if(uiLayoutState.listDrag){
