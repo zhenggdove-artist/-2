@@ -105,12 +105,16 @@
     background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap}
   .ui-layout-handle{position:absolute;right:-9px;bottom:-9px;width:18px;height:18px;border-radius:999px;
     background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:nwse-resize}
-  .ui-layout-object-panel{position:fixed;left:16px;top:16px;width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 32px);
+  .ui-layout-object-panel{position:fixed;left:16px;top:16px;width:min(340px,calc(100vw - 32px));height:min(520px,calc(100vh - 32px));
     display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:rgba(14,8,22,0.95);
     box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:1216}
+  .ui-layout-object-panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:move}
+  .ui-layout-object-panel-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
   .ui-layout-object-panel h3{margin:0;color:#fff3b2;font:600 16px/1.2 "Trebuchet MS",sans-serif}
   .ui-layout-object-panel p{margin:0;color:#f8efc0;font:11px/1.45 monospace;opacity:0.82}
-  .ui-layout-object-list{overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+  .ui-layout-object-panel-handle{flex:0 0 auto;width:18px;height:18px;border-radius:999px;background:#fff06a;
+    box-shadow:0 0 0 2px #2a1738 inset,0 2px 8px rgba(0,0,0,0.45)}
+  .ui-layout-object-list{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
   .ui-layout-object-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;
     padding:8px 10px;border-radius:12px;background:rgba(255,255,255,0.04);box-shadow:0 0 0 1px rgba(255,235,120,0.1) inset}
   .ui-layout-object-row.is-selected{background:rgba(124,248,255,0.12);box-shadow:0 0 0 1px rgba(124,248,255,0.34) inset}
@@ -123,6 +127,8 @@
   .ui-layout-object-panel button{appearance:none;border:none;border-radius:999px;background:rgba(20,8,32,0.94);color:#fff7c9;
     padding:7px 10px;font:11px/1 monospace;letter-spacing:0.04em;box-shadow:0 0 0 1px rgba(255,235,120,0.18) inset;cursor:pointer}
   .ui-layout-object-panel button.is-active{background:#7cf8ff;color:#1a0f24;box-shadow:0 0 0 1px rgba(0,0,0,0.18) inset}
+  .ui-layout-object-panel-resize{position:absolute;right:8px;bottom:8px;width:18px;height:18px;border-radius:999px;
+    background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:nwse-resize}
   .ui-layout-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:1210;
     padding:10px 14px;border-radius:12px;background:rgba(18,10,26,0.92);color:#fff7c9;
     font:12px/1.35 monospace;letter-spacing:0.04em;box-shadow:0 10px 28px rgba(0,0,0,0.35)}
@@ -5772,7 +5778,7 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,clipboard:null,history:[]};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,panelRect:{left:16,top:16,width:340,height:520},toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,clipboard:null,history:[]};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
@@ -5923,6 +5929,28 @@ function getUILayoutOrderedDefs(desc=false){
     return UI_LAYOUT_TARGET_DEFS.indexOf(a)-UI_LAYOUT_TARGET_DEFS.indexOf(b);
   });
   return defs;
+}
+function clampUILayoutPanelRect(rect){
+  const width=Math.max(260,Math.min(rect.width,window.innerWidth-16));
+  const height=Math.max(220,Math.min(rect.height,window.innerHeight-16));
+  const maxLeft=Math.max(0,window.innerWidth-width);
+  const maxTop=Math.max(0,window.innerHeight-height);
+  return {
+    left:Math.min(Math.max(0,rect.left),maxLeft),
+    top:Math.min(Math.max(0,rect.top),maxTop),
+    width,
+    height,
+  };
+}
+function applyUILayoutObjectPanelRect(){
+  const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
+  if(!panel) return;
+  const rect=clampUILayoutPanelRect(uiLayoutState.panelRect);
+  uiLayoutState.panelRect=rect;
+  panel.style.left=`${rect.left}px`;
+  panel.style.top=`${rect.top}px`;
+  panel.style.width=`${rect.width}px`;
+  panel.style.height=`${rect.height}px`;
 }
 function ensureUILayoutMetrics(def){
   const store=getUILayoutStore();
@@ -6091,6 +6119,7 @@ function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
   const list=panel?.querySelector('.ui-layout-object-list');
   if(!list) return;
+  applyUILayoutObjectPanelRect();
   list.innerHTML='';
   for(const def of getUILayoutOrderedDefs(true)){
     const metrics=ensureUILayoutMetrics(def);
@@ -6160,7 +6189,23 @@ function buildUILayoutEditor(){
   editor.appendChild(toolbar);
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
-  panel.innerHTML='<h3>Layout Objects</h3><p>Lock to ignore canvas selection. Use arrows to move front/back.</p><div class="ui-layout-object-list"></div>';
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Lock to ignore canvas selection. Use arrows to move front/back.</p></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize"></div>';
+  panel.addEventListener('pointerdown',e=>{
+    const resize=e.target?.closest?.('.ui-layout-object-panel-resize');
+    const header=e.target?.closest?.('.ui-layout-object-panel-header');
+    if(!resize && !header) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect=clampUILayoutPanelRect(uiLayoutState.panelRect);
+    uiLayoutState.panelDrag={
+      mode:resize?'resize':'move',
+      startX:e.clientX,
+      startY:e.clientY,
+      startRect:{...rect},
+      pointerId:e.pointerId,
+    };
+    panel.setPointerCapture?.(e.pointerId);
+  });
   editor.appendChild(panel);
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=document.createElement('div');
@@ -6219,6 +6264,27 @@ function refreshUILayoutEditor(){
   setUILayoutSelection(uiLayoutState.selectedId);
 }
 function handleUILayoutPointerMove(e){
+  if(uiLayoutState.panelDrag){
+    const drag=uiLayoutState.panelDrag;
+    if(drag.pointerId!==undefined && e.pointerId!==drag.pointerId) return;
+    const dx=e.clientX-drag.startX;
+    const dy=e.clientY-drag.startY;
+    if(drag.mode==='resize'){
+      uiLayoutState.panelRect=clampUILayoutPanelRect({
+        ...drag.startRect,
+        width:drag.startRect.width+dx,
+        height:drag.startRect.height+dy,
+      });
+    }else{
+      uiLayoutState.panelRect=clampUILayoutPanelRect({
+        ...drag.startRect,
+        left:drag.startRect.left+dx,
+        top:drag.startRect.top+dy,
+      });
+    }
+    applyUILayoutObjectPanelRect();
+    return;
+  }
   if(!uiLayoutState.active||!uiLayoutState.drag) return;
   const {def,startX,startY,startMetrics,resize}=uiLayoutState.drag;
   const dx=e.clientX-startX;
@@ -6240,6 +6306,10 @@ function handleUILayoutPointerMove(e){
   refreshUILayoutEditor();
 }
 function handleUILayoutPointerUp(){
+  if(uiLayoutState.panelDrag){
+    uiLayoutState.panelDrag=null;
+    return;
+  }
   if(!uiLayoutState.drag) return;
   const box=uiLayoutState.overlays.get(uiLayoutState.drag.def.id);
   box?.classList.remove('active');
