@@ -5990,7 +5990,7 @@ const UI_LAYOUT_COMPARE_PAIRS={
   'loadout-toggle-frame':'loadout-toggle',
   'loadout-toggle':'loadout-toggle-frame',
 };
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false,editedBuckets:new Set()};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
@@ -6086,6 +6086,19 @@ function loadUILayoutConfig(){
   }catch{
     return base;
   }
+}
+function readUILayoutFromStorage(){
+  try{
+    const raw=localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
+    if(!raw) return null;
+    return sanitizeUILayoutConfig(JSON.parse(raw));
+  }catch{
+    return null;
+  }
+}
+function markUILayoutBucketEdited(bucket){
+  const target=bucket||getUILayoutBucket();
+  if(target==='desktop'||target==='mobile') uiLayoutState.editedBuckets?.add(target);
 }
 function getUILayoutBucket(){ return uiLayoutState.forcedMode || (mobileLoadoutQuery.matches ? 'mobile' : 'desktop'); }
 function getUILayoutStore(){ return uiLayoutState.config[getUILayoutBucket()]||(uiLayoutState.config[getUILayoutBucket()]={}); }
@@ -6194,6 +6207,7 @@ function applyUILayoutLayerOrder(orderedIdsDesc){
     store[id]=metrics;
     applyUILayoutMetrics(def,metrics);
   });
+  markUILayoutBucketEdited();
 }
 function clampUILayoutPanelRect(rect){
   const width=Math.max(260,Math.min(rect.width,window.innerWidth-16));
@@ -6267,6 +6281,15 @@ function applyUILayoutConfig(){
 }
 function saveUILayoutConfig(){
   uiLayoutState.config=sanitizeUILayoutConfig(uiLayoutState.config);
+  // Sibling window safety: only overwrite the buckets the user actually
+  // edited in this session. The other bucket gets merged from whatever's
+  // on disk so a desktop save can't clobber a mobile preview popup's
+  // edits (and vice versa).
+  const latest=readUILayoutFromStorage();
+  if(latest){
+    if(!uiLayoutState.editedBuckets?.has('desktop') && latest.desktop) uiLayoutState.config.desktop=latest.desktop;
+    if(!uiLayoutState.editedBuckets?.has('mobile') && latest.mobile) uiLayoutState.config.mobile=latest.mobile;
+  }
   localStorage.setItem(UI_LAYOUT_STORAGE_KEY,JSON.stringify(uiLayoutState.config));
   window.__uiLayoutConfig=uiLayoutState.config;
 }
@@ -6367,6 +6390,7 @@ function toggleUILayoutLock(targetId){
   metrics.locked=!metrics.locked;
   const store=getUILayoutStore();
   store[def.id]=metrics;
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,metrics);
   if(metrics.locked && uiLayoutState.selectedId===def.id) setUILayoutSelection(null);
   refreshUILayoutEditor();
@@ -6391,6 +6415,7 @@ function moveUILayoutLayer(targetId,direction){
   const store=getUILayoutStore();
   store[current.id]=currentMetrics;
   store[other.id]=otherMetrics;
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(current,currentMetrics);
   applyUILayoutMetrics(other,otherMetrics);
   refreshUILayoutEditor();
@@ -6789,6 +6814,7 @@ function handleUILayoutPointerMove(e){
     metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
   }
   store[def.id]=metrics;
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,metrics);
   refreshUILayoutEditor();
 }
@@ -6846,6 +6872,7 @@ function pasteSelectedUILayoutItem(){
     h:source.h,
     hidden:false,
   };
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,store[def.id]);
   refreshUILayoutEditor();
   showUILayoutToast(`Pasted onto ${def.label}`);
@@ -6859,6 +6886,7 @@ function deleteSelectedUILayoutItem(){
   const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
   metrics.hidden=true;
   store[def.id]=metrics;
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,metrics);
   refreshUILayoutEditor();
   showUILayoutToast(`Deleted ${def.label}`);
@@ -6868,6 +6896,11 @@ function enableUILayoutEditor(){
   if(uiLayoutState.active) return;
   uiLayoutState.active=true;
   uiLayoutState.history=[];
+  uiLayoutState.editedBuckets=new Set();
+  // Re-read disk in case a sibling preview window saved newer values
+  // for the other bucket since this page loaded.
+  uiLayoutState.config=loadUILayoutConfig();
+  window.__uiLayoutConfig=uiLayoutState.config;
   uiLayoutState.forcedMode=getUILayoutAutoBucket();
   document.body.classList.add('admin-layout-mode');
   hideUILayoutExportButton();
@@ -6935,6 +6968,29 @@ function setShopOpen(open){
 }
 
 const mobileLoadoutQuery=window.matchMedia('(max-width:640px)');
+const GAMEOVER_HIDE_IDS=[
+  'hud','paint-bar','shop-btn','shop-panel','loadout-toggle','loadout-bar',
+  'game-controls','joystick-zone','jump-btn','attack-btn','special-btn','clean-btn',
+  'title','ui-frame-layer','timer-box','kill-box','coin-box',
+  'kill-box-frame','coin-box-frame','shop-btn-frame','paint-bar-frame',
+  'clean-btn-frame','special-btn-frame','jump-btn-frame','attack-btn-frame',
+  'loadout-toggle-frame','weapon-cycle-frame','weapon-cycle-card',
+  'soap-slot-frame','soap-slot-card',
+];
+function setGameOverUIHidden(hidden){
+  const apply=el=>{
+    if(!el) return;
+    if(hidden){
+      el.dataset.gameOverHidden='1';
+      el.style.setProperty('display','none','important');
+    }else if(el.dataset.gameOverHidden){
+      delete el.dataset.gameOverHidden;
+      el.style.removeProperty('display');
+    }
+  };
+  for(const id of GAMEOVER_HIDE_IDS) apply(document.getElementById(id));
+  document.querySelectorAll('#loadout-bar .loadout-slot, #loadout-bar .loadout-slot-frame').forEach(apply);
+}
 function syncLoadoutSlotVisibility(open){
   if(loadoutBar){
     loadoutBar.style.setProperty('display',open?'flex':'none','important');
@@ -6964,6 +7020,19 @@ function syncLoadoutLayout(forceClosed=false){
 mobileLoadoutQuery.addEventListener?.('change',()=>{
   if(!uiLayoutState.forcedMode) applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
+});
+// Pull in changes saved by a sibling window (e.g. the mobile preview popup)
+// so the parent window doesn't keep stale values it would otherwise write
+// back when its own save fires.
+window.addEventListener('storage',e=>{
+  if(e.key!==UI_LAYOUT_STORAGE_KEY) return;
+  const latest=readUILayoutFromStorage();
+  if(!latest) return;
+  const edits=uiLayoutState.editedBuckets;
+  if(!edits||!edits.has('desktop')) uiLayoutState.config.desktop=latest.desktop;
+  if(!edits||!edits.has('mobile')) uiLayoutState.config.mobile=latest.mobile;
+  window.__uiLayoutConfig=uiLayoutState.config;
+  if(uiLayoutState.active) applyUILayoutConfig();
 });
 applyUILayoutConfig();
 if(layoutQuery.get('layoutMode')==='mobile'){
@@ -7919,6 +7988,8 @@ function triggerArtWins(){
   // Kick off the fade-to-black + overlay reveal
   fadeEl.classList.add('show');
   artWinsOverlay.classList.add('show');
+  setLoadoutExpanded(false);
+  setGameOverUIHidden(true);
   // Freeze artists where they are; no more spawns, no more movement.
   // The scene keeps rendering underneath the fade for a couple seconds
   // then the overlay fully covers it.
@@ -8472,6 +8543,7 @@ startBtn.addEventListener('click',()=>{
 function startGame(){
   unlockSFX();
   setEndOverlaySceneView(false);
+  setGameOverUIHidden(false);
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
@@ -8514,6 +8586,11 @@ async function endGame(){
   // that would otherwise overlap the end overlay and its minimized
   // scene-view pill.
   document.body.classList.add('game-ended');
+  // Inline display:none on every gameplay HUD element so leftover
+  // inline display:flex from syncLoadoutSlotVisibility (and friends)
+  // can't outlive game-over and bleed through the leaderboard.
+  setLoadoutExpanded(false);
+  setGameOverUIHidden(true);
   nameInput.value='';submitBtn.disabled=false;
   await refreshLeaderboard();
 }
@@ -8576,6 +8653,7 @@ endOverlay?.addEventListener('click',e=>{
 replayBtn.addEventListener('click',()=>{
   endOverlay.classList.remove('show');
   document.body.classList.remove('game-ended');
+  setGameOverUIHidden(false);
   // Re-enable VHS unconditionally so a replay always starts with the
   // full post-process look, even if the player toggled it off mid-run.
   vhsEnabled=true;
