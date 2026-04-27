@@ -103,8 +103,12 @@
   .ui-layout-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
   .ui-layout-label{position:absolute;left:0;top:-22px;padding:2px 7px;border-radius:999px;
     background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap}
-  .ui-layout-handle{position:absolute;right:-9px;bottom:-9px;width:18px;height:18px;border-radius:999px;
-    background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:nwse-resize}
+  .ui-layout-handle,.ui-layout-object-panel-resize{position:absolute;width:24px;height:24px;border-radius:999px;
+    background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);pointer-events:auto}
+  .ui-layout-handle[data-corner="nw"],.ui-layout-object-panel-resize[data-corner="nw"]{left:-12px;top:-12px;cursor:nwse-resize}
+  .ui-layout-handle[data-corner="ne"],.ui-layout-object-panel-resize[data-corner="ne"]{right:-12px;top:-12px;cursor:nesw-resize}
+  .ui-layout-handle[data-corner="sw"],.ui-layout-object-panel-resize[data-corner="sw"]{left:-12px;bottom:-12px;cursor:nesw-resize}
+  .ui-layout-handle[data-corner="se"],.ui-layout-object-panel-resize[data-corner="se"]{right:-12px;bottom:-12px;cursor:nwse-resize}
   .ui-layout-object-panel{position:fixed;left:16px;top:16px;width:min(340px,calc(100vw - 32px));height:min(520px,calc(100vh - 32px));
     display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:rgba(14,8,22,0.95);
     box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:1216}
@@ -127,8 +131,6 @@
   .ui-layout-object-panel button{appearance:none;border:none;border-radius:999px;background:rgba(20,8,32,0.94);color:#fff7c9;
     padding:7px 10px;font:11px/1 monospace;letter-spacing:0.04em;box-shadow:0 0 0 1px rgba(255,235,120,0.18) inset;cursor:pointer}
   .ui-layout-object-panel button.is-active{background:#7cf8ff;color:#1a0f24;box-shadow:0 0 0 1px rgba(0,0,0,0.18) inset}
-  .ui-layout-object-panel-resize{position:absolute;right:8px;bottom:8px;width:18px;height:18px;border-radius:999px;
-    background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);cursor:nwse-resize}
   .ui-layout-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:1210;
     padding:10px 14px;border-radius:12px;background:rgba(18,10,26,0.92);color:#fff7c9;
     font:12px/1.35 monospace;letter-spacing:0.04em;box-shadow:0 10px 28px rgba(0,0,0,0.35)}
@@ -6189,7 +6191,7 @@ function buildUILayoutEditor(){
   editor.appendChild(toolbar);
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
-  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Lock to ignore canvas selection. Use arrows to move front/back.</p></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize"></div>';
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Lock to ignore canvas selection. Use arrows to move front/back.</p></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
   panel.addEventListener('pointerdown',e=>{
     const resize=e.target?.closest?.('.ui-layout-object-panel-resize');
     const header=e.target?.closest?.('.ui-layout-object-panel-header');
@@ -6199,6 +6201,7 @@ function buildUILayoutEditor(){
     const rect=clampUILayoutPanelRect(uiLayoutState.panelRect);
     uiLayoutState.panelDrag={
       mode:resize?'resize':'move',
+      corner:resize?.dataset?.corner||'se',
       startX:e.clientX,
       startY:e.clientY,
       startRect:{...rect},
@@ -6211,7 +6214,7 @@ function buildUILayoutEditor(){
     const box=document.createElement('div');
     box.className='ui-layout-box';
     box.dataset.targetId=def.id;
-    box.innerHTML=`<div class="ui-layout-label">${def.label}</div><div class="ui-layout-handle"></div>`;
+    box.innerHTML=`<div class="ui-layout-label">${def.label}</div><div class="ui-layout-handle" data-corner="nw"></div><div class="ui-layout-handle" data-corner="ne"></div><div class="ui-layout-handle" data-corner="sw"></div><div class="ui-layout-handle" data-corner="se"></div>`;
     box.addEventListener('pointerdown',e=>{
       e.preventDefault();
       e.stopPropagation();
@@ -6223,7 +6226,8 @@ function buildUILayoutEditor(){
       setUILayoutSelection(def.id);
       pushUILayoutHistory('move');
       const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
-      uiLayoutState.drag={def,startX:e.clientX,startY:e.clientY,startMetrics:metrics,resize:e.target.classList.contains('ui-layout-handle')};
+      const handle=e.target?.closest?.('.ui-layout-handle');
+      uiLayoutState.drag={def,startX:e.clientX,startY:e.clientY,startMetrics:metrics,resize:!!handle,corner:handle?.dataset?.corner||'se'};
       box.classList.add('active');
       box.setPointerCapture?.(e.pointerId);
     });
@@ -6270,11 +6274,18 @@ function handleUILayoutPointerMove(e){
     const dx=e.clientX-drag.startX;
     const dy=e.clientY-drag.startY;
     if(drag.mode==='resize'){
-      uiLayoutState.panelRect=clampUILayoutPanelRect({
-        ...drag.startRect,
-        width:drag.startRect.width+dx,
-        height:drag.startRect.height+dy,
-      });
+      const next={...drag.startRect};
+      if(drag.corner.includes('e')) next.width=drag.startRect.width+dx;
+      if(drag.corner.includes('s')) next.height=drag.startRect.height+dy;
+      if(drag.corner.includes('w')){
+        next.left=drag.startRect.left+dx;
+        next.width=drag.startRect.width-dx;
+      }
+      if(drag.corner.includes('n')){
+        next.top=drag.startRect.top+dy;
+        next.height=drag.startRect.height-dy;
+      }
+      uiLayoutState.panelRect=clampUILayoutPanelRect(next);
     }else{
       uiLayoutState.panelRect=clampUILayoutPanelRect({
         ...drag.startRect,
@@ -6286,14 +6297,39 @@ function handleUILayoutPointerMove(e){
     return;
   }
   if(!uiLayoutState.active||!uiLayoutState.drag) return;
-  const {def,startX,startY,startMetrics,resize}=uiLayoutState.drag;
+  const {def,startX,startY,startMetrics,resize,corner}=uiLayoutState.drag;
   const dx=e.clientX-startX;
   const dy=e.clientY-startY;
   const store=getUILayoutStore();
   const metrics={...startMetrics};
   if(resize){
-    metrics.w=Math.max(def.minW,startMetrics.w+dx);
-    metrics.h=Math.max(def.minH,startMetrics.h+dy);
+    if(def.anchor==='topLeft'){
+      const startLeftPx=(startMetrics.x/100)*window.innerWidth;
+      const startTopPx=(startMetrics.y/100)*window.innerHeight;
+      let nextLeftPx=startLeftPx;
+      let nextTopPx=startTopPx;
+      let nextWidth=startMetrics.w;
+      let nextHeight=startMetrics.h;
+      if(corner.includes('e')) nextWidth=startMetrics.w+dx;
+      if(corner.includes('s')) nextHeight=startMetrics.h+dy;
+      if(corner.includes('w')){
+        nextLeftPx=startLeftPx+dx;
+        nextWidth=startMetrics.w-dx;
+      }
+      if(corner.includes('n')){
+        nextTopPx=startTopPx+dy;
+        nextHeight=startMetrics.h-dy;
+      }
+      metrics.w=Math.max(def.minW,nextWidth);
+      metrics.h=Math.max(def.minH,nextHeight);
+      if(corner.includes('w')) metrics.x=+((nextLeftPx/window.innerWidth)*100).toFixed(3);
+      if(corner.includes('n')) metrics.y=+((nextTopPx/window.innerHeight)*100).toFixed(3);
+    }else{
+      const signX=corner.includes('w') ? -1 : 1;
+      const signY=corner.includes('n') ? -1 : 1;
+      metrics.w=Math.max(def.minW,startMetrics.w+dx*signX);
+      metrics.h=Math.max(def.minH,startMetrics.h+dy*signY);
+    }
   }else if(def.anchor==='topLeft'){
     metrics.x=+(((startMetrics.x/100*window.innerWidth)+dx)/window.innerWidth*100).toFixed(3);
     metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
