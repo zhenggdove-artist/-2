@@ -5783,7 +5783,7 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
@@ -6159,11 +6159,19 @@ function syncUILayoutSelectionStyles(){
     row.classList.toggle('is-selected',uiLayoutState.selectedIds.includes(row.dataset.targetId));
   });
 }
+function captureUILayoutObjectPanelScroll(){
+  const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
+  if(list) uiLayoutState.objectPanelScrollTop=list.scrollTop;
+}
+function restoreUILayoutObjectPanelScroll(){
+  const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
+  if(list) list.scrollTop=uiLayoutState.objectPanelScrollTop||0;
+}
 function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
   const list=panel?.querySelector('.ui-layout-object-list');
   if(!list) return;
-  const scrollTop=list.scrollTop;
+  captureUILayoutObjectPanelScroll();
   applyUILayoutObjectPanelRect();
   list.innerHTML='';
   for(const def of getUILayoutOrderedDefs(true)){
@@ -6245,7 +6253,7 @@ function refreshUILayoutObjectPanel(){
     });
     list.appendChild(row);
   }
-  list.scrollTop=scrollTop;
+  restoreUILayoutObjectPanelScroll();
   syncUILayoutSelectionStyles();
 }
 function setUILayoutSelection(targetId,options={}){
@@ -6286,6 +6294,9 @@ function buildUILayoutEditor(){
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
   panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.querySelector('.ui-layout-object-list')?.addEventListener('scroll',()=>{
+    captureUILayoutObjectPanelScroll();
+  });
   panel.addEventListener('click',e=>{
     const action=e.target?.dataset?.action;
     if(action==='top'){
@@ -6352,6 +6363,7 @@ function buildUILayoutEditor(){
 }
 function refreshUILayoutEditor(){
   if(!uiLayoutState.active||!uiLayoutState.editor) return;
+  captureUILayoutObjectPanelScroll();
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=uiLayoutState.overlays.get(def.id);
     const el=document.getElementById(def.id);
@@ -6374,6 +6386,7 @@ function refreshUILayoutEditor(){
   }
   const panel=uiLayoutState.editor.querySelector('.ui-layout-object-panel');
   if(panel) uiLayoutState.editor.appendChild(panel);
+  restoreUILayoutObjectPanelScroll();
   syncUILayoutSelectionStyles();
 }
 function handleUILayoutPointerMove(e){
