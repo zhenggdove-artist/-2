@@ -529,8 +529,9 @@
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fffdf6 0%,#8ff3da 55%,#279b87 100%);
     border:3px solid #fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),0 6px 14px rgba(39,155,135,0.45);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
-    text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4)}
+    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:10px;letter-spacing:1px;color:#fff;
+    text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4);
+    line-height:1;text-align:center;padding:0 6px;box-sizing:border-box}
   body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
   #clean-btn:active{transform:scale(0.93)}
   #special-btn{position:absolute;right:214px;bottom:42px;width:72px;height:72px;
@@ -714,6 +715,7 @@
   }
   #kill-box,#coin-box,#shop-btn{font-size:calc(14px * var(--ui-scale,1))!important}
   #timer-box{font-size:calc(16px * var(--ui-scale,1))!important}
+  #timer-text{display:block;line-height:1;font-size:1em}
   #paint-bar-frame{left:5.6%;top:50%;width:74px;height:334px}
   #paint-bar{left:5.6%;top:50%;width:74px!important;height:334px!important;background:transparent!important;
     box-shadow:none!important;border-radius:999px!important;overflow:visible!important}
@@ -734,7 +736,7 @@
 
   #clean-btn-frame{left:16%;top:74%;width:132px;height:132px}
   #clean-btn{left:16%;top:74%;width:64px!important;height:64px!important;transform:translate(-50%,-50%)!important;
-    padding:0!important;border:none!important;z-index:15}
+    padding:0 6px!important;border:none!important;z-index:15;font-size:calc(9px * var(--ui-scale,1))!important;letter-spacing:0.08em!important}
   #special-btn-frame{left:74.6%;top:83.4%;width:152px;height:152px}
   #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important}
   #jump-btn-frame{left:84.8%;top:83.4%;width:152px;height:152px}
@@ -778,7 +780,8 @@
   @media (max-width:640px){
     #kill-box-frame{left:14%;top:5.4%;width:142px;height:76px}
     #kill-box{left:14%;top:5.4%;width:96px!important;height:32px!important}
-    #timer-box{left:50%;top:8.2%;width:126px!important;height:28px!important;font-size:12px!important}
+    #timer-box{left:50%;top:8.2%;width:126px!important;height:28px!important;font-size:calc(18px * var(--ui-scale,1))!important}
+    #timer-text{font-size:1em}
     #coin-box-frame{left:74%;top:5.4%;width:142px;height:76px}
     #coin-box{left:74%;top:5.4%;width:96px!important;height:32px!important}
     #shop-btn-frame{left:86%;top:6.3%;width:124px;height:66px}
@@ -786,7 +789,7 @@
     #paint-bar-frame{left:8.5%;top:50%;width:58px;height:252px}
     #paint-bar{left:8.5%;top:50%;width:58px!important;height:252px!important}
     #clean-btn-frame{left:20%;top:62%;width:110px;height:110px}
-    #clean-btn{left:20%;top:62%;width:52px!important;height:52px!important}
+    #clean-btn{left:20%;top:62%;width:52px!important;height:52px!important;font-size:calc(7px * var(--ui-scale,1))!important;letter-spacing:0.04em!important}
     #special-btn-frame{left:31.8%;top:90.3%;width:120px;height:120px}
     #special-btn{left:31.8%;top:90.3%;width:56px!important;height:56px!important}
     #jump-btn-frame{left:55.7%;top:90.3%;width:120px;height:120px}
@@ -1128,7 +1131,7 @@
 
 <div id="hud">
   <div class="hud-box" id="kill-box">&#x1F480; <span id="kill-count">0</span></div>
-  <div class="hud-box" id="timer-box">&#x23F1; <span id="timer-text">3:00</span></div>
+  <div class="hud-box" id="timer-box"><span id="timer-text">3:00</span></div>
   <div class="hud-box" id="coin-box">&#x1FA99; <span id="coin-count">0</span></div>
 </div>
 
@@ -5574,34 +5577,38 @@ const UI_LAYOUT_DEFAULTS={
       "y": 69.126,
       "w": 128.90911865234375,
       "h": 178.18182373046875,
-      "z": 1400
+      "z": 1400,
+      "locked": true
     },
     "soap-slot-card": {
       "x": 28.207,
       "y": 69.126,
       "w": 87.81817626953125,
       "h": 125.45458984375,
-      "z": 1500
+      "z": 1500,
+      "locked": true
     },
     "weapon-cycle-frame": {
       "x": 15.964,
       "y": 69.486,
       "w": 150,
       "h": 200,
-      "z": 1600
+      "z": 1600,
+      "locked": true
     },
     "weapon-cycle-card": {
       "x": 15.756,
       "y": 69.601,
       "w": 106,
       "h": 148,
-      "z": 1700
+      "z": 1700,
+      "locked": true
     },
     "clean-btn-frame": {
       "x": 94.093,
       "y": 58.695,
-      "w": 132,
-      "h": 132,
+      "w": 107.272705078125,
+      "h": 97.09091186523438,
       "z": 500,
       "locked": true
     },
@@ -5614,58 +5621,64 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "special-btn-frame": {
-      "x": 74.619,
-      "y": 83.399,
-      "w": 152,
-      "h": 152,
-      "z": 1800
+      "x": 76.442,
+      "y": 83.075,
+      "w": 98.90911865234375,
+      "h": 101.8182373046875,
+      "z": 1800,
+      "locked": true
     },
     "special-btn": {
-      "x": 74.619,
-      "y": 83.399,
-      "w": 74,
-      "h": 74,
-      "z": 2400
+      "x": 76.442,
+      "y": 82.645,
+      "w": 62.36376953125,
+      "h": 63.0909423828125,
+      "z": 2400,
+      "locked": true
     },
     "jump-btn-frame": {
-      "x": 84.822,
-      "y": 83.399,
-      "w": 152,
-      "h": 152,
-      "z": 1900
+      "x": 84.718,
+      "y": 83.183,
+      "w": 104.7274169921875,
+      "h": 106.18182373046875,
+      "z": 1900,
+      "locked": true
     },
     "jump-btn": {
-      "x": 84.822,
-      "y": 83.399,
-      "w": 74,
-      "h": 74,
-      "z": 2500
+      "x": 84.77,
+      "y": 82.86,
+      "w": 65.2728271484375,
+      "h": 65.27276611328125,
+      "z": 2500,
+      "locked": true
     },
     "attack-btn-frame": {
-      "x": 94.524,
-      "y": 83.399,
-      "w": 152,
-      "h": 152,
-      "z": 2000
+      "x": 93.586,
+      "y": 82.86,
+      "w": 106.1817626953125,
+      "h": 100.36361694335938,
+      "z": 2000,
+      "locked": true
     },
     "attack-btn": {
-      "x": 94.524,
-      "y": 83.399,
-      "w": 74,
-      "h": 74,
-      "z": 2600
+      "x": 93.586,
+      "y": 82.753,
+      "w": 67.45458984375,
+      "h": 66,
+      "z": 2600,
+      "locked": true
     },
     "viewport-frame-top": {
-      "x": 50,
-      "y": 18.093,
+      "x": 50.052,
+      "y": 16.154,
       "w": 1395.2727272510529,
       "h": 219.2436627197266,
       "z": 100,
       "locked": true
     },
     "viewport-frame-bottom": {
-      "x": 50,
-      "y": 80.092,
+      "x": 49.948,
+      "y": 78.045,
       "w": 1396,
       "h": 252.8,
       "z": 900,
@@ -5680,10 +5693,10 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "viewport-frame-right": {
-      "x": 89,
-      "y": 50,
+      "x": 89.052,
+      "y": 48.384,
       "w": 307.12,
-      "h": 632,
+      "h": 655.2727327346802,
       "z": 700,
       "locked": true
     },
@@ -5722,10 +5735,10 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "timer-box": {
-      "x": 49.92,
-      "y": 7.931,
-      "w": 40,
-      "h": 18,
+      "x": 48.632,
+      "y": 7.729,
+      "w": 96.72734069824219,
+      "h": 26.72726821899414,
       "z": 700,
       "locked": true
     },
@@ -5764,46 +5777,50 @@ const UI_LAYOUT_DEFAULTS={
     "paint-bar-frame": {
       "x": 9.365,
       "y": 47.184,
-      "w": 36.1727279663086,
-      "h": 355.0955322265625,
+      "w": 39.081816101074224,
+      "h": 267.8228271484375,
       "z": 200,
       "locked": true
     },
     "paint-bar": {
       "x": 9.469,
-      "y": 49.495,
-      "w": 24.541820392608642,
-      "h": 243.80366271972656,
+      "y": 49.192,
+      "w": 25.269084796905517,
+      "h": 190.71276611328125,
       "z": 100,
       "locked": true
     },
     "soap-slot-frame": {
-      "x": 16.233,
-      "y": 37.02,
+      "x": 33.356,
+      "y": 52.475,
       "w": 72,
       "h": 96,
-      "z": 1300
+      "z": 1300,
+      "locked": true
     },
     "soap-slot-card": {
-      "x": 16.231,
-      "y": 37.826,
-      "w": 87.81,
-      "h": 125.45,
-      "z": 1400
+      "x": 33.17,
+      "y": 52.573,
+      "w": 54,
+      "h": 72,
+      "z": 1400,
+      "locked": true
     },
     "weapon-cycle-frame": {
-      "x": 42.481,
-      "y": 92.818,
-      "w": 72,
+      "x": 32.953,
+      "y": 68.778,
+      "w": 74.36366271972656,
       "h": 96,
-      "z": 1500
+      "z": 1500,
+      "locked": true
     },
     "weapon-cycle-card": {
-      "x": 78.912,
-      "y": 126.534,
-      "w": 156.90909576416016,
-      "h": 370.5454559326172,
-      "z": 1600
+      "x": 32.769,
+      "y": 68.878,
+      "w": 55.81817626953125,
+      "h": 72,
+      "z": 1600,
+      "locked": true
     },
     "clean-btn-frame": {
       "x": 87.755,
@@ -5902,20 +5919,20 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "loadout-toggle-frame": {
-      "x": 33.513,
-      "y": 71.667,
+      "x": 12.892,
+      "y": 78.839,
       "w": 56,
       "h": 56,
       "z": 2100,
       "locked": true
     },
     "loadout-toggle": {
-      "x": 33.328,
-      "y": 71.566,
+      "x": 12.891,
+      "y": 78.637,
       "w": 34.363616943359375,
       "h": 34.363555908203125,
       "z": 2700,
-      "locked": true
+      "locked": false
     }
   }
 };
