@@ -5753,11 +5753,32 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,clipboard:null};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,clipboard:null,history:[]};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
   return JSON.parse(JSON.stringify(config||{desktop:{},mobile:{}}));
+}
+function pushUILayoutHistory(label='change'){
+  uiLayoutState.history.push({
+    label,
+    config:cloneUILayoutConfig(sanitizeUILayoutConfig(uiLayoutState.config)),
+    selectedId:uiLayoutState.selectedId,
+    mode:uiLayoutState.forcedMode,
+  });
+  if(uiLayoutState.history.length>80) uiLayoutState.history.shift();
+}
+function undoUILayoutChange(){
+  const entry=uiLayoutState.history.pop();
+  if(!entry) return false;
+  uiLayoutState.config=cloneUILayoutConfig(entry.config);
+  window.__uiLayoutConfig=uiLayoutState.config;
+  if(entry.mode==='desktop'||entry.mode==='mobile') uiLayoutState.forcedMode=entry.mode;
+  applyUILayoutConfig();
+  refreshUILayoutEditorToolbar();
+  setUILayoutSelection(entry.selectedId||UI_LAYOUT_TARGET_DEFS[0]?.id||null);
+  showUILayoutToast(`Undo ${entry.label}`);
+  return true;
 }
 function sanitizeUILayoutConfig(config){
   const allowed=new Set(UI_LAYOUT_TARGET_DEFS.map(def=>def.id));
@@ -6014,6 +6035,7 @@ function buildUILayoutEditor(){
       e.preventDefault();
       e.stopPropagation();
       setUILayoutSelection(def.id);
+      pushUILayoutHistory('move');
       const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
       uiLayoutState.drag={def,startX:e.clientX,startY:e.clientY,startMetrics:metrics,resize:e.target.classList.contains('ui-layout-handle')};
       box.classList.add('active');
@@ -6085,6 +6107,7 @@ function copySelectedUILayoutItem(){
 function pasteSelectedUILayoutItem(){
   const def=getUILayoutDef(uiLayoutState.selectedId);
   if(!def||!uiLayoutState.clipboard?.metrics) return false;
+  pushUILayoutHistory('paste');
   const store=getUILayoutStore();
   const source=uiLayoutState.clipboard.metrics;
   store[def.id]={
@@ -6103,6 +6126,7 @@ function pasteSelectedUILayoutItem(){
 function deleteSelectedUILayoutItem(){
   const def=getUILayoutDef(uiLayoutState.selectedId);
   if(!def) return false;
+  pushUILayoutHistory('delete');
   const store=getUILayoutStore();
   const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
   metrics.hidden=true;
@@ -6115,6 +6139,7 @@ function deleteSelectedUILayoutItem(){
 function enableUILayoutEditor(){
   if(uiLayoutState.active) return;
   uiLayoutState.active=true;
+  uiLayoutState.history=[];
   uiLayoutState.forcedMode=getUILayoutAutoBucket();
   document.body.classList.add('admin-layout-mode');
   hideUILayoutExportButton();
@@ -6147,6 +6172,13 @@ function handleUILayoutHotkeys(e){
   if(!uiLayoutState.active) return false;
   if(e.target?.closest?.('input,textarea')) return false;
   const key=(e.key||'').toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&key==='z'&&!e.shiftKey){
+    if(undoUILayoutChange()){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
   if((e.ctrlKey||e.metaKey)&&key==='c'){
     if(copySelectedUILayoutItem()){
       e.preventDefault();
