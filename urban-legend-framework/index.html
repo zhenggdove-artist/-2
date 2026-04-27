@@ -6154,6 +6154,7 @@ function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
   const list=panel?.querySelector('.ui-layout-object-list');
   if(!list) return;
+  const scrollTop=list.scrollTop;
   applyUILayoutObjectPanelRect();
   list.innerHTML='';
   for(const def of getUILayoutOrderedDefs(true)){
@@ -6179,7 +6180,13 @@ function refreshUILayoutObjectPanel(){
     </div>`;
     row.addEventListener('pointerdown',e=>{
       if(e.target?.closest?.('button')) return;
-      if(e.shiftKey) return;
+      if(e.shiftKey){
+        e.preventDefault();
+        e.stopPropagation();
+        setUILayoutSelection(def.id,{additive:true});
+        uiLayoutState.suppressRowClick=true;
+        return;
+      }
       if(!uiLayoutState.selectedIds.includes(def.id)){
         setUILayoutSelection(def.id);
       }
@@ -6230,6 +6237,7 @@ function refreshUILayoutObjectPanel(){
     });
     list.appendChild(row);
   }
+  list.scrollTop=scrollTop;
 }
 function setUILayoutSelection(targetId,options={}){
   const {additive=false}=options;
