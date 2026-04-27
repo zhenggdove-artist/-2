@@ -5782,7 +5782,7 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[]};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
@@ -6164,11 +6164,20 @@ function refreshUILayoutObjectPanel(){
     row.addEventListener('pointerdown',e=>{
       if(e.target?.closest?.('button')) return;
       if(e.shiftKey){
-        setUILayoutSelection(def.id,{additive:true});
+        if(!uiLayoutState.selectedIds.includes(def.id)) setUILayoutSelection(def.id,{additive:true});
+        uiLayoutState.suppressRowClick=true;
+      }else if(!uiLayoutState.selectedIds.includes(def.id)){
+        setUILayoutSelection(def.id);
+      }
+      if(uiLayoutState.selectedIds.includes(def.id)){
         uiLayoutState.listDrag={
           pointerId:e.pointerId,
           selectedIds:[...uiLayoutState.selectedIds],
+          anchorId:def.id,
           insertBeforeId:def.id,
+          startX:e.clientX,
+          startY:e.clientY,
+          moved:false,
         };
         row.setPointerCapture?.(e.pointerId);
         e.preventDefault();
@@ -6177,6 +6186,11 @@ function refreshUILayoutObjectPanel(){
       }
     });
     row.addEventListener('click',e=>{
+      if(uiLayoutState.suppressRowClick){
+        uiLayoutState.suppressRowClick=false;
+        refreshUILayoutEditor();
+        return;
+      }
       const action=e.target?.dataset?.action;
       if(action==='lock'){
         e.stopPropagation();
@@ -6191,10 +6205,6 @@ function refreshUILayoutObjectPanel(){
       if(action==='down'){
         e.stopPropagation();
         moveUILayoutLayer(def.id,'down');
-        return;
-      }
-      if(e.shiftKey){
-        refreshUILayoutEditor();
         return;
       }
       setUILayoutSelection(def.id,{additive:e.shiftKey});
@@ -6324,10 +6334,18 @@ function handleUILayoutPointerMove(e){
   if(uiLayoutState.listDrag){
     const drag=uiLayoutState.listDrag;
     if(drag.pointerId!==undefined && e.pointerId!==drag.pointerId) return;
-    const row=e.target?.closest?.('.ui-layout-object-row') || document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.ui-layout-object-row');
-    if(row?.dataset?.targetId){
-      drag.insertBeforeId=row.dataset.targetId;
-      refreshUILayoutObjectPanel();
+    const dx=e.clientX-drag.startX;
+    const dy=e.clientY-drag.startY;
+    if(!drag.moved && Math.hypot(dx,dy)>=6){
+      drag.moved=true;
+      uiLayoutState.suppressRowClick=true;
+    }
+    if(drag.moved){
+      const row=e.target?.closest?.('.ui-layout-object-row') || document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.ui-layout-object-row');
+      if(row?.dataset?.targetId){
+        drag.insertBeforeId=row.dataset.targetId;
+        refreshUILayoutObjectPanel();
+      }
     }
     return;
   }
@@ -6409,7 +6427,7 @@ function handleUILayoutPointerUp(){
     const drag=uiLayoutState.listDrag;
     uiLayoutState.listDrag=null;
     const selectedIds=drag.selectedIds.filter(id=>UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
-    if(selectedIds.length){
+    if(drag.moved && selectedIds.length){
       const ordered=getUILayoutOrderedIds(true);
       const moving=ordered.filter(id=>selectedIds.includes(id));
       const remaining=ordered.filter(id=>!selectedIds.includes(id));
