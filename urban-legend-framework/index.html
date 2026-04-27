@@ -1140,7 +1140,7 @@
   <div id="coin-box-frame" class="ui-deco-frame hud-coin-frame"></div>
   <div id="shop-btn-frame" class="ui-deco-frame hud-coin-frame"></div>
   <div id="paint-bar-frame" class="ui-deco-frame paint-frame"></div>
-  <div id="clean-btn-frame" class="ui-deco-frame action-frame"></div>
+  <div id="clean-btn-frame" class="ui-deco-frame action-frame hidden"></div>
   <div id="special-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="jump-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="attack-btn-frame" class="ui-deco-frame action-frame"></div>
@@ -5480,6 +5480,7 @@ const shopBtn=document.getElementById('shop-btn');
 const shopPanel=document.getElementById('shop-panel');
 const shopClose=document.getElementById('shop-close');
 const artWinsRetryBtn=document.getElementById('art-wins-retry');
+const cleanBtnFrame=document.getElementById('clean-btn-frame');
 const loadoutBar=document.getElementById('loadout-bar');
 const loadoutToggle=document.getElementById('loadout-toggle');
 const buyCleanerBtn=document.getElementById('buy-cleaner-btn');
@@ -5519,8 +5520,8 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "timer-box": {
-      "x": 49.648,
-      "y": 16.535,
+      "x": 50.221,
+      "y": 16.643,
       "w": 85.818115234375,
       "h": 39.81818389892578,
       "z": 300,
@@ -5678,25 +5679,25 @@ const UI_LAYOUT_DEFAULTS={
     },
     "viewport-frame-bottom": {
       "x": 49.948,
-      "y": 78.045,
+      "y": 82.57,
       "w": 1396,
       "h": 252.8,
       "z": 900,
       "locked": true
     },
     "viewport-frame-left": {
-      "x": 11,
-      "y": 50,
-      "w": 307.12,
-      "h": 632,
+      "x": 11.051,
+      "y": 51.719,
+      "w": 307.847294921875,
+      "h": 703.9998834133148,
       "z": 800,
       "locked": true
     },
     "viewport-frame-right": {
-      "x": 89.052,
-      "y": 48.384,
-      "w": 307.12,
-      "h": 655.2727327346802,
+      "x": 89,
+      "y": 50.536,
+      "w": 309.301640625,
+      "h": 717.0909075737,
       "z": 700,
       "locked": true
     },
@@ -7194,6 +7195,7 @@ function resetShopState(){
   activeIceFields.length=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
+  cleanBtnFrame?.classList.add('hidden');
   setShopOpen(false);
   renderShopState();
 }
@@ -7253,6 +7255,7 @@ function updateCleanPrompt(){
   currentCleanTarget=null;
   if(gameState!=='playing' || (!debugCheatMode&&cleanerUses<=0) || !player.root){
     cleanBtn.classList.add('hidden');
+    cleanBtnFrame?.classList.add('hidden');
     return;
   }
   let best=null;
@@ -7266,6 +7269,7 @@ function updateCleanPrompt(){
   }
   currentCleanTarget=best;
   cleanBtn.classList.toggle('hidden',!best);
+  cleanBtnFrame?.classList.toggle('hidden',!best);
 }
 
 shopBtn?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
@@ -8630,6 +8634,7 @@ function resetWorld(){
   player.specialCooldowns.flame=0;player.specialCooldowns.water=0;player.specialCooldowns.ice=0;player.specialCooldowns.bomb=0;
   currentCleanTarget=null;
   cleanBtn.classList.add('hidden');
+  cleanBtnFrame?.classList.add('hidden');
   spawnTimer=1.5;
 }
 
