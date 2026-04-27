@@ -77,6 +77,7 @@
   body.admin-layout-mode *{cursor:default}
   .ui-layout-editor{position:fixed;inset:0;pointer-events:none;z-index:1200}
   .ui-layout-guide{position:fixed;background:rgba(255,240,106,0.22);pointer-events:none;opacity:0;transition:opacity .08s ease;z-index:1999999}
+  .ui-layout-guide.is-pair{background:rgba(255,151,208,0.45)}
   .ui-layout-guide.is-visible{opacity:1}
   .ui-layout-guide.is-snap{background:rgba(124,248,255,0.88);box-shadow:0 0 12px rgba(124,248,255,0.45)}
   .ui-layout-guide.guide-v{top:0;bottom:0;width:1px}
@@ -466,9 +467,9 @@
      all three, with a coloured emoji icon carrying the meaning. */
   #kill-box{color:#3a1410}
   #coin-box{color:#5a3a00}
-  #timer-box{color:#1a1f44;font-variant-numeric:tabular-nums}
+  #timer-box{color:#1a1f44;font-variant-numeric:tabular-nums;background:transparent!important;box-shadow:none!important}
   #timer-box.warn{color:#b3173a;animation:pulse 0.8s infinite alternate;
-    background:linear-gradient(180deg,#ffd9d9 0%,#ffb5b5 100%)}
+    background:transparent!important}
   /* Mini thorn flares attached to the side of the SHOP button and
      timer pill — same neon-yellow stroke language as the corner
      viewport frame, just smaller. Drawn as ::before/::after pseudo
@@ -664,11 +665,10 @@
     #jump-btn{right:94px;bottom:36px;width:45px;height:45px}
     #attack-btn{right:24px;bottom:36px;width:59px;height:59px}
     #loadout-toggle{left:14%;top:85%;width:48px;height:48px}
-    #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:8px 8px 12px;
-      border-radius:22px;background:linear-gradient(180deg,rgba(36,24,54,0.94),rgba(15,11,23,0.9));border:1px solid rgba(255,225,164,0.28);
-      backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(0,0,0,0.42),0 0 0 2px rgba(255,212,92,0.12);
-      opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .22s ease,transform .22s ease}
-    body.loadout-open #loadout-bar{opacity:1;pointer-events:auto;transform:translateY(0)}
+    #loadout-bar{left:10px;bottom:214px;right:10px;max-width:none;gap:8px;flex-wrap:nowrap;overflow:visible;padding:0;
+      border-radius:0;background:none;border:none;backdrop-filter:none;box-shadow:none;
+      display:none;pointer-events:none}
+    body.loadout-open #loadout-bar{display:flex;pointer-events:auto}
     .loadout-slot{width:58px;min-height:66px;padding:7px 5px;border-radius:16px;font-size:10px;gap:5px;flex:0 0 auto}
     .loadout-slot.cleaner{width:74px}
     .loadout-slot .slot-name{font-size:10px}
@@ -724,7 +724,9 @@
   #paint-bar-grid span{border-top:1px dashed rgba(255,255,255,0.55)}
   #paint-bar-grid span:first-child{border-top:none}
   #paint-bar-fill{left:0;right:0;bottom:0;
-    background:linear-gradient(0deg,#ff4f9b 0%,#ff76bd 22%,#f8a4da 100%)!important;
+    background:linear-gradient(0deg,
+      #e40303 0%, #ff8c00 16%, #ffed00 32%, #008026 48%,
+      #004dff 66%, #750787 82%, #ff66c4 100%)!important;
     box-shadow:0 -4px 12px rgba(255,255,255,0.55) inset!important}
   #paint-bar-fill::before{display:none!important}
   #paint-bar-label{bottom:6px!important;left:50%;transform:translateX(-50%);width:58px;
@@ -750,11 +752,12 @@
     width:106px!important;padding:12px 9px!important;border-radius:20px!important;z-index:15;pointer-events:auto;
     box-sizing:border-box!important}
   #loadout-bar .loadout-slot,#loadout-bar .loadout-slot-frame{
-    opacity:0;pointer-events:none;transition:opacity .22s ease,transform .22s ease;
+    display:none;opacity:1;pointer-events:none;transition:transform .22s ease;
     transform:translate(-50%,12px)}
   body.loadout-open #loadout-bar .loadout-slot,
   body.loadout-open #loadout-bar .loadout-slot-frame{
-    opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+    display:block;pointer-events:auto;transform:translate(-50%,-50%)}
+  body.loadout-open #loadout-bar .loadout-slot{display:flex}
   #soap-slot-frame{left:8.2%;top:73.5%;width:150px;height:200px}
   #soap-slot-card{left:8.2%;top:73.5%}
   #weapon-cycle-frame{left:15.964%;top:69.486%;width:150px;height:200px}
@@ -881,6 +884,27 @@
   body.game-ended #special-btn,
   body.game-ended #clean-btn,
   body.game-ended #title{display:none!important}
+  body.intro-active #hud,
+  body.intro-active #kill-box,
+  body.intro-active #timer-box,
+  body.intro-active #coin-box,
+  body.intro-active #paint-bar,
+  body.intro-active #shop-btn,
+  body.intro-active #shop-panel,
+  body.intro-active #loadout-toggle,
+  body.intro-active #loadout-bar,
+  body.intro-active #game-controls,
+  body.intro-active #joystick-zone,
+  body.intro-active #jump-btn,
+  body.intro-active #attack-btn,
+  body.intro-active #special-btn,
+  body.intro-active #clean-btn,
+  body.intro-active #kill-box-frame,
+  body.intro-active #coin-box-frame,
+  body.intro-active #shop-btn-frame,
+  body.intro-active #paint-bar-frame,
+  body.intro-active #loadout-toggle-frame,
+  body.intro-active #ui-frame-layer{display:none!important}
   #end-overlay.scene-view{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-end;padding:14px;pointer-events:none}
   /* Cream "poster" card with the same neon-thorn glow as the
      in-game cards. Replaces the old pink radial-gradient look so
@@ -5472,7 +5496,7 @@ const weaponBuyButtons={
 };
 const layoutQuery=new URLSearchParams(window.location.search);
 const isLayoutPreviewWindow=layoutQuery.get('layoutPreview')==='1';
-const UI_LAYOUT_STORAGE_KEY='urbanLegendUILayoutV1';
+const UI_LAYOUT_STORAGE_KEY='urbanLegendUILayoutV2';
 const UI_LAYOUT_DEFAULTS={
   "desktop": {
     "kill-box-frame": {
@@ -5493,9 +5517,9 @@ const UI_LAYOUT_DEFAULTS={
     },
     "timer-box": {
       "x": 49.648,
-      "y": 15.781,
-      "w": 63.272705078125,
-      "h": 20.909095764160156,
+      "y": 16.535,
+      "w": 85.818115234375,
+      "h": 39.81818389892578,
       "z": 300,
       "locked": true
     },
@@ -5533,14 +5557,14 @@ const UI_LAYOUT_DEFAULTS={
       "x": 5.6,
       "y": 48.167,
       "w": 39.09090042114258,
-      "h": 355.0908660888672,
+      "h": 338.3635711669922,
       "z": 1300,
       "locked": true
     },
     "paint-bar": {
-      "x": 5.496,
-      "y": 49.978,
-      "w": 25.999980926513672,
+      "x": 5.6,
+      "y": 50.517,
+      "w": 28.181804656982422,
       "h": 240.9090118408203,
       "z": 400,
       "locked": true
@@ -5754,31 +5778,31 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "soap-slot-frame": {
-      "x": 20,
-      "y": 71,
+      "x": 16.233,
+      "y": 37.02,
       "w": 72,
       "h": 96,
       "z": 1300
     },
     "soap-slot-card": {
-      "x": 20,
-      "y": 71,
-      "w": 90,
-      "h": 126,
+      "x": 16.231,
+      "y": 37.826,
+      "w": 87.81,
+      "h": 125.45,
       "z": 1400
     },
     "weapon-cycle-frame": {
-      "x": 44,
-      "y": 71,
-      "w": 126,
-      "h": 170,
+      "x": 42.481,
+      "y": 92.818,
+      "w": 72,
+      "h": 96,
       "z": 1500
     },
     "weapon-cycle-card": {
-      "x": 44,
-      "y": 71,
-      "w": 90,
-      "h": 126,
+      "x": 78.912,
+      "y": 126.534,
+      "w": 156.90909576416016,
+      "h": 370.5454559326172,
       "z": 1600
     },
     "clean-btn-frame": {
@@ -5924,6 +5948,30 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
+const UI_LAYOUT_COMPARE_PAIRS={
+  'kill-box-frame':'kill-box',
+  'kill-box':'kill-box-frame',
+  'coin-box-frame':'coin-box',
+  'coin-box':'coin-box-frame',
+  'shop-btn-frame':'shop-btn',
+  'shop-btn':'shop-btn-frame',
+  'paint-bar-frame':'paint-bar',
+  'paint-bar':'paint-bar-frame',
+  'soap-slot-frame':'soap-slot-card',
+  'soap-slot-card':'soap-slot-frame',
+  'weapon-cycle-frame':'weapon-cycle-card',
+  'weapon-cycle-card':'weapon-cycle-frame',
+  'clean-btn-frame':'clean-btn',
+  'clean-btn':'clean-btn-frame',
+  'special-btn-frame':'special-btn',
+  'special-btn':'special-btn-frame',
+  'jump-btn-frame':'jump-btn',
+  'jump-btn':'jump-btn-frame',
+  'attack-btn-frame':'attack-btn',
+  'attack-btn':'attack-btn-frame',
+  'loadout-toggle-frame':'loadout-toggle',
+  'loadout-toggle':'loadout-toggle-frame',
+};
 const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false};
 window.__uiLayoutConfig=uiLayoutState.config;
 
@@ -5953,16 +6001,55 @@ function undoUILayoutChange(){
 }
 function sanitizeUILayoutConfig(config){
   const allowed=new Set(UI_LAYOUT_TARGET_DEFS.map(def=>def.id));
-  const cleanBucket=bucket=>{
+  const cleanBucket=(bucket,bucketName)=>{
     const out={};
     for(const [key,val] of Object.entries(bucket||{})){
-      if(allowed.has(key)) out[key]=val;
+      if(!allowed.has(key)||!val||typeof val!=='object') continue;
+      const def=getUILayoutDef(key);
+      const next={...val};
+      if(Number.isFinite(next.x)) next.x=Math.max(-20,Math.min(120,next.x));
+      if(Number.isFinite(next.y)) next.y=Math.max(-20,Math.min(140,next.y));
+      if(Number.isFinite(next.w) && def) next.w=Math.max(def.minW,next.w);
+      if(Number.isFinite(next.h) && def) next.h=Math.max(def.minH,next.h);
+      out[key]=next;
+    }
+    if(bucketName==='mobile'){
+      const syncCardToFrame=(frameId,cardId,defaultW,defaultH,fallback=null)=>{
+        const frame=out[frameId];
+        const card=out[cardId];
+        if(!frame||!card) return;
+        const offscreen=card.y>110||card.y<-10||card.x>110||card.x<-10;
+        const tooFar=Math.abs(card.x-frame.x)>18||Math.abs(card.y-frame.y)>18;
+        const oversized=card.w>(frame.w*1.8)||card.h>(frame.h*2.8);
+        const badFrame=frame.y>84||(fallback&&frame.h<card.h*0.65);
+        if(offscreen||tooFar||oversized){
+          card.x=frame.x;
+          card.y=frame.y;
+          card.w=defaultW;
+          card.h=defaultH;
+        }
+        if(badFrame&&fallback){
+          frame.x=fallback.frame.x;
+          frame.y=fallback.frame.y;
+          frame.w=fallback.frame.w;
+          frame.h=fallback.frame.h;
+          card.x=fallback.card.x;
+          card.y=fallback.card.y;
+          card.w=fallback.card.w;
+          card.h=fallback.card.h;
+        }
+      };
+      syncCardToFrame('soap-slot-frame','soap-slot-card',87.81,125.45);
+      syncCardToFrame('weapon-cycle-frame','weapon-cycle-card',106,148,{
+        frame:{x:44,y:71,w:126,h:170},
+        card:{x:44,y:71,w:90,h:126},
+      });
     }
     return out;
   };
   return {
-    desktop:cleanBucket(config?.desktop),
-    mobile:cleanBucket(config?.mobile),
+    desktop:cleanBucket(config?.desktop,'desktop'),
+    mobile:cleanBucket(config?.mobile,'mobile'),
   };
 }
 function mergeUILayoutConfig(base,override){
@@ -5972,7 +6059,7 @@ function mergeUILayoutConfig(base,override){
   };
 }
 function loadUILayoutConfig(){
-  const base=cloneUILayoutConfig(UI_LAYOUT_DEFAULTS);
+  const base=sanitizeUILayoutConfig(cloneUILayoutConfig(UI_LAYOUT_DEFAULTS));
   try{
     const raw=localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
     if(!raw) return base;
@@ -6329,11 +6416,15 @@ function refreshUILayoutGuides(){
   if(!editor) return;
   const guideV=editor.querySelector('.ui-layout-guide.guide-v');
   const guideH=editor.querySelector('.ui-layout-guide.guide-h');
-  if(!guideV||!guideH) return;
+  const pairGuideV=editor.querySelector('.ui-layout-guide.pair-v');
+  const pairGuideH=editor.querySelector('.ui-layout-guide.pair-h');
+  if(!guideV||!guideH||!pairGuideV||!pairGuideH) return;
   const selectedBox=uiLayoutState.selectedId ? uiLayoutState.overlays.get(uiLayoutState.selectedId) : null;
   if(!uiLayoutState.active||!selectedBox){
     guideV.classList.remove('is-visible','is-snap');
     guideH.classList.remove('is-visible','is-snap');
+    pairGuideV.classList.remove('is-visible','is-snap');
+    pairGuideH.classList.remove('is-visible','is-snap');
     return;
   }
   const rect=selectedBox.getBoundingClientRect();
@@ -6347,6 +6438,22 @@ function refreshUILayoutGuides(){
   guideH.classList.add('is-visible');
   guideV.classList.toggle('is-snap',snapX);
   guideH.classList.toggle('is-snap',snapY);
+  const pairId=UI_LAYOUT_COMPARE_PAIRS[uiLayoutState.selectedId];
+  const pairBox=pairId ? uiLayoutState.overlays.get(pairId) : null;
+  if(!pairBox){
+    pairGuideV.classList.remove('is-visible','is-snap');
+    pairGuideH.classList.remove('is-visible','is-snap');
+    return;
+  }
+  const pairRect=pairBox.getBoundingClientRect();
+  const pairCx=pairRect.left+pairRect.width*0.5;
+  const pairCy=pairRect.top+pairRect.height*0.5;
+  pairGuideV.style.left=`${pairCx}px`;
+  pairGuideH.style.top=`${pairCy}px`;
+  pairGuideV.classList.add('is-visible','is-pair');
+  pairGuideH.classList.add('is-visible','is-pair');
+  pairGuideV.classList.toggle('is-snap',Math.abs(cx-pairCx)<=6);
+  pairGuideH.classList.toggle('is-snap',Math.abs(cy-pairCy)<=6);
 }
 function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
@@ -6460,7 +6567,7 @@ function buildUILayoutEditor(){
   if(uiLayoutState.editor) return uiLayoutState.editor;
   const editor=document.createElement('div');
   editor.className='ui-layout-editor';
-  editor.innerHTML='<div class="ui-layout-guide guide-v"></div><div class="ui-layout-guide guide-h"></div>';
+  editor.innerHTML='<div class="ui-layout-guide guide-v"></div><div class="ui-layout-guide guide-h"></div><div class="ui-layout-guide guide-v pair-v is-pair"></div><div class="ui-layout-guide guide-h pair-h is-pair"></div>';
   const toolbar=document.createElement('div');
   toolbar.className='ui-layout-toolbar';
   toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
@@ -6810,9 +6917,24 @@ function setShopOpen(open){
 }
 
 const mobileLoadoutQuery=window.matchMedia('(max-width:640px)');
+function syncLoadoutSlotVisibility(open){
+  if(loadoutBar){
+    loadoutBar.style.setProperty('display',open?'flex':'none','important');
+    loadoutBar.style.setProperty('opacity',open?'1':'0','important');
+    loadoutBar.style.setProperty('pointer-events',open?'auto':'none','important');
+    loadoutBar.style.setProperty('transform','none','important');
+  }
+  loadoutBar?.querySelectorAll?.('.loadout-slot,.loadout-slot-frame')?.forEach?.(el=>{
+    el.style.setProperty('display',open?(el.classList.contains('loadout-slot')?'flex':'block'):'none','important');
+    el.style.setProperty('opacity',open?'1':'0','important');
+    el.style.setProperty('pointer-events',open?'auto':'none','important');
+    el.style.setProperty('transform',open?'translate(-50%,-50%)':'translate(-50%,12px)','important');
+  });
+}
 function setLoadoutExpanded(open){
   document.body.classList.toggle('loadout-open',!!open);
   loadoutToggle?.setAttribute('aria-expanded',open?'true':'false');
+  syncLoadoutSlotVisibility(!!open);
 }
 function syncLoadoutLayout(forceClosed=false){
   if(forceClosed){
@@ -6974,25 +7096,27 @@ function renderLoadoutBar(){
     </div>`
   );
   const ownedWeapons=getOwnedWeaponIds();
-  if(ownedWeapons.length){
-    const current=findWeaponItem(equippedWeapon)||findWeaponItem(ownedWeapons[0]);
-    if(current && (!equippedWeapon || !ownedWeapons.includes(equippedWeapon))) equippedWeapon=current.id;
-    parts.push(
-      `<div id="weapon-cycle-frame" class="loadout-slot-frame"></div>
-      <div class="loadout-slot skill-slot active" id="weapon-cycle-card" data-weapon-cycle="1">
-        <div class="slot-kind">SKILL</div>
-        <div class="slot-icon">${current?.icon||getSkillIconSafe('water','weapon')}</div>
-        <div class="slot-name">${current?.name||'SKILL'}</div>
-        <div class="slot-meta">${ownedWeapons.length} owned</div>
-        <button type="button">${ownedWeapons.length>1?'NEXT':'EQUIPPED'}</button>
-      </div>`
-    );
-  }
+  const current=findWeaponItem(equippedWeapon)||findWeaponItem(ownedWeapons[0]);
+  if(current && (!equippedWeapon || !ownedWeapons.includes(equippedWeapon))) equippedWeapon=current.id;
+  parts.push(
+    `<div id="weapon-cycle-frame" class="loadout-slot-frame"></div>
+    <div class="loadout-slot skill-slot ${ownedWeapons.length?'active':'inactive'}" id="weapon-cycle-card" data-weapon-cycle="1">
+      <div class="slot-kind">SKILL</div>
+      <div class="slot-icon">${current?.icon||getSkillIconSafe('water','weapon')}</div>
+      <div class="slot-name">${current?.name||'EMPTY'}</div>
+      <div class="slot-meta">${ownedWeapons.length?`${ownedWeapons.length} owned`:'buy from shop'}</div>
+      <button type="button">${ownedWeapons.length?(ownedWeapons.length>1?'NEXT':'EQUIPPED'):'SHOP'}</button>
+    </div>`
+  );
   loadoutBar.innerHTML=parts.join('');
   loadoutBar.querySelectorAll('[data-weapon-cycle]').forEach(el=>{
     const cycle=()=>{
-      cycleOwnedWeapon();
-      renderShopState();
+      if(!getOwnedWeaponIds().length){
+        setShopOpen(true);
+      }else{
+        cycleOwnedWeapon();
+        renderShopState();
+      }
       if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
     };
     el.addEventListener('click',cycle);
@@ -7002,6 +7126,7 @@ function renderLoadoutBar(){
     });
   });
   applyUILayoutConfig();
+  syncLoadoutSlotVisibility(document.body.classList.contains('loadout-open'));
 }
 
 function renderShopState(){
@@ -7352,7 +7477,16 @@ window.addEventListener('keydown',e=>{
   if(k===' '||k==='spacebar'){keys.space=true;tryJump();e.preventDefault()}
   if((k==='f'||k==='j') && !e.repeat){handleAttackPress();e.preventDefault()}
   if((k==='q'||k==='k') && !e.repeat){handleSpecialPress();e.preventDefault()}
-  if(k==='e'||(k==='c'&&!e.shiftKey)){ if(currentCleanTarget) { requestCleanAction(currentCleanTarget); e.preventDefault(); } }
+  if(k==='e'){
+    if(currentCleanTarget){
+      requestCleanAction(currentCleanTarget);
+      e.preventDefault();
+    }else{
+      setLoadoutExpanded(!document.body.classList.contains('loadout-open'));
+      e.preventDefault();
+    }
+  }
+  if(k==='c'&&!e.shiftKey){ if(currentCleanTarget) { requestCleanAction(currentCleanTarget); e.preventDefault(); } }
   // Shift+X: toggle the debug coordinate readout. Updated in tick().
   if(k==='x'&&e.shiftKey){
     const el=document.getElementById('debug-coords');
@@ -7716,6 +7850,7 @@ function killArtist(a,cause='generic'){
 // ===== HUD / Timer / Game state =====
 const GAME_DURATION=180; // 3 min
 let gameState='intro'; // intro|playing|ended|artWins
+document.body.classList.add('intro-active');
 let gameTime=0;
 let killCount=0;
 let paintFillCount=0;
@@ -8309,6 +8444,7 @@ function setIntroProgress(pct,label='LOADING'){
 
 startBtn.addEventListener('click',()=>{
   intro.classList.add('hidden');
+  document.body.classList.remove('intro-active');
   startGame();
 });
 
@@ -8758,11 +8894,13 @@ document.addEventListener('touchend',e=>{
   lastTouchEndAt=now;
 },{passive:false});
 
-// Debug: press P to log pillar count
+// Debug: Shift+O logs pillar and artist counts without colliding with
+// the Shift+P layout-editor toggle.
 window.addEventListener('keydown',e=>{
-  if(e.key.toLowerCase()==='p'&&e.shiftKey){
+  if(e.key.toLowerCase()==='o'&&e.shiftKey){
     console.log('[debug] pillars:',pillars.length,pillars.map(p=>({x:p.pos.x.toFixed(1),z:p.pos.z.toFixed(1),h:p.topY.toFixed(1)})));
     console.log('[debug] artists:',artists.length);
+    e.preventDefault();
   }
 });
 </script>
