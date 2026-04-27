@@ -103,12 +103,19 @@
   .ui-layout-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
   .ui-layout-label{position:absolute;left:0;top:-22px;padding:2px 7px;border-radius:999px;
     background:rgba(20,8,32,0.92);color:#fff3b2;font:11px/1.4 monospace;letter-spacing:0.04em;white-space:nowrap}
-  .ui-layout-handle,.ui-layout-object-panel-resize{position:absolute;width:24px;height:24px;border-radius:999px;
-    background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45);pointer-events:auto}
-  .ui-layout-handle[data-corner="nw"],.ui-layout-object-panel-resize[data-corner="nw"]{left:-12px;top:-12px;cursor:nwse-resize}
-  .ui-layout-handle[data-corner="ne"],.ui-layout-object-panel-resize[data-corner="ne"]{right:-12px;top:-12px;cursor:nesw-resize}
-  .ui-layout-handle[data-corner="sw"],.ui-layout-object-panel-resize[data-corner="sw"]{left:-12px;bottom:-12px;cursor:nesw-resize}
-  .ui-layout-handle[data-corner="se"],.ui-layout-object-panel-resize[data-corner="se"]{right:-12px;bottom:-12px;cursor:nwse-resize}
+  .ui-layout-handle,.ui-layout-object-panel-resize{position:absolute;border-radius:999px;
+    background:#fff06a;border:2px solid #2a1738;box-shadow:0 2px 8px rgba(0,0,0,0.45)}
+  .ui-layout-handle{width:10px;height:10px;opacity:0;pointer-events:none}
+  .ui-layout-box.selected .ui-layout-handle,.ui-layout-box.active .ui-layout-handle{opacity:1;pointer-events:auto}
+  .ui-layout-object-panel-resize{width:24px;height:24px;pointer-events:auto}
+  .ui-layout-handle[data-corner="nw"]{left:-5px;top:-5px;cursor:nwse-resize}
+  .ui-layout-handle[data-corner="ne"]{right:-5px;top:-5px;cursor:nesw-resize}
+  .ui-layout-handle[data-corner="sw"]{left:-5px;bottom:-5px;cursor:nesw-resize}
+  .ui-layout-handle[data-corner="se"]{right:-5px;bottom:-5px;cursor:nwse-resize}
+  .ui-layout-object-panel-resize[data-corner="nw"]{left:-12px;top:-12px;cursor:nwse-resize}
+  .ui-layout-object-panel-resize[data-corner="ne"]{right:-12px;top:-12px;cursor:nesw-resize}
+  .ui-layout-object-panel-resize[data-corner="sw"]{left:-12px;bottom:-12px;cursor:nesw-resize}
+  .ui-layout-object-panel-resize[data-corner="se"]{right:-12px;bottom:-12px;cursor:nwse-resize}
   .ui-layout-object-panel{position:fixed;left:16px;top:16px;width:min(340px,calc(100vw - 32px));height:min(520px,calc(100vh - 32px));
     display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:rgba(14,8,22,0.95);
     box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:1216}
@@ -950,7 +957,7 @@
 
   /* Desktop: hide mobile joystick/attack button */
   @media (hover:hover) and (pointer:fine){
-    #joystick-zone{opacity:0.5}
+    #joystick-zone{display:none !important}
   }
 </style>
 </head>
@@ -5453,152 +5460,204 @@ const UI_LAYOUT_DEFAULTS={
     "kill-box-frame": {
       "x": 10.637,
       "y": 14.088,
-      "w": 156.36363220214844,
-      "h": 84.36366271972656
+      "w": 131.6363525390625,
+      "h": 72.72730255126953,
+      "z": 800,
+      "locked": true
     },
     "kill-box": {
       "x": 11.108,
       "y": 13.858,
-      "w": 95.45454406738281,
-      "h": 32.545448303222656
+      "w": 70,
+      "h": 26.727279663085938,
+      "z": 2000
     },
     "timer-box": {
-      "x": 49.908,
-      "y": 15.206,
-      "w": 40,
-      "h": 18
+      "x": 49.648,
+      "y": 15.781,
+      "w": 63.272705078125,
+      "h": 20.909095764160156,
+      "z": 2100
     },
     "coin-box-frame": {
       "x": 77.897,
       "y": 15.124,
-      "w": 152.0001220703125,
-      "h": 74.18180847167969
+      "w": 142.5455322265625,
+      "h": 63.999977111816406,
+      "z": 900,
+      "locked": true
     },
     "coin-box": {
       "x": 78.626,
       "y": 15.008,
-      "w": 84.54541015625,
-      "h": 29.63634490966797
+      "w": 62,
+      "h": 19.45452880859375,
+      "z": 2200
     },
     "shop-btn-frame": {
       "x": 90.189,
       "y": 15.032,
-      "w": 154,
-      "h": 84
+      "w": 129.9998779296875,
+      "h": 68.72724914550781,
+      "z": 1000,
+      "locked": true
     },
     "shop-btn": {
       "x": 90.763,
       "y": 14.802,
-      "w": 85.0909423828125,
-      "h": 31.81818389892578
+      "w": 60.3636474609375,
+      "h": 26,
+      "z": 2300
     },
     "paint-bar-frame": {
-      "x": 5.497,
-      "y": 45.973,
-      "w": 108.9090805053711,
-      "h": 412.54547119140625
+      "x": 5.236,
+      "y": 43.211,
+      "w": 40.54544448852539,
+      "h": 291.09092712402344,
+      "z": 1100,
+      "locked": false
     },
     "paint-bar": {
-      "x": 5.601,
-      "y": 50,
-      "w": 94.36363983154297,
-      "h": 271.4544677734375
+      "x": 5.184,
+      "y": 44.591,
+      "w": 25.272708892822266,
+      "h": 200.18173217773438,
+      "z": 100,
+      "locked": true
     },
     "soap-slot-frame": {
       "x": 28.26,
       "y": 69.126,
       "w": 128.90911865234375,
-      "h": 178.18182373046875
+      "h": 178.18182373046875,
+      "z": 1200
     },
     "soap-slot-card": {
       "x": 28.207,
       "y": 69.126,
       "w": 87.81817626953125,
-      "h": 125.45458984375
+      "h": 125.45458984375,
+      "z": 1300
     },
     "weapon-cycle-frame": {
       "x": 15.964,
       "y": 69.486,
       "w": 150,
-      "h": 200
+      "h": 200,
+      "z": 1400
     },
     "weapon-cycle-card": {
       "x": 15.756,
       "y": 69.601,
       "w": 106,
-      "h": 148
+      "h": 148,
+      "z": 1500
     },
     "clean-btn-frame": {
-      "x": 16,
-      "y": 74,
+      "x": 94.093,
+      "y": 58.695,
       "w": 132,
-      "h": 132
+      "h": 132,
+      "z": 200,
+      "locked": true
     },
     "clean-btn": {
-      "x": 16,
-      "y": 74,
+      "x": 93.989,
+      "y": -3.1,
       "w": 64,
-      "h": 64
+      "h": 64,
+      "z": 300,
+      "locked": true
     },
     "special-btn-frame": {
       "x": 74.619,
       "y": 83.399,
       "w": 152,
-      "h": 152
+      "h": 152,
+      "z": 1600
     },
     "special-btn": {
       "x": 74.619,
       "y": 83.399,
       "w": 74,
-      "h": 74
+      "h": 74,
+      "z": 2400
     },
     "jump-btn-frame": {
       "x": 84.822,
       "y": 83.399,
       "w": 152,
-      "h": 152
+      "h": 152,
+      "z": 1700
     },
     "jump-btn": {
       "x": 84.822,
       "y": 83.399,
       "w": 74,
-      "h": 74
+      "h": 74,
+      "z": 2500
     },
     "attack-btn-frame": {
       "x": 94.524,
       "y": 83.399,
       "w": 152,
-      "h": 152
+      "h": 152,
+      "z": 1800
     },
     "attack-btn": {
       "x": 94.524,
       "y": 83.399,
       "w": 74,
-      "h": 74
+      "h": 74,
+      "z": 2600
     },
     "viewport-frame-top": {
       "x": 50,
-      "y": 8.4,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.34
+      "y": 18.632,
+      "w": 1395.2727272510529,
+      "h": 219.2436627197266,
+      "z": 600,
+      "locked": false
     },
     "viewport-frame-bottom": {
       "x": 50,
-      "y": 91.6,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.4
+      "y": 80.092,
+      "w": 1396,
+      "h": 252.8,
+      "z": 700,
+      "locked": true
     },
     "viewport-frame-left": {
       "x": 11,
       "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "w": 307.12,
+      "h": 632,
+      "z": 500,
+      "locked": true
     },
     "viewport-frame-right": {
       "x": 89,
       "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "w": 307.12,
+      "h": 632,
+      "z": 400,
+      "locked": true
+    },
+    "loadout-toggle-frame": {
+      "x": 5.925,
+      "y": 84.807,
+      "w": 76.0000057220459,
+      "h": 74.54544067382812,
+      "z": 1900,
+      "locked": true
+    },
+    "loadout-toggle": {
+      "x": 5.924,
+      "y": 84.707,
+      "w": 32.909088134765625,
+      "h": 32.9090576171875,
+      "z": 2700,
+      "locked": true
     }
   },
   "mobile": {
@@ -5731,26 +5790,26 @@ const UI_LAYOUT_DEFAULTS={
     "viewport-frame-top": {
       "x": 50,
       "y": 8.4,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.34
+      "w": 1396,
+      "h": 214.88000000000002
     },
     "viewport-frame-bottom": {
       "x": 50,
       "y": 91.6,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.4
+      "w": 1396,
+      "h": 252.8
     },
     "viewport-frame-left": {
       "x": 11,
       "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "w": 307.12,
+      "h": 632
     },
     "viewport-frame-right": {
       "x": 89,
       "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "w": 307.12,
+      "h": 632
     }
   }
 };
