@@ -116,6 +116,7 @@
   .ui-layout-object-panel-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
   .ui-layout-object-panel h3{margin:0;color:#fff3b2;font:600 16px/1.2 "Trebuchet MS",sans-serif}
   .ui-layout-object-panel p{margin:0;color:#f8efc0;font:11px/1.45 monospace;opacity:0.82}
+  .ui-layout-object-panel-tools{display:flex;gap:6px;flex-wrap:wrap}
   .ui-layout-object-panel-handle{flex:0 0 auto;width:18px;height:18px;border-radius:999px;background:#fff06a;
     box-shadow:0 0 0 2px #2a1738 inset,0 2px 8px rgba(0,0,0,0.45)}
   .ui-layout-object-list{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
@@ -6134,6 +6135,21 @@ function moveUILayoutLayer(targetId,direction){
   showUILayoutToast(`${current.label} moved ${direction}`);
   return true;
 }
+function moveSelectedUILayoutItems(edge){
+  const selectedIds=uiLayoutState.selectedIds.filter(id=>UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+  if(!selectedIds.length) return false;
+  const ordered=getUILayoutOrderedIds(true);
+  const moving=ordered.filter(id=>selectedIds.includes(id));
+  const remaining=ordered.filter(id=>!selectedIds.includes(id));
+  const next=edge==='top' ? [...moving,...remaining] : [...remaining,...moving];
+  const changed=next.some((id,index)=>id!==ordered[index]);
+  if(!changed) return false;
+  pushUILayoutHistory(edge==='top'?'to top':'to bottom');
+  applyUILayoutLayerOrder(next);
+  refreshUILayoutEditor();
+  showUILayoutToast(`Moved ${moving.length} item(s) to ${edge}`);
+  return true;
+}
 function refreshUILayoutObjectPanel(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
   const list=panel?.querySelector('.ui-layout-object-list');
@@ -6163,10 +6179,8 @@ function refreshUILayoutObjectPanel(){
     </div>`;
     row.addEventListener('pointerdown',e=>{
       if(e.target?.closest?.('button')) return;
-      if(e.shiftKey){
-        if(!uiLayoutState.selectedIds.includes(def.id)) setUILayoutSelection(def.id,{additive:true});
-        uiLayoutState.suppressRowClick=true;
-      }else if(!uiLayoutState.selectedIds.includes(def.id)){
+      if(e.shiftKey) return;
+      if(!uiLayoutState.selectedIds.includes(def.id)){
         setUILayoutSelection(def.id);
       }
       if(uiLayoutState.selectedIds.includes(def.id)){
@@ -6207,7 +6221,11 @@ function refreshUILayoutObjectPanel(){
         moveUILayoutLayer(def.id,'down');
         return;
       }
-      setUILayoutSelection(def.id,{additive:e.shiftKey});
+      if(e.shiftKey){
+        setUILayoutSelection(def.id,{additive:true});
+      }else{
+        setUILayoutSelection(def.id);
+      }
       refreshUILayoutEditor();
     });
     list.appendChild(row);
@@ -6253,8 +6271,22 @@ function buildUILayoutEditor(){
   editor.appendChild(toolbar);
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
-  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Lock to ignore canvas selection. Use arrows to move front/back.</p></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.addEventListener('click',e=>{
+    const action=e.target?.dataset?.action;
+    if(action==='top'){
+      e.preventDefault();
+      e.stopPropagation();
+      moveSelectedUILayoutItems('top');
+    }
+    if(action==='bottom'){
+      e.preventDefault();
+      e.stopPropagation();
+      moveSelectedUILayoutItems('bottom');
+    }
+  });
   panel.addEventListener('pointerdown',e=>{
+    if(e.target?.closest?.('[data-action]')) return;
     const resize=e.target?.closest?.('.ui-layout-object-panel-resize');
     const header=e.target?.closest?.('.ui-layout-object-panel-header');
     if(!resize && !header) return;
