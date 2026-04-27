@@ -26,6 +26,11 @@
     src:url("FONTS/Bristol.otf") format("opentype");
     font-weight:normal;font-style:normal;font-display:swap;
   }
+  @font-face{
+    font-family:"HydrogenWhiskey";
+    src:url("FONTS/Hydrogen Whiskey.otf") format("opentype");
+    font-weight:normal;font-style:normal;font-display:swap;
+  }
   /* MANUAL FONT TWEAK GUIDE
      ----------------------------------------------------------------
      1. To swap the loading-briefing font, change the URL below to
@@ -328,7 +333,7 @@
     box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.7);
     width:auto;max-width:min(calc(100vw - 170px),620px);text-align:center;line-height:1.02;
     font-size:clamp(14px,2.8vw,22px);letter-spacing:0.18em;font-weight:bold;
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;text-transform:uppercase;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;text-transform:uppercase;
     z-index:12;pointer-events:none;color:var(--ink);white-space:nowrap;
     text-shadow:0 1px 0 rgba(255,255,255,0.55),0 2px 4px rgba(180,150,30,0.35);
     transition:opacity 1s ease;
@@ -372,7 +377,7 @@
     border-radius:999px;padding:5px 14px;
     box-shadow:var(--thorn-glow),inset 0 0 0 1px rgba(255,255,255,0.65);
     color:var(--ink);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:1px;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;letter-spacing:1px;
     font-size:17px;text-shadow:0 1px 0 rgba(255,255,255,0.55);display:inline-flex;
     align-items:center;gap:6px;
     /* Each pill carries its own 4-corner thorn cluster. Per-element
@@ -435,7 +440,7 @@
     background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0));
     filter:blur(2px)}
   #paint-bar-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);width:44px;
-    text-align:center;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    text-align:center;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     color:#fff;font-size:11px;letter-spacing:2px;
     text-shadow:0 1px 2px rgba(0,0,0,0.7);z-index:4}
   @media (max-width:640px){
@@ -449,7 +454,7 @@
     background:transparent;opacity:0;pointer-events:none;
     transition:opacity 2.2s ease;text-align:center}
   #art-wins.show{opacity:1;pointer-events:auto}
-  #art-wins .aw-text{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+  #art-wins .aw-text{font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     font-size:clamp(42px,10vw,120px);letter-spacing:0.3em;font-weight:bold;
     background:linear-gradient(90deg,#e40303,#ff8c00,#ffed00,#008026,#004dff,#750787,#ff66c4);
     background-size:300% 100%;
@@ -459,15 +464,15 @@
     filter:drop-shadow(0 6px 20px rgba(0,0,0,0.9));width:min(90vw,820px);margin:0 auto;text-align:center}
   #art-wins .aw-sub{display:none}
   #art-wins .aw-btn{padding:12px 26px;border-radius:999px;border:1px solid rgba(255,255,255,0.72);
-    background:transparent;color:#fff;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    background:transparent;color:#fff;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     font-size:14px;letter-spacing:0.25em;cursor:pointer;text-transform:uppercase;
     box-shadow:none}
   @keyframes awShimmer{from{background-position:0% 50%}to{background-position:300% 50%}}
   /* HUD pill text against cream paper background — dark ink for
      all three, with a coloured emoji icon carrying the meaning. */
-  #kill-box{color:#3a1410}
-  #coin-box{color:#5a3a00}
-  #timer-box{color:#1a1f44;font-variant-numeric:tabular-nums;background:transparent!important;box-shadow:none!important}
+  #kill-box{color:#9E9A91}
+  #coin-box{color:#9E9A91}
+  #timer-box{color:#9E9A91;font-variant-numeric:tabular-nums;background:transparent!important;box-shadow:none!important}
   #timer-box.warn{color:#b3173a;animation:pulse 0.8s infinite alternate;
     background:transparent!important}
   /* Mini thorn flares attached to the side of the SHOP button and
@@ -485,8 +490,9 @@
   /* Game controls */
   #game-controls{position:fixed;bottom:0;left:0;right:0;height:40vh;z-index:15;
     pointer-events:none;display:block}
-  #joystick-zone{position:absolute;left:20px;bottom:24px;width:100px;height:100px;
-    pointer-events:auto;touch-action:none}
+  #joystick-zone{position:fixed;left:14%;top:78%;width:120px;height:120px;
+    transform:translate(-50%,-50%);
+    pointer-events:auto;touch-action:none;z-index:18}
   #joystick-base{position:absolute;inset:0;border-radius:50%;
     background:radial-gradient(circle at 30% 20%,rgba(255,243,251,0.35),rgba(100,60,120,0.35));
     border:2px solid var(--bubble-edge);
@@ -529,7 +535,7 @@
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fffdf6 0%,#8ff3da 55%,#279b87 100%);
     border:3px solid #fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),0 6px 14px rgba(39,155,135,0.45);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:10px;letter-spacing:1px;color:#fff;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:10px;letter-spacing:1px;color:#fff;
     text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4);
     line-height:1;text-align:center;padding:0 6px;box-sizing:border-box}
   body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
@@ -553,20 +559,26 @@
      the button, so the icon takes the full face. */
   #special-btn .btn-sub{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;
     padding:0 6px;border-radius:999px;background:#2e1a3c;color:#ffd86b;
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;line-height:20px;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:11px;line-height:20px;
     letter-spacing:0.06em;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(255,255,255,0.25)}
   /* Icon art inside JUMP / PUNCH. Sized as a percentage of the
      button face so the mobile & desktop sizes scale together. */
   .btn-ico-svg{width:52%;height:52%;display:block;stroke-width:2.6;
     filter:drop-shadow(0 2px 2px rgba(0,0,0,0.35))}
-  #attack-btn .btn-ico-svg,#jump-btn .btn-ico-svg,#special-btn .btn-ico{position:relative;z-index:3}
+  /* PNG icon variant — same footprint as the SVG glyphs above so the
+     SKILL / JUMP / PUNCH buttons read as a unified set. */
+  .btn-ico-img{width:78%;height:78%;display:block;object-fit:contain;
+    pointer-events:none;user-select:none;-webkit-user-drag:none;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4))}
+  #attack-btn .btn-ico-svg,#jump-btn .btn-ico-svg,#special-btn .btn-ico,
+  #attack-btn .btn-ico-img,#jump-btn .btn-ico-img,#special-btn .btn-ico-img{position:relative;z-index:3}
   #jump-btn .btn-ico-svg{color:#fff}
   #attack-btn .btn-ico-svg{color:#fff}
   #shop-btn{position:fixed;right:18px;top:96px;z-index:25;padding:0 12px;border-radius:14px;
     border:none;
     background:linear-gradient(180deg,var(--paper) 0%,var(--paper-soft) 100%);
-    color:var(--ink);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:calc(13px * var(--ui-scale,1));letter-spacing:calc(0.22em * var(--ui-scale,1));cursor:pointer;
+    color:#9E9A91;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:calc(13px * var(--ui-scale,1));letter-spacing:calc(0.22em * var(--ui-scale,1));cursor:pointer;
     display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1;
     box-shadow:inset 0 0 0 1px rgba(255,255,255,0.65);
     text-shadow:0 1px 0 rgba(255,255,255,0.5);
@@ -576,9 +588,9 @@
     border:1px solid rgba(255,255,255,0.16);box-shadow:0 18px 40px rgba(0,0,0,0.42);padding:16px 16px 14px;
     color:#f7eaff;display:none;max-height:calc(100vh - 164px);overflow-y:auto;overscroll-behavior:contain}
   #shop-panel.show{display:block}
-  #shop-panel h3{margin:0 0 6px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:20px;letter-spacing:0.18em;color:#ffd86b}
+  #shop-panel h3{margin:0 0 6px;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:20px;letter-spacing:0.18em;color:#ffd86b}
   #shop-panel .shop-sub{font-size:12px;opacity:0.72;letter-spacing:0.08em;margin-bottom:10px}
-  #shop-panel .shop-section{margin-top:14px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.24em;color:#ffc7e2}
+  #shop-panel .shop-section{margin-top:14px;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.24em;color:#ffc7e2}
   #shop-panel .shop-section.skill-section{color:#5f4200;background:linear-gradient(90deg,rgba(255,225,84,0.96),rgba(255,196,54,0.65));padding:8px 10px;border-radius:999px;box-shadow:0 6px 16px rgba(255,194,46,0.22)}
   #shop-panel .shop-section.burst-section{color:#ffe9f6;background:linear-gradient(90deg,rgba(255,93,157,0.28),rgba(116,199,255,0.2));padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12)}
   #shop-close{position:absolute;right:12px;top:10px;border:none;background:transparent;color:#fff;font-size:22px;cursor:pointer}
@@ -592,7 +604,7 @@
   .shop-card.skill-card p{color:#fff4cf;opacity:0.9}
   .shop-card.burst-card{background:linear-gradient(180deg,rgba(255,112,168,0.16),rgba(121,188,255,0.12));border:1px solid rgba(255,180,216,0.24)}
   .shop-buy{width:100%;padding:10px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);
-    background:linear-gradient(90deg,#553c69,#392448);color:#fff;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    background:linear-gradient(90deg,#553c69,#392448);color:#fff;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     font-size:12px;letter-spacing:0.18em;cursor:pointer;text-transform:uppercase}
   .shop-card.skill-card .shop-buy{background:linear-gradient(90deg,#ffe66d,#ffb91f);color:#503300;border-color:rgba(255,247,197,0.8)}
   .shop-card.burst-card .shop-buy{background:linear-gradient(90deg,#6d3e7b,#2f4e74)}
@@ -604,7 +616,7 @@
   #loadout-toggle{display:block;position:fixed;left:6.6%;top:81%;transform:translate(-50%,-50%);z-index:26;width:54px;height:54px;border-radius:999px;
     border:2px solid rgba(255,215,235,0.92);background:radial-gradient(circle at 30% 24%,rgba(255,244,251,0.98),rgba(255,122,191,0.96) 55%,rgba(203,22,112,0.98));
     color:#fff;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(255,138,201,0.18);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
     pointer-events:auto;cursor:pointer}
   #loadout-toggle .lt-ico{display:block;font-size:26px;line-height:50px;margin:0;text-align:center;color:#fff;font-weight:bold;
     text-shadow:0 2px 8px rgba(103,0,55,0.42)}
@@ -629,8 +641,8 @@
     pointer-events:none;z-index:1;
     filter:drop-shadow(0 0 8px rgba(255,238,142,0.16))}
   .loadout-slot > *{position:relative;z-index:2}
-  .loadout-slot .slot-kind{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:9px;letter-spacing:0.18em;color:rgba(26,15,36,0.55)}
-  .loadout-slot .slot-name{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.12em;color:var(--ink)}
+  .loadout-slot .slot-kind{font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:9px;letter-spacing:0.18em;color:rgba(26,15,36,0.55)}
+  .loadout-slot .slot-name{font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:13px;letter-spacing:0.12em;color:var(--ink)}
   .loadout-slot .slot-meta{font-size:10px;color:rgba(26,15,36,0.62)}
   .loadout-slot .slot-icon{width:32px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;
     background:radial-gradient(circle at 35% 25%,#ffffff 0%,#fff5d8 60%,#f0d878 100%);
@@ -638,7 +650,7 @@
     font-size:18px;color:var(--ink)}
   .loadout-slot button{width:88%;padding:5px 0;border-radius:999px;border:none;
     background:rgba(26,15,36,0.06);color:var(--ink);
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     font-size:10px;letter-spacing:0.16em;cursor:pointer}
   /* Equipped slot — entire text turns the gallery-green from the
      reference, on top of a slightly brighter cream so it still
@@ -945,7 +957,7 @@
   #end-box.minimized #end-toggle{position:static;width:24px;height:24px;font-size:16px}
   #end-box .sub{text-align:center;font-size:13px;color:rgba(26,15,36,0.6);margin-bottom:14px;letter-spacing:1px}
   #end-score{text-align:center;font-size:44px;font-weight:bold;color:#b3173a;line-height:1;margin:6px 0 10px;
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;letter-spacing:0.1em;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;letter-spacing:0.1em;
     text-shadow:0 1px 0 rgba(255,255,255,0.5)}
   #name-row{display:flex;gap:8px;margin-bottom:12px}
   #name-input{flex:1;padding:10px 14px;border-radius:999px;border:1.5px solid rgba(26,15,36,0.18);
@@ -953,7 +965,7 @@
   #submit-btn{padding:10px 20px;border-radius:999px;border:none;
     background:linear-gradient(180deg,#fff7d3 0%,#f4e85c 100%);
     color:var(--ink);font-size:14px;letter-spacing:2px;cursor:pointer;
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     box-shadow:0 0 0 1.5px var(--neon-deep),0 4px 10px rgba(180,150,30,0.35)}
   #submit-btn:disabled{opacity:0.5;cursor:not-allowed}
   #leaderboard-list{max-height:38vh;overflow-y:auto;padding:0;margin:0;list-style:none;
@@ -969,7 +981,7 @@
   #replay-btn{width:100%;margin-top:14px;padding:10px;border-radius:999px;border:none;
     background:linear-gradient(180deg,#fff7d3 0%,#f4e85c 100%);
     color:var(--ink);font-size:15px;letter-spacing:2px;cursor:pointer;
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     box-shadow:0 0 0 1.5px var(--neon-deep),0 4px 10px rgba(180,150,30,0.35),inset 0 0 0 1px rgba(255,255,255,0.6)}
 
   /* Stone tablet cutscene */
@@ -982,27 +994,27 @@
     border:3px solid #1f1c18;border-radius:10px 10px 20px 20px;
     box-shadow:0 30px 60px rgba(0,0,0,0.9),inset 0 0 60px rgba(0,0,0,0.7);
     display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:24px;
-    color:#e8dfc2;font-family:"GoldenGirdle","Trebuchet MS",sans-serif}
+    color:#e8dfc2;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif}
   #tablet-img::before{content:"";position:absolute;inset:6px;border:1px solid rgba(232,223,194,0.2);
     border-radius:6px 6px 14px 14px;pointer-events:none}
   #tablet-img .glyph{font-size:clamp(28px,6vw,56px);letter-spacing:0.35em;line-height:1.2;
     text-align:center;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.8))}
   #tablet-img .sub{font-size:clamp(10px,1.5vw,13px);letter-spacing:3px;opacity:0.65;margin-top:6px}
-  #tablet-caption{font-family:"GoldenGirdle","Trebuchet MS",sans-serif;color:#e8dfc2;
+  #tablet-caption{font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;color:#e8dfc2;
     font-size:clamp(12px,1.8vw,15px);letter-spacing:4px;opacity:0.85;text-align:center;max-width:80vw}
   #tablet-close{margin-top:10px;padding:8px 24px;border-radius:999px;border:1px solid #e8dfc2;
     background:transparent;color:#e8dfc2;font-size:13px;letter-spacing:3px;cursor:pointer;
-    font-family:"GoldenGirdle","Trebuchet MS",sans-serif}
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif}
 
   #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 0.6s;z-index:50}
   #fade.show{opacity:1;pointer-events:auto}
 
   .hidden{display:none !important}
 
-  /* Desktop: hide mobile joystick/attack button */
-  @media (hover:hover) and (pointer:fine){
-    #joystick-zone{display:none !important}
-  }
+  /* Joystick: visible only on touch / mobile-bucket layouts. The
+     body class is owned by JS so admin-mode mobile preview can show
+     and edit the joystick on a desktop browser too. */
+  body:not(.show-joystick) #joystick-zone{display:none !important}
 </style>
 </head>
 <body>
@@ -1171,31 +1183,13 @@
   <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
   <button id="clean-btn" class="hidden">CLEAN</button>
   <button id="special-btn" aria-label="Use special skill">
-    <span class="btn-ico" aria-hidden="true">✦</span>
+    <img class="btn-ico-img" src="game icon/skill.png" alt="" aria-hidden="true">
   </button>
   <button id="jump-btn" aria-label="Jump">
-    <svg class="btn-ico-svg" viewBox="0 0 32 32" fill="none" stroke="currentColor"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <!-- Up-arrow with a dashed ground line: literal "leap upward" sigil -->
-      <path d="M16 7 V23"/>
-      <path d="M9 14 L16 7 L23 14"/>
-      <path d="M7 27 H11" stroke-width="2.2"/>
-      <path d="M14 27 H18" stroke-width="2.2"/>
-      <path d="M21 27 H25" stroke-width="2.2"/>
-    </svg>
+    <img class="btn-ico-img" src="game icon/jump.png" alt="" aria-hidden="true">
   </button>
   <button id="attack-btn" aria-label="Punch">
-    <svg class="btn-ico-svg" viewBox="0 0 32 32" fill="none" stroke="currentColor"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <!-- Clenched fist: 4 knuckle ticks above a rounded fist body
-           with a curled thumb on the bottom-left. -->
-      <path d="M9 11 V14"/>
-      <path d="M13 11 V14"/>
-      <path d="M17 11 V14"/>
-      <path d="M21 11 V14"/>
-      <rect x="7" y="14" width="16" height="10" rx="3"/>
-      <path d="M7 18 Q4 18 4 20 Q4 22 7 22"/>
-    </svg>
+    <img class="btn-ico-img" src="game icon/punch.png" alt="" aria-hidden="true">
   </button>
 </div>
 
@@ -5934,6 +5928,14 @@ const UI_LAYOUT_DEFAULTS={
       "h": 34.363555908203125,
       "z": 2700,
       "locked": true
+    },
+    "joystick-zone": {
+      "x": 16,
+      "y": 78,
+      "w": 120,
+      "h": 120,
+      "z": 1850,
+      "locked": false
     }
   }
 };
@@ -5961,6 +5963,7 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'attack-btn',label:'punch btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
   {id:'loadout-toggle-frame',label:'E frame',anchor:'center',minW:56,minH:56,baseW:116,baseH:116},
   {id:'loadout-toggle',label:'E btn',anchor:'center',minW:24,minH:24,baseW:54,baseH:54},
+  {id:'joystick-zone',label:'joystick',anchor:'center',minW:80,minH:80,baseW:120,baseH:120},
   {id:'viewport-frame-top',label:'frame top',anchor:'center',minW:200,minH:40,baseW:window.innerWidth,baseH:window.innerHeight*0.34},
   {id:'viewport-frame-bottom',label:'frame bottom',anchor:'center',minW:200,minH:40,baseW:window.innerWidth,baseH:window.innerHeight*0.40},
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
@@ -6119,6 +6122,7 @@ function setUILayoutMode(mode){
   uiLayoutState.forcedMode=mode==='desktop'||mode==='mobile' ? mode : null;
   applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
+  syncJoystickVisibility();
 }
 function formatUILayoutExport(){
   return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
@@ -6909,6 +6913,7 @@ function enableUILayoutEditor(){
   refreshUILayoutEditor();
   setUILayoutSelection(null);
   refreshUILayoutEditorToolbar();
+  syncJoystickVisibility();
 }
 function disableUILayoutEditor(openExport=false){
   if(!uiLayoutState.active) return;
@@ -6923,6 +6928,7 @@ function disableUILayoutEditor(openExport=false){
   saveUILayoutConfig();
   ensureUILayoutExportButton();
   if(openExport) showUILayoutExportModal();
+  syncJoystickVisibility();
 }
 function toggleUILayoutEditor(){
   if(uiLayoutState.active) disableUILayoutEditor();
@@ -7017,9 +7023,18 @@ function syncLoadoutLayout(forceClosed=false){
   }
   if(!document.body.classList.contains('loadout-open')) setLoadoutExpanded(false);
 }
+function syncJoystickVisibility(){
+  // Show joystick on real mobile/touch viewports OR while admin mode
+  // is editing the mobile bucket (so the on-screen control can be
+  // tweaked from a desktop browser's mobile-preview popup).
+  const showForDevice=mobileLoadoutQuery.matches || IS_MOBILE_LAYOUT;
+  const showForAdmin=uiLayoutState.active && getUILayoutBucket()==='mobile';
+  document.body.classList.toggle('show-joystick',!!(showForDevice||showForAdmin));
+}
 mobileLoadoutQuery.addEventListener?.('change',()=>{
   if(!uiLayoutState.forcedMode) applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
+  syncJoystickVisibility();
 });
 // Pull in changes saved by a sibling window (e.g. the mobile preview popup)
 // so the parent window doesn't keep stale values it would otherwise write
@@ -7038,6 +7053,7 @@ applyUILayoutConfig();
 if(layoutQuery.get('layoutMode')==='mobile'){
   uiLayoutState.forcedMode='mobile';
 }
+syncJoystickVisibility();
 
 let lastSpecialBtnHTML='';
 let lastSpecialBtnCooling=null;
@@ -7138,16 +7154,15 @@ function unlockBurstEffectsByKills(){
 function refreshSpecialButton(){
   if(!specialBtn) return;
   if(debugCheatMode) applyCheatInventory();
-  // Icon-only render: SKILL button shows a single weapon glyph
-  // with an optional small corner badge for cooldown / water
-  // uses. The "SKILL" text label was dropped in favour of the
-  // visual SVG/emoji language used by JUMP and PUNCH.
+  // SKILL button shows ONE shared white icon regardless of which
+  // weapon is equipped — keeps the right-side action cluster visually
+  // unified. Cooldown / water-uses still surface as a small corner badge.
+  const skillIcon=`<img class="btn-ico-img" src="game icon/skill.png" alt="" aria-hidden="true">`;
   if(!equippedWeapon){
-    specialBtn.innerHTML=`<span class="btn-ico">\u2726</span>`;
+    specialBtn.innerHTML=skillIcon;
     specialBtn.classList.add('cooling');
     return;
   }
-  const item=findWeaponItem(equippedWeapon);
   const cd=specialCooldownRemaining(equippedWeapon);
   let sub='';
   if(equippedWeapon==='water'){
@@ -7156,7 +7171,7 @@ function refreshSpecialButton(){
     sub=cd.toFixed(1)+'s';
   }
   const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
-  specialBtn.innerHTML=`<span class="btn-ico">${item?.icon||'\u2726'}</span>${subHtml}`;
+  specialBtn.innerHTML=`${skillIcon}${subHtml}`;
   specialBtn.classList.toggle('cooling',equippedWeapon==='water' ? (!debugCheatMode&&wateringUses<=0) : (cd>0 && !debugCheatMode));
 }
 
