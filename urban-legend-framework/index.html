@@ -6212,7 +6212,6 @@ function refreshUILayoutObjectPanel(){
         row.setPointerCapture?.(e.pointerId);
         e.preventDefault();
         e.stopPropagation();
-        refreshUILayoutObjectPanel();
       }
     });
     row.addEventListener('click',e=>{
@@ -6386,10 +6385,11 @@ function handleUILayoutPointerMove(e){
     if(!drag.moved && Math.hypot(dx,dy)>=6){
       drag.moved=true;
       uiLayoutState.suppressRowClick=true;
+      refreshUILayoutObjectPanel();
     }
     if(drag.moved){
       const row=e.target?.closest?.('.ui-layout-object-row') || document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.ui-layout-object-row');
-      if(row?.dataset?.targetId){
+      if(row?.dataset?.targetId && drag.insertBeforeId!==row.dataset.targetId){
         drag.insertBeforeId=row.dataset.targetId;
         refreshUILayoutObjectPanel();
       }
@@ -6473,6 +6473,7 @@ function handleUILayoutPointerUp(){
   if(uiLayoutState.listDrag){
     const drag=uiLayoutState.listDrag;
     uiLayoutState.listDrag=null;
+    uiLayoutState.suppressRowClick=false;
     const selectedIds=drag.selectedIds.filter(id=>UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
     if(drag.moved && selectedIds.length){
       const ordered=getUILayoutOrderedIds(true);
