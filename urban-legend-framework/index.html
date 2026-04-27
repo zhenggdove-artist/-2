@@ -176,9 +176,16 @@
 
   /* (1) Full-bleed frame from the user's painted PNG. Claude's
      traced yellow glow is fully retired here. */
-  #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;
-    background:url("img/viewport_frame_overlay.png") center/100% 100% no-repeat;
-    filter:none}
+  #viewport-frame{position:fixed;inset:0;pointer-events:none;z-index:11;filter:none}
+  #viewport-frame .viewport-edge{position:fixed;background-position:center;background-repeat:no-repeat;pointer-events:none}
+  #viewport-frame-top{left:50%;top:8.4%;transform:translate(-50%,-50%);width:100%;height:34%;
+    background-image:url("img/viewport_frame_top_edge.png");background-size:100% 100%}
+  #viewport-frame-bottom{left:50%;top:91.6%;transform:translate(-50%,-50%);width:100%;height:40%;
+    background-image:url("img/viewport_frame_bottom_edge.png");background-size:100% 100%}
+  #viewport-frame-left{left:11%;top:50%;transform:translate(-50%,-50%);width:22%;height:100%;
+    background-image:url("img/viewport_frame_left_edge.png");background-size:100% 100%}
+  #viewport-frame-right{left:89%;top:50%;transform:translate(-50%,-50%);width:22%;height:100%;
+    background-image:url("img/viewport_frame_right_edge.png");background-size:100% 100%}
   #viewport-frame .vf-corner,#viewport-frame > svg{display:none}
   body.game-ended #viewport-frame{display:none}
 
@@ -470,6 +477,7 @@
     border:3px solid #fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),0 6px 14px rgba(39,155,135,0.45);
     font-family:"GoldenGirdle","Trebuchet MS",sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
     text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4)}
+  body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
   #clean-btn:active{transform:scale(0.93)}
   #special-btn{position:absolute;right:214px;bottom:42px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
@@ -640,7 +648,6 @@
   }
   #kill-box-frame{left:11%;top:9.6%;width:176px;height:96px}
   #kill-box{left:11%;top:9.6%;width:118px!important;height:42px!important;padding:0 14px!important}
-  #timer-box-frame{left:50%;top:12.1%;width:246px;height:108px}
   #timer-box{left:50%;top:12.1%;width:164px!important;height:38px!important;padding:0 14px!important;
     font-size:clamp(11px,1.35vw,22px)!important}
   #coin-box-frame{left:82.2%;top:9.6%;width:176px;height:96px}
@@ -666,6 +673,9 @@
   #paint-bar-label{bottom:6px!important;left:50%;transform:translateX(-50%);width:58px;
     font-size:10px!important;letter-spacing:0.14em}
 
+  #clean-btn-frame{left:16%;top:74%;width:132px;height:132px}
+  #clean-btn{left:16%;top:74%;width:64px!important;height:64px!important;transform:translate(-50%,-50%)!important;
+    padding:0!important;border:none!important;z-index:15}
   #special-btn-frame{left:74.6%;top:83.4%;width:152px;height:152px}
   #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important}
   #jump-btn-frame{left:84.8%;top:83.4%;width:152px;height:152px}
@@ -690,8 +700,8 @@
     opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
   #soap-slot-frame{left:8.2%;top:73.5%;width:150px;height:200px}
   #soap-slot-card{left:8.2%;top:73.5%}
-  #burst-slot-amber-frame{left:8.2%;top:90.2%;width:150px;height:200px}
-  #burst-slot-amber-card{left:8.2%;top:90.2%}
+  #weapon-cycle-frame{left:15.964%;top:69.486%;width:150px;height:200px}
+  #weapon-cycle-card{left:15.756%;top:69.601%}
   .loadout-slot.cleaner{width:106px!important}
   .loadout-slot .slot-kind{font-size:calc(10px * var(--ui-scale,1))!important}
   .loadout-slot .slot-name{font-size:calc(16px * var(--ui-scale,1))!important}
@@ -708,7 +718,6 @@
   @media (max-width:640px){
     #kill-box-frame{left:14%;top:5.4%;width:142px;height:76px}
     #kill-box{left:14%;top:5.4%;width:96px!important;height:32px!important}
-    #timer-box-frame{left:50%;top:8.2%;width:188px;height:82px}
     #timer-box{left:50%;top:8.2%;width:126px!important;height:28px!important;font-size:12px!important}
     #coin-box-frame{left:74%;top:5.4%;width:142px;height:76px}
     #coin-box{left:74%;top:5.4%;width:96px!important;height:32px!important}
@@ -716,6 +725,8 @@
     #shop-btn{left:86%;top:6.3%;width:72px!important;height:28px!important;font-size:10px!important}
     #paint-bar-frame{left:8.5%;top:50%;width:58px;height:252px}
     #paint-bar{left:8.5%;top:50%;width:58px!important;height:252px!important}
+    #clean-btn-frame{left:20%;top:62%;width:110px;height:110px}
+    #clean-btn{left:20%;top:62%;width:52px!important;height:52px!important}
     #special-btn-frame{left:31.8%;top:90.3%;width:120px;height:120px}
     #special-btn{left:31.8%;top:90.3%;width:56px!important;height:56px!important}
     #jump-btn-frame{left:55.7%;top:90.3%;width:120px;height:120px}
@@ -725,8 +736,8 @@
     #loadout-toggle-frame{left:14%;top:85%;width:98px;height:98px}
     #soap-slot-frame{left:20%;top:71%;width:126px;height:170px}
     #soap-slot-card{left:20%;top:71%;width:90px!important;height:126px!important}
-    #burst-slot-amber-frame{left:20%;top:87.5%;width:126px;height:170px}
-    #burst-slot-amber-card{left:20%;top:87.5%;width:90px!important;height:126px!important}
+    #weapon-cycle-frame{left:15.968%;top:69.485%;width:150px;height:200px}
+    #weapon-cycle-card{left:15.759%;top:71.18%;width:106px!important;height:148px!important}
   }
   body.game-ended #ui-frame-layer,
   body.game-ended #loadout-bar .loadout-slot-frame{display:none!important}
@@ -919,6 +930,10 @@
      SVG paths are stroked, not filled, to keep them lightweight
      (~1 KB each) regardless of how the user scales the viewport. -->
 <div id="viewport-frame" aria-hidden="true">
+  <div id="viewport-frame-top" class="viewport-edge"></div>
+  <div id="viewport-frame-bottom" class="viewport-edge"></div>
+  <div id="viewport-frame-left" class="viewport-edge"></div>
+  <div id="viewport-frame-right" class="viewport-edge"></div>
   <!-- Master vine ornament drawn once, then mirrored to all four
        corners via CSS transforms. Built from 3 elements that match
        the design reference's visual language:
@@ -1038,10 +1053,10 @@
 
 <div id="ui-frame-layer" aria-hidden="true">
   <div id="kill-box-frame" class="ui-deco-frame hud-coin-frame"></div>
-  <div id="timer-box-frame" class="ui-deco-frame hud-small-frame"></div>
   <div id="coin-box-frame" class="ui-deco-frame hud-coin-frame"></div>
   <div id="shop-btn-frame" class="ui-deco-frame hud-coin-frame"></div>
   <div id="paint-bar-frame" class="ui-deco-frame paint-frame"></div>
+  <div id="clean-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="special-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="jump-btn-frame" class="ui-deco-frame action-frame"></div>
   <div id="attack-btn-frame" class="ui-deco-frame action-frame"></div>
@@ -5414,12 +5429,6 @@ const UI_LAYOUT_DEFAULTS={
       "w": 95.45454406738281,
       "h": 32.545448303222656
     },
-    "timer-box-frame": {
-      "x": 50.013,
-      "y": 12.099,
-      "w": 246,
-      "h": 108
-    },
     "timer-box": {
       "x": 49.908,
       "y": 15.206,
@@ -5474,17 +5483,29 @@ const UI_LAYOUT_DEFAULTS={
       "w": 87.81817626953125,
       "h": 125.45458984375
     },
-    "burst-slot-amber-frame": {
+    "weapon-cycle-frame": {
       "x": 15.964,
       "y": 69.486,
       "w": 150,
       "h": 200
     },
-    "burst-slot-amber-card": {
+    "weapon-cycle-card": {
       "x": 15.756,
       "y": 69.601,
       "w": 106,
       "h": 148
+    },
+    "clean-btn-frame": {
+      "x": 16,
+      "y": 74,
+      "w": 132,
+      "h": 132
+    },
+    "clean-btn": {
+      "x": 16,
+      "y": 74,
+      "w": 64,
+      "h": 64
     },
     "special-btn-frame": {
       "x": 74.619,
@@ -5521,6 +5542,30 @@ const UI_LAYOUT_DEFAULTS={
       "y": 83.399,
       "w": 74,
       "h": 74
+    },
+    "viewport-frame-top": {
+      "x": 50,
+      "y": 8.4,
+      "w": window.innerWidth,
+      "h": window.innerHeight * 0.34
+    },
+    "viewport-frame-bottom": {
+      "x": 50,
+      "y": 91.6,
+      "w": window.innerWidth,
+      "h": window.innerHeight * 0.4
+    },
+    "viewport-frame-left": {
+      "x": 11,
+      "y": 50,
+      "w": window.innerWidth * 0.22,
+      "h": window.innerHeight
+    },
+    "viewport-frame-right": {
+      "x": 89,
+      "y": 50,
+      "w": window.innerWidth * 0.22,
+      "h": window.innerHeight
     }
   },
   "mobile": {
@@ -5535,12 +5580,6 @@ const UI_LAYOUT_DEFAULTS={
       "y": 10.061,
       "w": 95.45,
       "h": 32.53
-    },
-    "timer-box-frame": {
-      "x": 46.606,
-      "y": 11.965,
-      "w": 246,
-      "h": 108
     },
     "timer-box": {
       "x": 49.92,
@@ -5596,17 +5635,29 @@ const UI_LAYOUT_DEFAULTS={
       "w": 87.81,
       "h": 125.45
     },
-    "burst-slot-amber-frame": {
+    "weapon-cycle-frame": {
       "x": 15.968,
       "y": 69.485,
       "w": 150,
       "h": 200
     },
-    "burst-slot-amber-card": {
+    "weapon-cycle-card": {
       "x": 15.759,
       "y": 71.18,
       "w": 106,
       "h": 148
+    },
+    "clean-btn-frame": {
+      "x": 20,
+      "y": 62,
+      "w": 110,
+      "h": 110
+    },
+    "clean-btn": {
+      "x": 20,
+      "y": 62,
+      "w": 52,
+      "h": 52
     },
     "special-btn-frame": {
       "x": 76.664,
@@ -5643,13 +5694,36 @@ const UI_LAYOUT_DEFAULTS={
       "y": 56.42,
       "w": 36.9091796875,
       "h": 35.45452880859375
+    },
+    "viewport-frame-top": {
+      "x": 50,
+      "y": 8.4,
+      "w": window.innerWidth,
+      "h": window.innerHeight * 0.34
+    },
+    "viewport-frame-bottom": {
+      "x": 50,
+      "y": 91.6,
+      "w": window.innerWidth,
+      "h": window.innerHeight * 0.4
+    },
+    "viewport-frame-left": {
+      "x": 11,
+      "y": 50,
+      "w": window.innerWidth * 0.22,
+      "h": window.innerHeight
+    },
+    "viewport-frame-right": {
+      "x": 89,
+      "y": 50,
+      "w": window.innerWidth * 0.22,
+      "h": window.innerHeight
     }
   }
 };
 const UI_LAYOUT_TARGET_DEFS=[
   {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40,baseW:156.36,baseH:84.36},
   {id:'kill-box',label:'artist',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
-  {id:'timer-box-frame',label:'timer frame',anchor:'center',minW:90,minH:40,baseW:246,baseH:108},
   {id:'timer-box',label:'timer',anchor:'center',minW:24,minH:12,baseW:40,baseH:18},
   {id:'coin-box-frame',label:'coin frame',anchor:'center',minW:80,minH:40,baseW:152,baseH:74.18},
   {id:'coin-box',label:'coin',anchor:'center',minW:40,minH:18,baseW:84.55,baseH:29.64},
@@ -5659,8 +5733,10 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:80,baseW:94.36,baseH:271.45},
   {id:'soap-slot-frame',label:'soap frame',anchor:'center',minW:72,minH:96,baseW:128.91,baseH:178.18},
   {id:'soap-slot-card',label:'soap card',anchor:'center',minW:54,minH:72,baseW:87.82,baseH:125.45},
-  {id:'burst-slot-amber-frame',label:'fx frame',anchor:'center',minW:72,minH:96,baseW:150,baseH:200},
-  {id:'burst-slot-amber-card',label:'fx card',anchor:'center',minW:54,minH:72,baseW:106,baseH:148},
+  {id:'weapon-cycle-frame',label:'skill frame',anchor:'center',minW:72,minH:96,baseW:150,baseH:200},
+  {id:'weapon-cycle-card',label:'skill card',anchor:'center',minW:54,minH:72,baseW:106,baseH:148},
+  {id:'clean-btn-frame',label:'clean frame',anchor:'center',minW:56,minH:56,baseW:132,baseH:132},
+  {id:'clean-btn',label:'clean btn',anchor:'center',minW:24,minH:24,baseW:64,baseH:64},
   {id:'special-btn-frame',label:'skill frame',anchor:'center',minW:56,minH:56,baseW:152,baseH:152},
   {id:'special-btn',label:'skill btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
   {id:'jump-btn-frame',label:'jump frame',anchor:'center',minW:56,minH:56,baseW:152,baseH:152},
@@ -5669,12 +5745,30 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'attack-btn',label:'punch btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
   {id:'loadout-toggle-frame',label:'E frame',anchor:'center',minW:56,minH:56,baseW:116,baseH:116},
   {id:'loadout-toggle',label:'E btn',anchor:'center',minW:24,minH:24,baseW:54,baseH:54},
+  {id:'viewport-frame-top',label:'frame top',anchor:'center',minW:200,minH:40,baseW:window.innerWidth,baseH:window.innerHeight*0.34},
+  {id:'viewport-frame-bottom',label:'frame bottom',anchor:'center',minW:200,minH:40,baseW:window.innerWidth,baseH:window.innerHeight*0.40},
+  {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
+  {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
 const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
   return JSON.parse(JSON.stringify(config||{desktop:{},mobile:{}}));
+}
+function sanitizeUILayoutConfig(config){
+  const allowed=new Set(UI_LAYOUT_TARGET_DEFS.map(def=>def.id));
+  const cleanBucket=bucket=>{
+    const out={};
+    for(const [key,val] of Object.entries(bucket||{})){
+      if(allowed.has(key)) out[key]=val;
+    }
+    return out;
+  };
+  return {
+    desktop:cleanBucket(config?.desktop),
+    mobile:cleanBucket(config?.mobile),
+  };
 }
 function mergeUILayoutConfig(base,override){
   return {
@@ -5688,7 +5782,7 @@ function loadUILayoutConfig(){
     const raw=localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
     if(!raw) return base;
     const parsed=JSON.parse(raw);
-    return mergeUILayoutConfig(base,parsed);
+    return sanitizeUILayoutConfig(mergeUILayoutConfig(base,parsed));
   }catch{
     return base;
   }
@@ -5715,7 +5809,7 @@ function setUILayoutMode(mode){
   if(uiLayoutState.active) showUILayoutToast(`Layout admin editing ${getUILayoutBucket()}`);
 }
 function formatUILayoutExport(){
-  return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(uiLayoutState.config,null,2)};`;
+  return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
 }
 function showUILayoutToast(msg){
   let el=uiLayoutState.editor?.querySelector('.ui-layout-toast');
@@ -5774,6 +5868,7 @@ function applyUILayoutConfig(){
   refreshUILayoutEditor();
 }
 function saveUILayoutConfig(){
+  uiLayoutState.config=sanitizeUILayoutConfig(uiLayoutState.config);
   localStorage.setItem(UI_LAYOUT_STORAGE_KEY,JSON.stringify(uiLayoutState.config));
   window.__uiLayoutConfig=uiLayoutState.config;
 }
@@ -6006,6 +6101,22 @@ const BURST_UNLOCK_ITEMS=[
   {id:'star',name:'HEXAGRAM',label:'20 KOs',icon:'\u2605',unlockKills:20},
   {id:'petal',name:'HEART',label:'30 KOs',icon:'\u2665',unlockKills:30},
 ];
+function getOwnedWeaponIds(){
+  return WEAPON_SHOP_ITEMS.filter(item=>purchasedWeapons.has(item.id)).map(item=>item.id);
+}
+function cycleOwnedWeapon(){
+  const owned=getOwnedWeaponIds();
+  if(!owned.length){
+    equippedWeapon=null;
+    refreshSpecialButton();
+    renderLoadoutBar();
+    return;
+  }
+  const currentIndex=Math.max(-1,owned.indexOf(equippedWeapon));
+  equippedWeapon=owned[(currentIndex+1)%owned.length];
+  refreshSpecialButton();
+  renderLoadoutBar();
+}
 const attackInputState={isDown:false,pointerId:null,downAt:0,pendingTapAt:0};
 const specialInputState={isDown:false,pointerId:null,downAt:0};
 
@@ -6122,52 +6233,32 @@ function renderLoadoutBar(){
       <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
     </div>`
   );
-  for(const item of BURST_UNLOCK_ITEMS.filter(item=>item.id==='amber')){
-    if(!purchasedBurstEffects.has(item.id)) continue;
-    const active=item.id===equippedBurstEffect?' active':'';
+  const ownedWeapons=getOwnedWeaponIds();
+  if(ownedWeapons.length){
+    const current=findWeaponItem(equippedWeapon)||findWeaponItem(ownedWeapons[0]);
+    if(current && (!equippedWeapon || !ownedWeapons.includes(equippedWeapon))) equippedWeapon=current.id;
     parts.push(
-      `<div id="burst-slot-${item.id}-frame" class="loadout-slot-frame"></div>
-      <div class="loadout-slot burst-slot${active}" id="burst-slot-${item.id}-card" data-burst-slot="${item.id}">
-        <div class="slot-kind">BURST FX</div>
-        <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'burst')}</div>
-        <div class="slot-name">${item.name}</div>
-        <div class="slot-meta">${item.label}</div>
-        <button type="button">${item.id===equippedBurstEffect?'EQUIPPED':'EQUIP'}</button>
-      </div>`
-    );
-  }
-  for(const item of WEAPON_SHOP_ITEMS){
-    if(!purchasedWeapons.has(item.id)) continue;
-    const active=item.id===equippedWeapon?' active':'';
-    const cd=specialCooldownRemaining(item.id);
-    parts.push(
-      `<div class="loadout-slot skill-slot${active}" data-weapon-slot="${item.id}">
+      `<div id="weapon-cycle-frame" class="loadout-slot-frame"></div>
+      <div class="loadout-slot skill-slot active" id="weapon-cycle-card" data-weapon-cycle="1">
         <div class="slot-kind">SKILL</div>
-        <div class="slot-icon">${item.icon||getSkillIconSafe(item.id,'weapon')}</div>
-        <div class="slot-name">${item.name}</div>
-        <div class="slot-meta">${debugCheatMode?'∞ ready':(cd>0?cd.toFixed(1)+'s':item.label)}</div>
-        <button type="button">${item.id===equippedWeapon?'EQUIPPED':'EQUIP'}</button>
+        <div class="slot-icon">${current?.icon||getSkillIconSafe('water','weapon')}</div>
+        <div class="slot-name">${current?.name||'SKILL'}</div>
+        <div class="slot-meta">${ownedWeapons.length} owned</div>
+        <button type="button">${ownedWeapons.length>1?'NEXT':'EQUIPPED'}</button>
       </div>`
     );
   }
   loadoutBar.innerHTML=parts.join('');
-  loadoutBar.querySelectorAll('[data-burst-slot]').forEach(el=>{
-    el.querySelector('button')?.addEventListener('click',()=>{
-      const id=el.getAttribute('data-burst-slot');
-      equippedBurstEffect=(equippedBurstEffect===id && id!=='amber') ? 'amber' : id;
-      renderLoadoutBar();
+  loadoutBar.querySelectorAll('[data-weapon-cycle]').forEach(el=>{
+    const cycle=()=>{
+      cycleOwnedWeapon();
       renderShopState();
       if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
-    });
-  });
-  loadoutBar.querySelectorAll('[data-weapon-slot]').forEach(el=>{
-    el.querySelector('button')?.addEventListener('click',()=>{
-      const id=el.getAttribute('data-weapon-slot');
-      equippedWeapon=(equippedWeapon===id) ? null : id;
-      refreshSpecialButton();
-      renderLoadoutBar();
-      renderShopState();
-      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
+    };
+    el.addEventListener('click',cycle);
+    el.querySelector('button')?.addEventListener('click',e=>{
+      e.stopPropagation();
+      cycle();
     });
   });
   applyUILayoutConfig();
@@ -6625,29 +6716,43 @@ let dragging=false,dragPId=null,dx0=0,dy0=0,yaw0=0,pitch0=0;
 canvas.addEventListener('pointerdown',e=>{
   if(e.target!==canvas)return;
   dragging=true;dragPId=e.pointerId;
-  dx0=e.clientX;dy0=e.clientY;yaw0=camYaw;pitch0=camPitch;
+  dx0=e.clientX;dy0=e.clientY;
+  yaw0=gameState==='ended' ? endCameraOrbitAngle : camYaw;
+  pitch0=gameState==='ended' ? endCameraPitch : camPitch;
 });
 canvas.addEventListener('pointermove',e=>{
   if(!dragging||e.pointerId!==dragPId)return;
+  if(gameState==='ended'){
+    endCameraOrbitAngle=yaw0-(e.clientX-dx0)/W()*4;
+    endCameraPitch=clamp(pitch0+(e.clientY-dy0)/H()*2.2,0.3,1.3);
+    return;
+  }
   camYaw=yaw0-(e.clientX-dx0)/W()*4;
   camPitch=clamp(pitch0+(e.clientY-dy0)/H()*3,-0.2,1.0);
 });
 const endDrag=e=>{if(e.pointerId===dragPId){dragging=false;dragPId=null}};
 canvas.addEventListener('pointerup',endDrag);
 canvas.addEventListener('pointercancel',endDrag);
-canvas.addEventListener('wheel',e=>{e.preventDefault();camDist=clamp(camDist+e.deltaY*0.015,2,9)},{passive:false});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  if(gameState==='ended'){
+    endCameraZoom=clamp(endCameraZoom+e.deltaY*0.0015,0.45,1.85);
+    return;
+  }
+  camDist=clamp(camDist+e.deltaY*0.015,2,9);
+},{passive:false});
 
 function updateCam(){
   if(gameState==='ended'){
     const b=getPlayableBounds();
-    endCameraOrbitAngle+=0.0026;
-    const radius=Math.max(12,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*0.62);
+    const radius=Math.max(12,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*0.62)*endCameraZoom;
     const tx=b.centerX;
     const tz=b.centerZ;
     const ty=(playableLayer?.y||0)+1.2;
-    const cx=tx+Math.cos(endCameraOrbitAngle)*radius;
-    const cz=tz+Math.sin(endCameraOrbitAngle)*radius;
-    const cy=ty+18;
+    const horiz=Math.cos(endCameraPitch)*radius;
+    const cx=tx+Math.cos(endCameraOrbitAngle)*horiz;
+    const cz=tz+Math.sin(endCameraOrbitAngle)*horiz;
+    const cy=ty+Math.sin(endCameraPitch)*radius;
     camera.position.set(cx,cy,cz);
     camera.lookAt(tx,ty,tz);
     return;
@@ -7312,6 +7417,8 @@ const fadeEl=document.getElementById('fade');
 let endGameSceneState=null;
 let replaySceneEntryId=null;
 let endCameraOrbitAngle=0;
+let endCameraPitch=0.78;
+let endCameraZoom=1;
 let introProgressValue=0;
 
 function setEndOverlaySceneView(minimized){
@@ -7493,6 +7600,8 @@ async function endGame(){
   endGameSceneState=captureSceneState();
   replaySceneEntryId=null;
   endCameraOrbitAngle=0;
+  endCameraPitch=0.78;
+  endCameraZoom=1;
   setEndOverlaySceneView(false);
   endScore.textContent=killCount;
   endOverlay.classList.add('show');
@@ -7580,6 +7689,8 @@ function resetWorld(){
   endGameSceneState=null;
   replaySceneEntryId=null;
   endCameraOrbitAngle=0;
+  endCameraPitch=0.78;
+  endCameraZoom=1;
   // Remove all artists
   for(let i=artists.length-1;i>=0;i--) removeArtist(i);
   // Clear all flowers (and the growing-mesh tracking list)
