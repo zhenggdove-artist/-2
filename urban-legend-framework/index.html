@@ -124,6 +124,8 @@
   .ui-layout-object-row.is-selected{background:rgba(124,248,255,0.12);box-shadow:0 0 0 1px rgba(124,248,255,0.34) inset}
   .ui-layout-object-row.is-hidden{background:rgba(255,80,80,0.12)}
   .ui-layout-object-row.is-locked{background:rgba(130,140,166,0.18)}
+  .ui-layout-object-row.is-drop-before{box-shadow:0 -3px 0 0 #7cf8ff inset,0 0 0 1px rgba(124,248,255,0.18) inset}
+  .ui-layout-object-row.is-dragging{opacity:0.72}
   .ui-layout-object-meta{min-width:0}
   .ui-layout-object-name{display:block;color:#fff7c9;font:12px/1.3 monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ui-layout-object-state{display:block;color:#d7cfff;font:10px/1.25 monospace;opacity:0.88}
@@ -5780,7 +5782,7 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,panelRect:{left:16,top:16,width:340,height:520},toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,clipboard:null,history:[]};
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[]};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
@@ -5931,6 +5933,21 @@ function getUILayoutOrderedDefs(desc=false){
     return UI_LAYOUT_TARGET_DEFS.indexOf(a)-UI_LAYOUT_TARGET_DEFS.indexOf(b);
   });
   return defs;
+}
+function getUILayoutOrderedIds(desc=false){
+  return getUILayoutOrderedDefs(desc).map(def=>def.id);
+}
+function applyUILayoutLayerOrder(orderedIdsDesc){
+  const store=getUILayoutStore();
+  const total=orderedIdsDesc.length;
+  orderedIdsDesc.forEach((id,index)=>{
+    const def=getUILayoutDef(id);
+    if(!def) return;
+    const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+    metrics.z=(total-index)*100;
+    store[id]=metrics;
+    applyUILayoutMetrics(def,metrics);
+  });
 }
 function clampUILayoutPanelRect(rect){
   const width=Math.max(260,Math.min(rect.width,window.innerWidth-16));
@@ -6127,9 +6144,12 @@ function refreshUILayoutObjectPanel(){
     const metrics=ensureUILayoutMetrics(def);
     const row=document.createElement('div');
     row.className='ui-layout-object-row';
-    row.classList.toggle('is-selected',uiLayoutState.selectedId===def.id);
+    row.dataset.targetId=def.id;
+    row.classList.toggle('is-selected',uiLayoutState.selectedIds.includes(def.id));
     row.classList.toggle('is-hidden',!!metrics.hidden);
     row.classList.toggle('is-locked',!!metrics.locked);
+    row.classList.toggle('is-dragging',!!uiLayoutState.listDrag && uiLayoutState.listDrag.selectedIds.includes(def.id));
+    row.classList.toggle('is-drop-before',!!uiLayoutState.listDrag && uiLayoutState.listDrag.insertBeforeId===def.id);
     row.innerHTML=`<div class="ui-layout-object-meta">
       <span class="ui-layout-object-name">${def.label}</span>
       <span class="ui-layout-object-state">${getUILayoutStateFlags(metrics)}</span>
@@ -6141,6 +6161,21 @@ function refreshUILayoutObjectPanel(){
       <button type="button" data-action="up">↑</button>
       <button type="button" data-action="down">↓</button>
     </div>`;
+    row.addEventListener('pointerdown',e=>{
+      if(e.target?.closest?.('button')) return;
+      if(e.shiftKey){
+        setUILayoutSelection(def.id,{additive:true});
+        uiLayoutState.listDrag={
+          pointerId:e.pointerId,
+          selectedIds:[...uiLayoutState.selectedIds],
+          insertBeforeId:def.id,
+        };
+        row.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+        e.stopPropagation();
+        refreshUILayoutObjectPanel();
+      }
+    });
     row.addEventListener('click',e=>{
       const action=e.target?.dataset?.action;
       if(action==='lock'){
@@ -6158,16 +6193,33 @@ function refreshUILayoutObjectPanel(){
         moveUILayoutLayer(def.id,'down');
         return;
       }
-      setUILayoutSelection(def.id);
+      if(e.shiftKey){
+        refreshUILayoutEditor();
+        return;
+      }
+      setUILayoutSelection(def.id,{additive:e.shiftKey});
       refreshUILayoutEditor();
     });
     list.appendChild(row);
   }
 }
-function setUILayoutSelection(targetId){
-  uiLayoutState.selectedId=targetId||null;
+function setUILayoutSelection(targetId,options={}){
+  const {additive=false}=options;
+  if(!targetId){
+    uiLayoutState.selectedId=null;
+    uiLayoutState.selectedIds=[];
+  }else if(additive){
+    const next=new Set(uiLayoutState.selectedIds);
+    if(next.has(targetId)) next.delete(targetId);
+    else next.add(targetId);
+    uiLayoutState.selectedIds=[...next];
+    uiLayoutState.selectedId=uiLayoutState.selectedIds[uiLayoutState.selectedIds.length-1]||null;
+  }else{
+    uiLayoutState.selectedId=targetId;
+    uiLayoutState.selectedIds=[targetId];
+  }
   for(const [id,box] of uiLayoutState.overlays.entries()){
-    box.classList.toggle('selected',id===uiLayoutState.selectedId);
+    box.classList.toggle('selected',uiLayoutState.selectedIds.includes(id));
   }
   refreshUILayoutObjectPanel();
 }
@@ -6257,6 +6309,7 @@ function refreshUILayoutEditor(){
     box.style.zIndex=String(getUILayoutLayer(def,metrics));
     box.classList.toggle('is-hidden',!!metrics.hidden);
     box.classList.toggle('is-locked',!!metrics.locked);
+    box.style.pointerEvents=metrics.locked ? 'none' : 'auto';
     box.querySelector('.ui-layout-label').textContent=`${def.label}${metrics.hidden?' [hidden]':''}`;
   }
   for(const def of getUILayoutOrderedDefs(false)){
@@ -6268,6 +6321,16 @@ function refreshUILayoutEditor(){
   setUILayoutSelection(uiLayoutState.selectedId);
 }
 function handleUILayoutPointerMove(e){
+  if(uiLayoutState.listDrag){
+    const drag=uiLayoutState.listDrag;
+    if(drag.pointerId!==undefined && e.pointerId!==drag.pointerId) return;
+    const row=e.target?.closest?.('.ui-layout-object-row') || document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.ui-layout-object-row');
+    if(row?.dataset?.targetId){
+      drag.insertBeforeId=row.dataset.targetId;
+      refreshUILayoutObjectPanel();
+    }
+    return;
+  }
   if(uiLayoutState.panelDrag){
     const drag=uiLayoutState.panelDrag;
     if(drag.pointerId!==undefined && e.pointerId!==drag.pointerId) return;
@@ -6342,6 +6405,26 @@ function handleUILayoutPointerMove(e){
   refreshUILayoutEditor();
 }
 function handleUILayoutPointerUp(){
+  if(uiLayoutState.listDrag){
+    const drag=uiLayoutState.listDrag;
+    uiLayoutState.listDrag=null;
+    const selectedIds=drag.selectedIds.filter(id=>UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+    if(selectedIds.length){
+      const ordered=getUILayoutOrderedIds(true);
+      const moving=ordered.filter(id=>selectedIds.includes(id));
+      const remaining=ordered.filter(id=>!selectedIds.includes(id));
+      let insertIndex=remaining.findIndex(id=>id===drag.insertBeforeId);
+      if(insertIndex<0) insertIndex=remaining.length;
+      const next=[...remaining.slice(0,insertIndex),...moving,...remaining.slice(insertIndex)];
+      const changed=next.length===ordered.length && next.some((id,index)=>id!==ordered[index]);
+      if(changed){
+        pushUILayoutHistory('layer reorder');
+        applyUILayoutLayerOrder(next);
+      }
+    }
+    refreshUILayoutEditor();
+    return;
+  }
   if(uiLayoutState.panelDrag){
     uiLayoutState.panelDrag=null;
     return;
@@ -6414,6 +6497,7 @@ function disableUILayoutEditor(openExport=false){
   uiLayoutState.editor=null;
   uiLayoutState.overlays.clear();
   uiLayoutState.selectedId=null;
+  uiLayoutState.selectedIds=[];
   uiLayoutState.forcedMode=null;
   saveUILayoutConfig();
   ensureUILayoutExportButton();
