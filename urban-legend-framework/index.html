@@ -488,6 +488,32 @@
   .hud-icon-shop{display:block;width:auto;height:90%;max-height:38px;margin:0 auto;
     object-fit:contain;
     pointer-events:none;user-select:none;-webkit-user-drag:none}
+  /* Detached HUD pieces — each is independently fixed-positioned so admin
+     mode can drag the icon, wordmark, and number apart from the cream pill
+     background. Click handling on shop is retained on both shop-btn and
+     shop-icon so the user can click whichever piece is visually present. */
+  .hud-detached{position:fixed!important;z-index:16!important;
+    transform:translate(-50%,-50%)!important;
+    pointer-events:none;user-select:none;-webkit-user-drag:none}
+  .hud-detached-count{display:inline-flex!important;align-items:center;justify-content:center;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
+    font-weight:700;color:#9E9A91;letter-spacing:0.04em;
+    font-size:calc(20px * var(--ui-scale,1));line-height:1;white-space:nowrap}
+  #kill-icon{left:8.6%;top:13.86%;height:34px;width:auto}
+  #kill-count{left:13.4%;top:13.86%;width:48px;height:30px}
+  #coin-glyph{left:75.4%;top:15%;width:24px;height:24px}
+  #coin-glyph .hud-coin-svg{width:100%;height:100%;display:block}
+  #coin-icon{left:79%;top:15%;height:30px;width:auto}
+  #coin-count{left:84%;top:15%;width:48px;height:30px}
+  #shop-icon{left:90.7%;top:14.8%;height:30px;width:auto;pointer-events:auto;cursor:pointer}
+  @media (max-width:640px){
+    #kill-icon{left:18%;top:17.7%;height:24px}
+    #kill-count{left:23.5%;top:17.7%;width:36px;height:24px;font-size:calc(16px * var(--ui-scale,1))}
+    #coin-glyph{left:78%;top:17.7%;width:20px;height:20px}
+    #coin-icon{left:81%;top:17.7%;height:22px}
+    #coin-count{left:85%;top:17.7%;width:36px;height:24px;font-size:calc(16px * var(--ui-scale,1))}
+    #shop-icon{left:81%;top:24.5%;height:24px}
+  }
   #timer-box.warn{color:#b3173a;animation:pulse 0.8s infinite alternate;
     background:transparent!important}
   /* Mini thorn flares attached to the side of the SHOP button and
@@ -905,6 +931,12 @@
      through the overlay's darkened backdrop (and through the
      minimized pill in scene-view mode). */
   body.game-ended #hud,
+  body.game-ended #kill-icon,
+  body.game-ended #kill-count,
+  body.game-ended #coin-glyph,
+  body.game-ended #coin-icon,
+  body.game-ended #coin-count,
+  body.game-ended #shop-icon,
   body.game-ended #paint-bar,
   body.game-ended #shop-btn,
   body.game-ended #shop-panel,
@@ -921,6 +953,12 @@
   body.intro-active #kill-box,
   body.intro-active #timer-box,
   body.intro-active #coin-box,
+  body.intro-active #kill-icon,
+  body.intro-active #kill-count,
+  body.intro-active #coin-glyph,
+  body.intro-active #coin-icon,
+  body.intro-active #coin-count,
+  body.intro-active #shop-icon,
   body.intro-active #paint-bar,
   body.intro-active #shop-btn,
   body.intro-active #shop-panel,
@@ -1160,9 +1198,14 @@
 <div id="title">RunArtistRun</div>
 
 <div id="hud">
-  <div class="hud-box" id="kill-box"><img class="hud-icon hud-icon-skull" src="game icon/artistcount icon.png" alt="" aria-hidden="true"> <span id="kill-count">0</span></div>
+  <div class="hud-box" id="kill-box"></div>
   <div class="hud-box" id="timer-box"><span id="timer-text">3:00</span></div>
-  <div class="hud-box" id="coin-box"><span class="hud-icon-coin-glyph" aria-hidden="true">&#x1FA99;</span><img class="hud-icon hud-icon-coin" src="game icon/coin icon.png" alt="" aria-hidden="true"> <span id="coin-count">0</span></div>
+  <div class="hud-box" id="coin-box"></div>
+  <img id="kill-icon" class="hud-icon hud-icon-skull hud-detached" src="game icon/artistcount icon.png" alt="" aria-hidden="true">
+  <span id="kill-count" class="hud-detached hud-detached-count">0</span>
+  <span id="coin-glyph" class="hud-icon-coin-glyph hud-detached" aria-hidden="true"><svg class="hud-coin-svg" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="coin-glyph-grad" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="#fff2b0"/><stop offset="55%" stop-color="#f5cd54"/><stop offset="100%" stop-color="#b8830d"/></radialGradient></defs><circle cx="12" cy="12" r="10" fill="url(#coin-glyph-grad)" stroke="#7a5300" stroke-width="1.2"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#6e4500" font-family="Georgia,serif">$</text></svg></span>
+  <img id="coin-icon" class="hud-icon hud-icon-coin hud-detached" src="game icon/coin icon.png" alt="" aria-hidden="true">
+  <span id="coin-count" class="hud-detached hud-detached-count">0</span>
 </div>
 
 <div id="ui-frame-layer" aria-hidden="true">
@@ -1211,7 +1254,8 @@
   </button>
 </div>
 
-<button id="shop-btn"><img class="hud-icon hud-icon-shop" src="game icon/shop icon.png" alt="Shop"></button>
+<button id="shop-btn" aria-label="Shop"></button>
+<img id="shop-icon" class="hud-icon hud-icon-shop hud-detached" src="game icon/shop icon.png" alt="Shop">
 <div id="shop-panel">
   <button id="shop-close" aria-label="Close shop">Ã—</button>
   <h3>SHOP</h3>
@@ -1297,7 +1341,7 @@
       <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
     </div>
     <div class="tag" style="margin-top:8px;opacity:0.6;font-size:11px;line-height:1.5">
-      點擊Shop可購買清潔劑清洗塗鴉/購買灑水器替植物澆水等等等
+      Defeat artists to earn coins. Spend them on cleaner to remove graffiti and watering cans to care for cute plants.
     </div>
   </div>
 </div>
@@ -5826,7 +5870,7 @@ const UI_LAYOUT_DEFAULTS={
       "w": 61.818145751953125,
       "h": 26.727272033691406,
       "z": 800,
-      "locked": true
+      "locked": false
     },
     "shop-btn-frame": {
       "x": 79.756,
@@ -5846,11 +5890,11 @@ const UI_LAYOUT_DEFAULTS={
     },
     "paint-bar-frame": {
       "x": 9.365,
-      "y": 47.184,
-      "w": 39.081816101074224,
-      "h": 267.8228271484375,
+      "y": 46.862,
+      "w": 148.9,
+      "h": 248.18648986816407,
       "z": 200,
-      "locked": true
+      "locked": false
     },
     "paint-bar": {
       "x": 9.469,
@@ -5878,19 +5922,19 @@ const UI_LAYOUT_DEFAULTS={
     },
     "weapon-cycle-frame": {
       "x": 32.953,
-      "y": 68.778,
+      "y": 37.256,
       "w": 74.36366271972656,
       "h": 96,
       "z": 1500,
       "locked": true
     },
     "weapon-cycle-card": {
-      "x": 32.769,
-      "y": 68.878,
+      "x": 32.953,
+      "y": 37.248,
       "w": 55.81817626953125,
       "h": 72,
       "z": 1600,
-      "locked": true
+      "locked": false
     },
     "clean-btn-frame": {
       "x": 87.203,
@@ -5989,26 +6033,26 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "loadout-toggle-frame": {
-      "x": 23.203,
-      "y": 60.227,
+      "x": 23.571,
+      "y": 63.67,
       "w": 56,
       "h": 56,
       "z": 2100,
       "locked": true
     },
     "loadout-toggle": {
-      "x": 23.202,
-      "y": 60.133,
+      "x": 23.386,
+      "y": 63.468,
       "w": 34.363616943359375,
       "h": 34.363555908203125,
       "z": 2700,
       "locked": true
     },
     "joystick-zone": {
-      "x": 19.498,
-      "y": 76.279,
-      "w": 120,
-      "h": 120,
+      "x": 19.682,
+      "y": 77.462,
+      "w": 101.09090423583984,
+      "h": 98.9090576171875,
       "z": 1850,
       "locked": false
     }
@@ -6016,12 +6060,18 @@ const UI_LAYOUT_DEFAULTS={
 };
 const UI_LAYOUT_TARGET_DEFS=[
   {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40,baseW:156.36,baseH:84.36},
-  {id:'kill-box',label:'artist',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
+  {id:'kill-box',label:'artist bg',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
+  {id:'kill-icon',label:'artist icon',anchor:'center',minW:16,minH:16,baseW:34,baseH:34},
+  {id:'kill-count',label:'artist number',anchor:'center',minW:24,minH:18,baseW:48,baseH:30},
   {id:'timer-box',label:'timer',anchor:'center',minW:24,minH:12,baseW:40,baseH:18},
   {id:'coin-box-frame',label:'coin frame',anchor:'center',minW:80,minH:40,baseW:152,baseH:74.18},
-  {id:'coin-box',label:'coin',anchor:'center',minW:40,minH:18,baseW:84.55,baseH:29.64},
+  {id:'coin-box',label:'coin bg',anchor:'center',minW:40,minH:18,baseW:84.55,baseH:29.64},
+  {id:'coin-glyph',label:'coin glyph',anchor:'center',minW:14,minH:14,baseW:24,baseH:24},
+  {id:'coin-icon',label:'coin word',anchor:'center',minW:20,minH:14,baseW:48,baseH:30},
+  {id:'coin-count',label:'coin number',anchor:'center',minW:24,minH:18,baseW:48,baseH:30},
   {id:'shop-btn-frame',label:'shop frame',anchor:'center',minW:72,minH:36,baseW:154,baseH:84},
-  {id:'shop-btn',label:'shop',anchor:'center',minW:36,minH:18,baseW:85.09,baseH:31.82},
+  {id:'shop-btn',label:'shop bg',anchor:'center',minW:36,minH:18,baseW:85.09,baseH:31.82},
+  {id:'shop-icon',label:'shop word',anchor:'center',minW:24,minH:16,baseW:60,baseH:30},
   {id:'paint-bar-frame',label:'paint frame',anchor:'center',minW:30,minH:120,baseW:108.91,baseH:412.55},
   {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:80,baseW:94.36,baseH:271.45},
   {id:'soap-slot-frame',label:'soap frame',anchor:'center',minW:72,minH:96,baseW:128.91,baseH:178.18},
@@ -7009,6 +7059,35 @@ function toggleUILayoutEditor(){
   if(uiLayoutState.active) disableUILayoutEditor();
   else enableUILayoutEditor();
 }
+function nudgeSelectedUILayoutItems(dx,dy){
+  const ids=(uiLayoutState.selectedIds?.length?uiLayoutState.selectedIds:[uiLayoutState.selectedId])
+    .filter(id=>id&&UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+  if(!ids.length) return false;
+  let moved=false;
+  for(const id of ids){
+    const def=getUILayoutDef(id);
+    if(!def) continue;
+    const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+    if(metrics.locked) continue;
+    metrics.x=Math.max(-20,Math.min(120,(metrics.x||0)+dx));
+    metrics.y=Math.max(-20,Math.min(120,(metrics.y||0)+dy));
+    getUILayoutStore()[def.id]=metrics;
+    applyUILayoutMetrics(def,metrics);
+    moved=true;
+  }
+  if(moved){
+    markUILayoutBucketEdited();
+    refreshUILayoutEditor();
+    refreshUILayoutObjectPanel();
+  }
+  return moved;
+}
+let __uiNudgeHistoryTimer=0;
+function scheduleUILayoutNudgeHistory(){
+  if(__uiNudgeHistoryTimer) clearTimeout(__uiNudgeHistoryTimer);
+  pushUILayoutHistory('nudge');
+  __uiNudgeHistoryTimer=setTimeout(()=>{__uiNudgeHistoryTimer=0;},220);
+}
 function handleUILayoutHotkeys(e){
   if(!uiLayoutState.active) return false;
   if(e.target?.closest?.('input,textarea')) return false;
@@ -7040,6 +7119,22 @@ function handleUILayoutHotkeys(e){
       return true;
     }
   }
+  // Arrow-key nudge: 0.1% per press, 1% with Shift. Holding the key
+  // triggers OS-level auto-repeat which keeps moving the selection.
+  if(key==='arrowleft'||key==='arrowright'||key==='arrowup'||key==='arrowdown'){
+    const step=e.shiftKey?1:0.1;
+    let dx=0,dy=0;
+    if(key==='arrowleft') dx=-step;
+    else if(key==='arrowright') dx=step;
+    else if(key==='arrowup') dy=-step;
+    else dy=step;
+    if(!e.repeat) scheduleUILayoutNudgeHistory();
+    if(nudgeSelectedUILayoutItems(dx,dy)){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
   return false;
 }
 
@@ -7053,6 +7148,7 @@ const GAMEOVER_HIDE_IDS=[
   'hud','paint-bar','shop-btn','shop-panel','loadout-toggle','loadout-bar',
   'game-controls','joystick-zone','jump-btn','attack-btn','special-btn','clean-btn',
   'title','ui-frame-layer','timer-box','kill-box','coin-box',
+  'kill-icon','kill-count','coin-glyph','coin-icon','coin-count','shop-icon',
   'kill-box-frame','coin-box-frame','shop-btn-frame','paint-bar-frame',
   'clean-btn-frame','special-btn-frame','jump-btn-frame','attack-btn-frame',
   'loadout-toggle-frame','weapon-cycle-frame','weapon-cycle-card',
@@ -7432,6 +7528,7 @@ function updateCleanPrompt(){
 }
 
 shopBtn?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
+document.getElementById('shop-icon')?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
 shopClose?.addEventListener('click',()=>setShopOpen(false));
 buyCleanerBtn?.addEventListener('click',()=>{
   if(!spendCoins(1)) return;
