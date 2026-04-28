@@ -4265,7 +4265,21 @@ function setSpecialAimMarkerVisible(visible){
 function getSpecialThrowTarget(charge=0,weapon=equippedWeapon,yaw=player.yaw){
   if(weapon!=='ice' && weapon!=='bomb') return null;
   const {x:fx,z:fz}=getForwardXZ(yaw);
-  const throwDist=weapon==='ice' ? (3.2+charge*3.8) : (1.1+charge*2.6);
+  const bounds=getPlayableBounds();
+  const edgeMargin=0.75;
+  const ts=[];
+  if(Math.abs(fx)>1e-5){
+    ts.push(((fx>0 ? bounds.maxX-edgeMargin : bounds.minX+edgeMargin)-player.root.position.x)/fx);
+  }
+  if(Math.abs(fz)>1e-5){
+    ts.push(((fz>0 ? bounds.maxZ-edgeMargin : bounds.minZ+edgeMargin)-player.root.position.z)/fz);
+  }
+  const maxForwardDist=ts
+    .filter(t=>Number.isFinite(t) && t>0)
+    .reduce((best,t)=>Math.min(best,t),Infinity);
+  const minThrowDist=weapon==='ice' ? 3.2 : 1.1;
+  const boundedMaxDist=Number.isFinite(maxForwardDist) ? Math.max(minThrowDist,maxForwardDist) : Math.max(minThrowDist,worldBoundR*2);
+  const throwDist=minThrowDist + clamp(charge,0,1)*(boundedMaxDist-minThrowDist);
   const targetX=player.root.position.x+fx*throwDist;
   const targetZ=player.root.position.z+fz*throwDist;
   const groundY=getStandY(targetX,targetZ,player.root.position.y)+GROUND_Y_OFFSET;
@@ -8386,7 +8400,7 @@ function handleSpecialPress(pointerId=null){
 
 function getSpecialCharge(){
   if(!specialInputState.downAt) return 0;
-  return clamp((performance.now()-specialInputState.downAt)/900,0,1);
+  return clamp((performance.now()-specialInputState.downAt)/450,0,1);
 }
 
 function handleSpecialRelease(pointerId=null){
