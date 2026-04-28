@@ -6292,6 +6292,20 @@ function sanitizeUILayoutConfig(config){
   const allowed=new Set(UI_LAYOUT_TARGET_DEFS.map(def=>def.id));
   const cleanBucket=(bucket,bucketName)=>{
     const out={};
+    const syncActionToFrame=(frameId,controlId,defaultW,defaultH,maxDelta=18)=>{
+      const frame=out[frameId];
+      const control=out[controlId];
+      if(!frame||!control) return;
+      const offscreen=control.y>110||control.y<-10||control.x>110||control.x<-10;
+      const tooFar=Math.abs(control.x-frame.x)>maxDelta||Math.abs(control.y-frame.y)>maxDelta;
+      const oversized=control.w>(frame.w*1.2)||control.h>(frame.h*1.2);
+      const undersized=control.w<(defaultW*0.45)||control.h<(defaultH*0.45);
+      if(!offscreen && !tooFar && !oversized && !undersized) return;
+      control.x=frame.x;
+      control.y=frame.y;
+      control.w=defaultW;
+      control.h=defaultH;
+    };
     for(const [key,val] of Object.entries(bucket||{})){
       if(!allowed.has(key)||!val||typeof val!=='object') continue;
       const def=getUILayoutDef(key);
@@ -6337,6 +6351,11 @@ function sanitizeUILayoutConfig(config){
         card:{x:44,y:71,w:90,h:126},
       });
     }
+    syncActionToFrame('clean-btn-frame','clean-btn',bucketName==='mobile'?52:64,bucketName==='mobile'?52:64);
+    syncActionToFrame('special-btn-frame','special-btn',bucketName==='mobile'?56:74,bucketName==='mobile'?56:74);
+    syncActionToFrame('jump-btn-frame','jump-btn',bucketName==='mobile'?56:74,bucketName==='mobile'?56:74);
+    syncActionToFrame('attack-btn-frame','attack-btn',bucketName==='mobile'?56:74,bucketName==='mobile'?56:74);
+    syncActionToFrame('loadout-toggle-frame','loadout-toggle',bucketName==='mobile'?46:54,bucketName==='mobile'?46:54);
     return out;
   };
   return {
