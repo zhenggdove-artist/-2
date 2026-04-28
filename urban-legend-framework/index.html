@@ -633,7 +633,7 @@
     padding:0 6px;border-radius:999px;background:#1d1730;color:#9ff7de;
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:11px;line-height:20px;
     letter-spacing:0.06em;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(255,255,255,0.25);z-index:4}
-  .clean-ico-svg{width:var(--clean-icon-size);height:var(--clean-icon-size);display:block;
+  .clean-ico-svg,.clean-ico-img{width:var(--clean-icon-size);height:var(--clean-icon-size);display:block;
     transform:translate(var(--clean-icon-offset-x),var(--clean-icon-offset-y));
     filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));pointer-events:none}
   #special-btn{position:fixed;right:214px;bottom:42px;width:72px;height:72px;
@@ -4257,6 +4257,7 @@ function ensureSpecialAimMarker(){
 }
 
 function setSpecialAimMarkerVisible(visible){
+  if(!visible) currentSpecialAimTarget=null;
   if(!specialAimMarker) return;
   specialAimMarker.visible=visible;
 }
@@ -4269,6 +4270,20 @@ function getSpecialThrowTarget(charge=0,weapon=equippedWeapon,yaw=player.yaw){
   const targetZ=player.root.position.z+fz*throwDist;
   const groundY=getStandY(targetX,targetZ,player.root.position.y)+GROUND_Y_OFFSET;
   return {x:targetX,y:groundY,z:targetZ,dist:throwDist,dirX:fx,dirZ:fz,yaw};
+}
+
+function cloneSpecialThrowTarget(target){
+  return target ? {
+    x:target.x,
+    y:target.y,
+    z:target.z,
+    dist:target.dist,
+    dirX:target.dirX,
+    dirZ:target.dirZ,
+    yaw:target.yaw,
+    weapon:target.weapon,
+    charge:target.charge,
+  } : null;
 }
 
 function findWaterPlantTarget(){
@@ -4419,14 +4434,16 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
     setSpecialAimMarkerVisible(false);
     return;
   }
-  const target=getSpecialThrowTarget(getSpecialCharge());
+  const charge=getSpecialCharge();
+  const target=getSpecialThrowTarget(charge,equippedWeapon,player.yaw);
   if(!target){
     setSpecialAimMarkerVisible(false);
     return;
   }
+  currentSpecialAimTarget={...target,weapon:equippedWeapon,charge};
   const marker=ensureSpecialAimMarker();
   const pulse=1+Math.sin(nowS*8)*0.08;
-  marker.position.set(target.x,target.y+1.06,target.z);
+  marker.position.set(target.x,target.y+0.14,target.z);
   marker.scale.setScalar((equippedWeapon==='ice'?1.08:0.92)*pulse);
   marker.visible=true;
 }
@@ -4818,7 +4835,9 @@ function useSpecialWeapon(charge=0){
       if(wateringUses===0 && equippedWeapon==='water') equippedWeapon=null;
     }
   }else if(equippedWeapon==='ice'){
-    const throwData=getSpecialThrowTarget(charge,'ice',player.yaw);
+    const throwData=(currentSpecialAimTarget?.weapon==='ice'
+      ? cloneSpecialThrowTarget(currentSpecialAimTarget)
+      : getSpecialThrowTarget(charge,'ice',player.yaw));
     if(!throwData) return false;
     const releaseOriginX=player.root.position.x+throwData.dirX*0.55;
     const releaseOriginY=player.root.position.y+1.1;
@@ -4830,7 +4849,9 @@ function useSpecialWeapon(charge=0){
     player.pendingSpecialThrow={weapon:'ice',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else if(equippedWeapon==='bomb'){
     if(activeBombs.length+(activeThrownProjectiles.filter(p=>p.kind==='bomb').length)>=5 && !debugCheatMode) return false;
-    const throwData=getSpecialThrowTarget(charge,'bomb',player.yaw);
+    const throwData=(currentSpecialAimTarget?.weapon==='bomb'
+      ? cloneSpecialThrowTarget(currentSpecialAimTarget)
+      : getSpecialThrowTarget(charge,'bomb',player.yaw));
     if(!throwData) return false;
     const releaseOriginX=player.root.position.x+throwData.dirX*0.55;
     const releaseOriginY=player.root.position.y+1.1;
@@ -5744,6 +5765,7 @@ const activeIceFields=[];
 const activeWaterStreams=[];
 const activeThrownProjectiles=[];
 let specialAimMarker=null;
+let currentSpecialAimTarget=null;
 const cleanBtn=document.getElementById('clean-btn');
 const specialBtn=document.getElementById('special-btn');
 const shopBtn=document.getElementById('shop-btn');
@@ -7975,18 +7997,7 @@ function refreshSpecialButton(){
   specialBtn.classList.toggle('cooling',equippedWeapon==='water' ? (!debugCheatMode&&wateringUses<=0) : (cd>0 && !debugCheatMode));
 }
 function getCleanIconSVG(){
-  return `<svg class="clean-ico-svg" viewBox="0 0 128 128" aria-hidden="true">
-    <g fill="none" stroke="#eefbff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M34 24 49 12c7-5 16-4 21 3l4 6c4 6 3 13-3 18l-10 8"/>
-      <path d="M37 31c10-10 23-9 34 1l6 6c4 4 8 9 13 17l22 31c9 13 6 31-7 43l-12 11c-8 7-18 10-27 8-8-2-14-8-19-19L25 88c-3-7-6-14-9-25-2-7 1-15 7-20z"/>
-      <path d="M42 73c10 0 22 6 38 18"/>
-      <path d="M36 81c12 2 25 10 40 22"/>
-      <path d="M31 89c13 4 24 12 36 23"/>
-      <path d="M88 22c3-8 10-13 18-13"/>
-      <path d="M94 36c9-2 17 0 24 5"/>
-      <path d="M90 52c7 4 12 10 14 18"/>
-    </g>
-  </svg>`;
+  return `<img class="clean-ico-img" src="img/clean_spray_icon.svg" alt="" aria-hidden="true">`;
 }
 function refreshCleanButton(){
   if(!cleanBtn) return;
@@ -8382,11 +8393,14 @@ function handleSpecialRelease(pointerId=null){
   if(!specialInputState.isDown) return;
   if(pointerId!==null && specialInputState.pointerId!==null && pointerId!==specialInputState.pointerId) return;
   const charge=getSpecialCharge();
+  const lockedAimTarget=cloneSpecialThrowTarget(currentSpecialAimTarget);
   specialInputState.isDown=false;
   specialInputState.pointerId=null;
   specialInputState.downAt=0;
   setSpecialAimMarkerVisible(false);
+  if(lockedAimTarget) currentSpecialAimTarget=lockedAimTarget;
   useSpecialWeapon(charge);
+  currentSpecialAimTarget=null;
 }
 
 window.addEventListener('keydown',e=>{
