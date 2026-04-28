@@ -586,7 +586,7 @@
     background:radial-gradient(circle at 35% 25%,#fff 0%,var(--bubble-1) 50%,var(--bubble-2) 100%);
     border:2px solid var(--bubble-edge);
     box-shadow:0 4px 10px var(--bubble-shadow)}
-  #attack-btn{position:absolute;right:24px;bottom:36px;width:84px;height:84px;
+  #attack-btn{position:fixed;right:24px;bottom:36px;width:84px;height:84px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#ff8fb8 55%,#c03870 100%);
     border:none;
@@ -604,7 +604,7 @@
   #attack-btn::after,#jump-btn::after,#special-btn::after{content:none!important;display:none!important}
   #attack-btn:active{transform:scale(0.93)}
   #attack-btn.cooling{opacity:0.55;filter:grayscale(0.3)}
-  #jump-btn{position:absolute;right:124px;bottom:36px;width:64px;height:64px;
+  #jump-btn{position:fixed;right:124px;bottom:36px;width:64px;height:64px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fff3fb 0%,#a8d8ff 55%,#5a8fcf 100%);
     border:none;
@@ -615,7 +615,7 @@
     --ornate-size:24px;--ornate-bleed:8px;--action-frame-scale:1.92;
     --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #jump-btn:active{transform:scale(0.92)}
-  #clean-btn{position:absolute;right:124px;bottom:112px;width:72px;height:72px;
+  #clean-btn{position:fixed;right:124px;bottom:112px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fffdf6 0%,#8ff3da 55%,#279b87 100%);
     border:3px solid #fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,0.45),0 6px 14px rgba(39,155,135,0.45);
@@ -636,7 +636,7 @@
   .clean-ico-svg{width:var(--clean-icon-size);height:var(--clean-icon-size);display:block;
     transform:translate(var(--clean-icon-offset-x),var(--clean-icon-offset-y));
     filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));pointer-events:none}
-  #special-btn{position:absolute;right:214px;bottom:42px;width:72px;height:72px;
+  #special-btn{position:fixed;right:214px;bottom:42px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fffdd1 0%,#ffe45a 50%,#d99400 100%);
     border:none;
@@ -5847,8 +5847,8 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "clean-btn": {
-      "x": 94.011,
-      "y": -4.045,
+      "x": 94.093,
+      "y": 58.695,
       "w": 64.73,
       "h": 64.73,
       "z": 600,
@@ -6136,8 +6136,8 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "clean-btn": {
-      "x": 85.87500000000003,
-      "y": -8.633999999999999,
+      "x": 85.887,
+      "y": 56.782,
       "w": 36.47,
       "h": 35.61,
       "z": 2400,
@@ -6531,6 +6531,19 @@ function sanitizeUILayoutConfig(config){
       if(Number.isFinite(next.h) && def) next.h=Math.max(def.minH,next.h);
       out[key]=next;
     }
+    const migrateActionButtonToFrame=(frameId,buttonId)=>{
+      const frame=out[frameId];
+      const button=out[buttonId];
+      if(!frame||!button) return;
+      const invalidY=!Number.isFinite(button.y) || button.y < -2 || button.y > 102;
+      const invalidX=!Number.isFinite(button.x) || button.x < -2 || button.x > 102;
+      const driftedTooFar=Math.abs((button.x??0)-(frame.x??0))>20 || Math.abs((button.y??0)-(frame.y??0))>20;
+      if(invalidX || invalidY || driftedTooFar){
+        button.x=frame.x;
+        button.y=frame.y;
+      }
+    };
+    migrateActionButtonToFrame('clean-btn-frame','clean-btn');
     if(bucketName==='mobile'){
       const syncCardToFrame=(frameId,cardId,defaultW,defaultH,fallback=null)=>{
         const frame=out[frameId];
