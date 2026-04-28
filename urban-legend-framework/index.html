@@ -2263,6 +2263,7 @@ async function detectPlayableLayer(progressFn){
   for(let z=-worldBoundR;z<=worldBoundR;z+=step) zs.push(z);
   const total=xs.length*zs.length;
   let done=0;
+  let lastYieldAt=performance.now();
   const sampleColumns=[];
   const candidateHeights=[];
   for(const x of xs){
@@ -2274,9 +2275,12 @@ async function detectPlayableLayer(progressFn){
         candidateHeights.push(...floors.map(f=>f.y));
       }
       done++;
-      if(done%60===0){
+      if(done%12===0){
         if(progressFn) progressFn(done/total);
-        await new Promise(r=>setTimeout(r,0));
+      }
+      if(performance.now()-lastYieldAt>20){
+        lastYieldAt=performance.now();
+        await yieldToMainThread();
       }
     }
   }
@@ -2284,28 +2288,36 @@ async function detectPlayableLayer(progressFn){
   if(sampleColumns.length<20||candidateHeights.length<20) return null;
   const clusters=buildHeightClusters(candidateHeights,0.7);
   if(!clusters.length) return null;
-  const ranked=clusters
-    .map(cluster=>{
-      const samples=[];
-      for(const col of sampleColumns){
-        let best=null;
-        let bestDist=Infinity;
-        for(const floor of col.floors){
-          const dist=Math.abs(floor.y-cluster.avg);
-          if(dist<bestDist){
-            best=floor;
-            bestDist=dist;
-          }
+  const ranked=[];
+  for(let ci=0;ci<clusters.length;ci++){
+    const cluster=clusters[ci];
+    const samples=[];
+    for(let i=0;i<sampleColumns.length;i++){
+      const col=sampleColumns[i];
+      let best=null;
+      let bestDist=Infinity;
+      for(let j=0;j<col.floors.length;j++){
+        const floor=col.floors[j];
+        const dist=Math.abs(floor.y-cluster.avg);
+        if(dist<bestDist){
+          best=floor;
+          bestDist=dist;
         }
-        if(best&&bestDist<=0.9) samples.push(best);
       }
-      return {cluster,samples};
-    })
-    .filter(v=>v.samples.length>=12)
-    .sort((a,b)=>{
-      if(b.samples.length!==a.samples.length) return b.samples.length-a.samples.length;
-      return a.cluster.avg-b.cluster.avg;
-    });
+      if(best&&bestDist<=0.9) samples.push(best);
+      if(i%24===0 && performance.now()-lastYieldAt>20){
+        const rankProgress=0.78+((ci+(i/Math.max(1,sampleColumns.length)))/Math.max(1,clusters.length))*0.22;
+        if(progressFn) progressFn(Math.min(0.999,rankProgress));
+        lastYieldAt=performance.now();
+        await yieldToMainThread();
+      }
+    }
+    if(samples.length>=12) ranked.push({cluster,samples});
+  }
+  ranked.sort((a,b)=>{
+    if(b.samples.length!==a.samples.length) return b.samples.length-a.samples.length;
+    return a.cluster.avg-b.cluster.avg;
+  });
   const chosen=ranked[0];
   if(!chosen) return null;
   const samples=chosen.samples;
@@ -2358,10 +2370,14 @@ async function detectRiverBounds(progressFn){
   if(progressFn) progressFn(1);
   if(samples.length<20) return null;
   const ys=samples.map(s=>s.y).sort((a,b)=>a-b);
+  await yieldToMainThread();
+  if(progressFn) progressFn(0.28);
   // Take bottom ~20% as low cells
   const lowCount=Math.max(6,Math.floor(samples.length*0.18));
   const threshold=ys[Math.min(ys.length-1,lowCount)];
   const low=samples.filter(s=>s.y<=threshold);
+  await yieldToMainThread();
+  if(progressFn) progressFn(0.56);
   if(low.length<5) return null;
   const sideGap=(playableLayer?.step||1)*0.6;
   const pick=(arr,p)=>{
@@ -2395,6 +2411,8 @@ async function detectRiverBounds(progressFn){
       axis:'x'
     };
   }).sort((a,b)=>a.centerZ-b.centerZ);
+  if(progressFn) progressFn(0.86);
+  await yieldToMainThread();
   if(trenches.length) saveCachedJSON(cacheKey,trenches);
   return trenches.length?trenches:null;
 }
@@ -9280,15 +9298,16 @@ let introProgressTargetValue=0;
 let introProgressLabel='LOADING';
 let introProgressTicker=0;
 let introProgressLastStepAt=0;
+let introProgressStartAt=0;
 
 function getIntroProgressSoftCap(label='LOADING'){
   switch(label){
-    case 'BOOT': return 12;
-    case 'PLAYER': return 28;
-    case 'WORLD': return 44;
-    case 'TERRAIN': return 90;
-    case 'ARTISTS': return 84;
-    case 'ITEMS': return 96;
+    case 'BOOT': return 24;
+    case 'PLAYER': return 40;
+    case 'WORLD': return 58;
+    case 'TERRAIN': return 92;
+    case 'ARTISTS': return 95;
+    case 'ITEMS': return 98;
     case 'READY': return 100;
     default: return 95;
   }
@@ -9308,11 +9327,13 @@ function stopIntroProgressSmoother(){
 
 function startIntroProgressSmoother(){
   stopIntroProgressSmoother();
+  introProgressStartAt=performance.now();
   introProgressLastStepAt=performance.now();
   introProgressTicker=window.setInterval(()=>{
     const now=performance.now();
     const softCap=getIntroProgressSoftCap(introProgressLabel);
-    const maxVisible=Math.max(introProgressTargetValue,Math.min(softCap,99));
+    const forcedFloor=Math.min(95,Math.floor((now-introProgressStartAt)/1000)+1);
+    const maxVisible=Math.max(introProgressTargetValue,Math.min(Math.max(softCap,forcedFloor),99));
     let next=introProgressValue;
     if(introProgressValue<introProgressTargetValue){
       const gap=introProgressTargetValue-introProgressValue;
@@ -9327,6 +9348,16 @@ function startIntroProgressSmoother(){
       renderIntroProgressDisplay();
     }
   },240);
+}
+
+function yieldToMainThread(){
+  return new Promise(resolve=>{
+    if(typeof window.requestAnimationFrame==='function'){
+      window.requestAnimationFrame(()=>resolve());
+    }else{
+      window.setTimeout(resolve,0);
+    }
+  });
 }
 
 function setEndOverlaySceneView(minimized){
