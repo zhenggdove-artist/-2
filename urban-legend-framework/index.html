@@ -628,7 +628,8 @@
   body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
   body.admin-layout-mode #clean-btn-frame.hidden{display:block!important;opacity:0.9}
   #clean-btn:active{transform:scale(0.93)}
-  #clean-btn.cooling{opacity:0.28;filter:saturate(0.18) grayscale(0.7) brightness(0.66)}
+  #clean-btn.cooling{opacity:1;filter:saturate(0.16) grayscale(0.72) brightness(0.34) contrast(0.96);
+    box-shadow:inset 0 0 0 999px rgba(0,0,0,0.28),inset 0 0 0 2px rgba(255,255,255,0.12),0 6px 14px rgba(0,0,0,0.32)}
   #clean-btn .btn-sub{position:absolute;top:-10px;right:-10px;min-width:18px;height:18px;
     padding:0 6px;border-radius:999px;background:#1d1730;color:#9ff7de;
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:10px;line-height:18px;
@@ -649,7 +650,8 @@
     --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #special-btn .btn-sub{z-index:4}
   #special-btn:active{transform:scale(0.93)}
-  #special-btn.cooling{opacity:0.28;filter:saturate(0.18) grayscale(0.7) brightness(0.66)}
+  #special-btn.cooling{opacity:1;filter:saturate(0.16) grayscale(0.72) brightness(0.34) contrast(0.96);
+    box-shadow:inset 0 0 0 999px rgba(0,0,0,0.28),inset 0 0 0 2px rgba(255,255,255,0.14),0 8px 18px rgba(0,0,0,0.34)}
   #special-btn .btn-ico{font-size:28px;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.25)}
   /* SKILL cooldown / uses counter — small badge at top-right of
      the button, so the icon takes the full face. */
@@ -5760,7 +5762,10 @@ function disposeCoin(grp){
 
 let coinCount=0;
 const coinCountEl=document.getElementById('coin-count');
-function updateCoinUI(){coinCountEl.textContent=coinCount;renderShopState()}
+function updateCoinUI(){
+  coinCountEl.textContent=coinCount;
+  if(shopPanel?.classList.contains('show')) renderShopState();
+}
 
 const CLEAN_RANGE=2.25;
 const BURST_SHOP_ITEMS=[
@@ -9886,6 +9891,7 @@ async function init(){
   await extraCharacterClipsReadyPromise;
   setIntroProgress(84,'ITEMS');
   ensureIceSpecialVisualAssets();
+  primeSFX();
   if(false&&bvhReady){
     Promise.resolve().then(async()=>{
       try{
