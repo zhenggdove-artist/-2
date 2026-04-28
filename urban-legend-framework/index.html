@@ -623,6 +623,7 @@
     text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-shadow:0 2px 2px rgba(0,0,0,0.4);
     line-height:1;text-align:center;padding:0 6px;box-sizing:border-box}
   body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
+  body.admin-layout-mode #clean-btn-frame.hidden{display:block!important;opacity:0.9}
   #clean-btn:active{transform:scale(0.93)}
   #special-btn{position:absolute;right:214px;bottom:42px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
@@ -6261,8 +6262,110 @@ const UI_LAYOUT_COMPARE_PAIRS={
   'loadout-toggle':'loadout-toggle-frame',
 };
 const UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT=66;
+const MOBILE_LAYOUT_REFERENCE_WIDTH=430;
+const MOBILE_LAYOUT_REFERENCE_HEIGHT=932;
+const UI_LAYOUT_EDGE_SNAP_PX=14;
+const UI_LAYOUT_VIEWPORT_FRAME_IDS=new Set(['viewport-frame-top','viewport-frame-bottom','viewport-frame-left','viewport-frame-right']);
 const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelCollapsed:false,objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false,editedBuckets:new Set()};
 window.__uiLayoutConfig=uiLayoutState.config;
+
+function getUILayoutViewportBounds(){
+  const cs=getComputedStyle(document.body);
+  const padTop=parseFloat(cs.paddingTop)||0;
+  const padRight=parseFloat(cs.paddingRight)||0;
+  const padBottom=parseFloat(cs.paddingBottom)||0;
+  const padLeft=parseFloat(cs.paddingLeft)||0;
+  return {
+    left:padLeft,
+    top:padTop,
+    width:Math.max(1,window.innerWidth-padLeft-padRight),
+    height:Math.max(1,window.innerHeight-padTop-padBottom),
+  };
+}
+function isMobileUILayoutBucket(){
+  return getUILayoutBucket()==='mobile';
+}
+function resolveUILayoutSize(def,metrics){
+  if(!isMobileUILayoutBucket()){
+    return {
+      width:Math.max(def.minW,metrics?.w||def.minW),
+      height:Math.max(def.minH,metrics?.h||def.minH),
+    };
+  }
+  const bounds=getUILayoutViewportBounds();
+  const wp=Number.isFinite(metrics?.wp) ? metrics.wp : ((metrics?.w||def.minW)/MOBILE_LAYOUT_REFERENCE_WIDTH)*100;
+  const hp=Number.isFinite(metrics?.hp) ? metrics.hp : ((metrics?.h||def.minH)/MOBILE_LAYOUT_REFERENCE_HEIGHT)*100;
+  return {
+    width:Math.max(def.minW,bounds.width*(wp/100)),
+    height:Math.max(def.minH,bounds.height*(hp/100)),
+  };
+}
+function isUILayoutViewportFrame(def){
+  return !!def && UI_LAYOUT_VIEWPORT_FRAME_IDS.has(def.id);
+}
+function getUILayoutSnapEdges(def,resize,corner=''){
+  if(!isUILayoutViewportFrame(def)) return null;
+  if(!resize) return {left:true,right:true,top:true,bottom:true};
+  return {
+    left:corner.includes('w'),
+    right:corner.includes('e'),
+    top:corner.includes('n'),
+    bottom:corner.includes('s'),
+  };
+}
+function snapUILayoutRectToViewport(rect,bounds,edges,mode='move'){
+  if(!edges) return rect;
+  const next={...rect};
+  const boundLeft=bounds.left;
+  const boundTop=bounds.top;
+  const boundRight=bounds.left+bounds.width;
+  const boundBottom=bounds.top+bounds.height;
+  const right=()=>next.left+next.width;
+  const bottom=()=>next.top+next.height;
+  if(mode==='move'){
+    let bestHX=null;
+    if(edges.left){
+      const dist=next.left-boundLeft;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX) bestHX={kind:'left',dist:Math.abs(dist)};
+    }
+    if(edges.right){
+      const dist=right()-boundRight;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX && (!bestHX || Math.abs(dist)<bestHX.dist)) bestHX={kind:'right',dist:Math.abs(dist)};
+    }
+    if(bestHX?.kind==='left') next.left=boundLeft;
+    else if(bestHX?.kind==='right') next.left=boundRight-next.width;
+
+    let bestVY=null;
+    if(edges.top){
+      const dist=next.top-boundTop;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX) bestVY={kind:'top',dist:Math.abs(dist)};
+    }
+    if(edges.bottom){
+      const dist=bottom()-boundBottom;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX && (!bestVY || Math.abs(dist)<bestVY.dist)) bestVY={kind:'bottom',dist:Math.abs(dist)};
+    }
+    if(bestVY?.kind==='top') next.top=boundTop;
+    else if(bestVY?.kind==='bottom') next.top=boundBottom-next.height;
+    return next;
+  }
+  const fixedRight=right();
+  const fixedBottom=bottom();
+  if(edges.left && Math.abs(next.left-boundLeft)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.left=boundLeft;
+    next.width=Math.max(1,fixedRight-next.left);
+  }
+  if(edges.right && Math.abs(right()-boundRight)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.width=Math.max(1,boundRight-next.left);
+  }
+  if(edges.top && Math.abs(next.top-boundTop)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.top=boundTop;
+    next.height=Math.max(1,fixedBottom-next.top);
+  }
+  if(edges.bottom && Math.abs(bottom()-boundBottom)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.height=Math.max(1,boundBottom-next.top);
+  }
+  return next;
+}
 
 function cloneUILayoutConfig(config){
   return JSON.parse(JSON.stringify(config||{desktop:{},mobile:{}}));
@@ -6433,27 +6536,48 @@ function currentUILayoutMetrics(def){
   const el=document.getElementById(def.id);
   if(!el) return null;
   const r=el.getBoundingClientRect();
+  const bounds=getUILayoutViewportBounds();
   if(def.anchor==='topLeft'){
-    return {x:+((r.left/window.innerWidth)*100).toFixed(3),y:+((r.top/window.innerHeight)*100).toFixed(3),w:+r.width.toFixed(2),h:+r.height.toFixed(2)};
+    const metrics={
+      x:+(((r.left-bounds.left)/bounds.width)*100).toFixed(3),
+      y:+(((r.top-bounds.top)/bounds.height)*100).toFixed(3),
+      w:+r.width.toFixed(2),
+      h:+r.height.toFixed(2)
+    };
+    if(isMobileUILayoutBucket()){
+      metrics.wp=+((r.width/bounds.width)*100).toFixed(4);
+      metrics.hp=+((r.height/bounds.height)*100).toFixed(4);
+    }
+    return metrics;
   }
-  return {x:+(((r.left+r.width*0.5)/window.innerWidth)*100).toFixed(3),y:+(((r.top+r.height*0.5)/window.innerHeight)*100).toFixed(3),w:+r.width.toFixed(2),h:+r.height.toFixed(2)};
+  const metrics={
+    x:+((((r.left-bounds.left)+r.width*0.5)/bounds.width)*100).toFixed(3),
+    y:+((((r.top-bounds.top)+r.height*0.5)/bounds.height)*100).toFixed(3),
+    w:+r.width.toFixed(2),
+    h:+r.height.toFixed(2)
+  };
+  if(isMobileUILayoutBucket()){
+    metrics.wp=+((r.width/bounds.width)*100).toFixed(4);
+    metrics.hp=+((r.height/bounds.height)*100).toFixed(4);
+  }
+  return metrics;
 }
 function getUILayoutDef(targetId){
   return UI_LAYOUT_TARGET_DEFS.find(def=>def.id===targetId)||null;
 }
 function getUILayoutBoxRect(def,metrics){
-  const width=Math.max(def.minW,metrics?.w||def.minW);
-  const height=Math.max(def.minH,metrics?.h||def.minH);
+  const bounds=getUILayoutViewportBounds();
+  const {width,height}=resolveUILayoutSize(def,metrics);
   if(def.anchor==='topLeft'){
     return {
-      left:(metrics.x/100)*window.innerWidth,
-      top:(metrics.y/100)*window.innerHeight,
+      left:bounds.left+(metrics.x/100)*bounds.width,
+      top:bounds.top+(metrics.y/100)*bounds.height,
       width,
       height,
     };
   }
-  const centerX=(metrics.x/100)*window.innerWidth;
-  const centerY=(metrics.y/100)*window.innerHeight;
+  const centerX=bounds.left+(metrics.x/100)*bounds.width;
+  const centerY=bounds.top+(metrics.y/100)*bounds.height;
   return {
     left:centerX-width*0.5,
     top:centerY-height*0.5,
@@ -6462,6 +6586,7 @@ function getUILayoutBoxRect(def,metrics){
   };
 }
 function buildUILayoutMetricsFromRect(def,metrics,rect){
+  const bounds=getUILayoutViewportBounds();
   const nextRect={
     left:rect.left,
     top:rect.top,
@@ -6470,12 +6595,16 @@ function buildUILayoutMetricsFromRect(def,metrics,rect){
   };
   metrics.w=+nextRect.width.toFixed(2);
   metrics.h=+nextRect.height.toFixed(2);
+  if(isMobileUILayoutBucket()){
+    metrics.wp=+((nextRect.width/bounds.width)*100).toFixed(4);
+    metrics.hp=+((nextRect.height/bounds.height)*100).toFixed(4);
+  }
   if(def.anchor==='topLeft'){
-    metrics.x=+((nextRect.left/window.innerWidth)*100).toFixed(3);
-    metrics.y=+((nextRect.top/window.innerHeight)*100).toFixed(3);
+    metrics.x=+(((nextRect.left-bounds.left)/bounds.width)*100).toFixed(3);
+    metrics.y=+(((nextRect.top-bounds.top)/bounds.height)*100).toFixed(3);
   }else{
-    metrics.x=+(((nextRect.left+nextRect.width*0.5)/window.innerWidth)*100).toFixed(3);
-    metrics.y=+(((nextRect.top+nextRect.height*0.5)/window.innerHeight)*100).toFixed(3);
+    metrics.x=+((((nextRect.left-bounds.left)+nextRect.width*0.5)/bounds.width)*100).toFixed(3);
+    metrics.y=+((((nextRect.top-bounds.top)+nextRect.height*0.5)/bounds.height)*100).toFixed(3);
   }
   return metrics;
 }
@@ -6602,8 +6731,7 @@ function applyUILayoutMetrics(def,metrics){
     return;
   }
   el.style.removeProperty('display');
-  const width=Math.max(def.minW,metrics.w);
-  const height=Math.max(def.minH,metrics.h);
+  const {width,height}=resolveUILayoutSize(def,metrics);
   const scaleX=def.baseW ? width/def.baseW : 1;
   const scaleY=def.baseH ? height/def.baseH : 1;
   const textScale=Math.max(0.42,Math.min(scaleX,scaleY));
@@ -6830,10 +6958,13 @@ function refreshUILayoutGuides(){
   const rect=selectedBox.getBoundingClientRect();
   const cx=rect.left+rect.width*0.5;
   const cy=rect.top+rect.height*0.5;
-  const snapX=Math.abs(cx-window.innerWidth*0.5)<=8;
-  const snapY=Math.abs(cy-window.innerHeight*0.5)<=8;
-  guideV.style.left=`${window.innerWidth*0.5}px`;
-  guideH.style.top=`${window.innerHeight*0.5}px`;
+  const bounds=getUILayoutViewportBounds();
+  const centerX=bounds.left+bounds.width*0.5;
+  const centerY=bounds.top+bounds.height*0.5;
+  const snapX=Math.abs(cx-centerX)<=8;
+  const snapY=Math.abs(cy-centerY)<=8;
+  guideV.style.left=`${centerX}px`;
+  guideH.style.top=`${centerY}px`;
   guideV.classList.add('is-visible');
   guideH.classList.add('is-visible');
   guideV.classList.toggle('is-snap',snapX);
@@ -7144,20 +7275,32 @@ function handleUILayoutPointerMove(e){
   const stageScale=getAdminStageZoom()||1;
   const dx=(e.clientX-startX)/stageScale;
   const dy=(e.clientY-startY)/stageScale;
+  const bounds=getUILayoutViewportBounds();
   const store=getUILayoutStore();
   const metrics={...startMetrics};
   if(resize){
     const startRect=getUILayoutBoxRect(def,startMetrics);
-    const nextRect=corner.length===1
+    let nextRect=corner.length===1
       ? resizeUILayoutRectFromEdge(startRect,corner,dx,dy,def)
       : resizeUILayoutRectFromCorner(startRect,corner,dx,dy,def);
+    nextRect=snapUILayoutRectToViewport(nextRect,bounds,getUILayoutSnapEdges(def,true,corner),'resize');
     buildUILayoutMetricsFromRect(def,metrics,nextRect);
-  }else if(def.anchor==='topLeft'){
-    metrics.x=+(((startMetrics.x/100*window.innerWidth)+dx)/window.innerWidth*100).toFixed(3);
-    metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
   }else{
-    metrics.x=+(((startMetrics.x/100*window.innerWidth)+dx)/window.innerWidth*100).toFixed(3);
-    metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
+    if(isUILayoutViewportFrame(def)){
+      const startRect=getUILayoutBoxRect(def,startMetrics);
+      const nextRect=snapUILayoutRectToViewport({
+        ...startRect,
+        left:startRect.left+dx,
+        top:startRect.top+dy,
+      },bounds,getUILayoutSnapEdges(def,false),'move');
+      buildUILayoutMetricsFromRect(def,metrics,nextRect);
+    }else if(def.anchor==='topLeft'){
+      metrics.x=+((((startMetrics.x/100)*bounds.width)+dx)/bounds.width*100).toFixed(3);
+      metrics.y=+((((startMetrics.y/100)*bounds.height)+dy)/bounds.height*100).toFixed(3);
+    }else{
+      metrics.x=+((((startMetrics.x/100)*bounds.width)+dx)/bounds.width*100).toFixed(3);
+      metrics.y=+((((startMetrics.y/100)*bounds.height)+dy)/bounds.height*100).toFixed(3);
+    }
   }
   store[def.id]=metrics;
   markUILayoutBucketEdited();
