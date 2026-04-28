@@ -9276,6 +9276,58 @@ let endCameraZoom=1;
 let endCameraAutoRotate=true;
 const END_CAMERA_AUTO_RATE=0.08; // radians / second
 let introProgressValue=0;
+let introProgressTargetValue=0;
+let introProgressLabel='LOADING';
+let introProgressTicker=0;
+let introProgressLastStepAt=0;
+
+function getIntroProgressSoftCap(label='LOADING'){
+  switch(label){
+    case 'BOOT': return 12;
+    case 'PLAYER': return 28;
+    case 'WORLD': return 44;
+    case 'TERRAIN': return 90;
+    case 'ARTISTS': return 84;
+    case 'ITEMS': return 96;
+    case 'READY': return 100;
+    default: return 95;
+  }
+}
+
+function renderIntroProgressDisplay(){
+  if(introProgressText) introProgressText.textContent=`${introProgressLabel} ${introProgressValue}%`;
+  if(introProgressFill) introProgressFill.style.width=`${introProgressValue}%`;
+}
+
+function stopIntroProgressSmoother(){
+  if(introProgressTicker){
+    clearInterval(introProgressTicker);
+    introProgressTicker=0;
+  }
+}
+
+function startIntroProgressSmoother(){
+  stopIntroProgressSmoother();
+  introProgressLastStepAt=performance.now();
+  introProgressTicker=window.setInterval(()=>{
+    const now=performance.now();
+    const softCap=getIntroProgressSoftCap(introProgressLabel);
+    const maxVisible=Math.max(introProgressTargetValue,Math.min(softCap,99));
+    let next=introProgressValue;
+    if(introProgressValue<introProgressTargetValue){
+      const gap=introProgressTargetValue-introProgressValue;
+      next+=gap>=18 ? 3 : (gap>=8 ? 2 : 1);
+    }else if(introProgressValue<maxVisible && now-introProgressLastStepAt>=1000){
+      next+=1;
+    }
+    next=Math.min(next,maxVisible);
+    if(next!==introProgressValue){
+      introProgressValue=next;
+      introProgressLastStepAt=now;
+      renderIntroProgressDisplay();
+    }
+  },240);
+}
 
 function setEndOverlaySceneView(minimized){
   endOverlay.classList.toggle('scene-view',!!minimized);
@@ -9411,10 +9463,11 @@ function showLeaderboardScene(entry){
 
 function setIntroProgress(pct,label='LOADING'){
   const clamped=Math.max(0,Math.min(100,Math.round(pct)));
-  if(clamped<introProgressValue) return;
-  introProgressValue=clamped;
-  if(introProgressText) introProgressText.textContent=`${label} ${clamped}%`;
-  if(introProgressFill) introProgressFill.style.width=`${clamped}%`;
+  if(clamped < introProgressTargetValue && label===introProgressLabel) return;
+  introProgressTargetValue=Math.max(introProgressTargetValue,clamped);
+  introProgressLabel=label;
+  if(introProgressValue>introProgressTargetValue) introProgressValue=introProgressTargetValue;
+  renderIntroProgressDisplay();
 }
 
 startBtn.addEventListener('click',()=>{
@@ -9739,6 +9792,11 @@ async function init(){
   startBtn.disabled=true;
   const origLabel=startBtn.textContent;
   startBtn.textContent='LOADINGâ€¦';
+  introProgressValue=0;
+  introProgressTargetValue=0;
+  introProgressLabel='BOOT';
+  renderIntroProgressDisplay();
+  startIntroProgressSmoother();
   setIntroProgress(2,'BOOT');
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
@@ -9859,8 +9917,11 @@ async function init(){
   }
 
   startBtn.textContent=origLabel;
-  startBtn.disabled=false;
   setIntroProgress(100,'READY');
+  introProgressValue=100;
+  renderIntroProgressDisplay();
+  stopIntroProgressSmoother();
+  startBtn.disabled=false;
 }
 init();
 
