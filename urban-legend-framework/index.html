@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <title>RunArtistRun</title>
 <meta name="title" content="RunArtistRun"/>
 <meta name="description" content="RunArtistRun"/>
@@ -75,7 +75,9 @@
   }
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;
     font-family:"Trebuchet MS",sans-serif;color:#fff;
-    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    /* Block iOS double-tap-to-zoom and pinch-zoom across the whole game. */
+    touch-action:manipulation;-ms-touch-action:manipulation;overscroll-behavior:none}
   body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
@@ -473,6 +475,19 @@
   #kill-box{color:#9E9A91}
   #coin-box{color:#9E9A91}
   #timer-box{color:#9E9A91;font-variant-numeric:tabular-nums;background:transparent!important;box-shadow:none!important}
+  /* Hand-drawn HUD glyphs replacing the original emoji prefixes. The
+     coin pill keeps a small gold coin glyph in front of the "Coin"
+     wordmark; the kill pill swaps the skull emoji for a doodle. */
+  .hud-icon{display:inline-block;height:1.6em;width:auto;vertical-align:-0.3em;margin-right:4px;
+    pointer-events:none;user-select:none;-webkit-user-drag:none;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,0.18))}
+  .hud-icon-skull{height:1.7em;margin-right:5px}
+  .hud-icon-coin-glyph{display:inline-block;color:#e8b923;font-size:1em;margin-right:2px;
+    text-shadow:0 1px 1px rgba(120,80,0,0.35)}
+  .hud-icon-coin{height:1.4em;margin-right:4px}
+  .hud-icon-shop{display:block;width:auto;height:90%;max-height:38px;margin:0 auto;
+    object-fit:contain;
+    pointer-events:none;user-select:none;-webkit-user-drag:none}
   #timer-box.warn{color:#b3173a;animation:pulse 0.8s infinite alternate;
     background:transparent!important}
   /* Mini thorn flares attached to the side of the SHOP button and
@@ -620,6 +635,9 @@
     pointer-events:auto;cursor:pointer}
   #loadout-toggle .lt-ico{display:block;font-size:26px;line-height:50px;margin:0;text-align:center;color:#fff;font-weight:bold;
     text-shadow:0 2px 8px rgba(103,0,55,0.42)}
+  #loadout-toggle .lt-ico-img{display:block;width:78%;height:78%;margin:0 auto;object-fit:contain;
+    pointer-events:none;user-select:none;-webkit-user-drag:none;
+    filter:drop-shadow(0 2px 4px rgba(103,0,55,0.42))}
   /* Loadout slots — cream "tag" cards matching the HUD pills.
      Each slot carries its OWN 4-corner thorn frame via the
      .ornate-frame mixin, which means the moment a new slot is
@@ -705,7 +723,7 @@
   .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%}
   .hud-small-frame{background-image:url("img/hud_small_frame_overlay.png")}
   .hud-coin-frame{background-image:url("img/hud_small_frame_overlay.png")}
-  .paint-frame{background-image:url("img/paint_bar_frame_overlay.png");background-size:100% 100%}
+  .paint-frame{background-image:url("game icon/左側彩虹br.png");background-size:100% 100%}
   #attack-btn::before,#jump-btn::before,#special-btn::before,
   #kill-box::before,#coin-box::before,#shop-btn::before,
   .loadout-slot::before,#paint-bar::before,#paint-bar::after{content:none!important;display:none!important}
@@ -826,7 +844,7 @@
     padding:38px 44px 28px;border-radius:28px;background:linear-gradient(180deg,rgba(43,19,57,0.9),rgba(15,10,22,0.94));
     border:1px solid rgba(255,214,150,0.24);box-shadow:0 20px 56px rgba(0,0,0,0.48),inset 0 0 0 1px rgba(255,255,255,0.06);
     overflow:visible}
-  #intro h1{width:100%;font-size:clamp(26px,5.2vw,44px);margin:0;padding:0 18px 8px;box-sizing:border-box;color:#ffd86b;letter-spacing:0.05em;line-height:1.14;
+  #intro h1{width:100%;font-size:clamp(22px,4.4vw,38px);margin:0;padding:0 18px 8px;box-sizing:border-box;color:#ffd86b;letter-spacing:0.04em;line-height:1.14;white-space:nowrap;
     text-shadow:0 2px 16px rgba(255,188,73,0.38),0 0 26px rgba(255,120,180,0.16);
     overflow-wrap:break-word;word-break:break-word;hyphens:auto}
   /* BRIEFING TYPE — see the "MANUAL FONT TWEAK GUIDE" comment near
@@ -862,7 +880,7 @@
        Shrunk font + reduced letter-spacing + 16px safety padding
        keeps it visibly inside the card, and overflow-wrap handles
        extreme widths gracefully. */
-    #intro h1{font-size:clamp(18px,6.2vw,28px);letter-spacing:0.02em;padding:0 16px 6px;line-height:1.18}
+    #intro h1{font-size:clamp(15px,5vw,24px);letter-spacing:0.01em;padding:0 12px 6px;line-height:1.18}
     #intro .tag{font-size:10px;letter-spacing:0.16em}
     #intro .intro-copy{max-height:min(40vh,320px);padding-right:8px}
     #intro p{font-size:18px;line-height:1.5}
@@ -1142,9 +1160,9 @@
 <div id="title">RunArtistRun</div>
 
 <div id="hud">
-  <div class="hud-box" id="kill-box">&#x1F480; <span id="kill-count">0</span></div>
+  <div class="hud-box" id="kill-box"><img class="hud-icon hud-icon-skull" src="game icon/artistcount icon.png" alt="" aria-hidden="true"> <span id="kill-count">0</span></div>
   <div class="hud-box" id="timer-box"><span id="timer-text">3:00</span></div>
-  <div class="hud-box" id="coin-box">&#x1FA99; <span id="coin-count">0</span></div>
+  <div class="hud-box" id="coin-box"><span class="hud-icon-coin-glyph" aria-hidden="true">&#x1FA99;</span><img class="hud-icon hud-icon-coin" src="game icon/coin icon.png" alt="" aria-hidden="true"> <span id="coin-count">0</span></div>
 </div>
 
 <div id="ui-frame-layer" aria-hidden="true">
@@ -1193,7 +1211,7 @@
   </button>
 </div>
 
-<button id="shop-btn">SHOP</button>
+<button id="shop-btn"><img class="hud-icon hud-icon-shop" src="game icon/shop icon.png" alt="Shop"></button>
 <div id="shop-panel">
   <button id="shop-close" aria-label="Close shop">Ã—</button>
   <h3>SHOP</h3>
@@ -1258,7 +1276,7 @@
 </div>
 
 <div id="loadout-bar"></div>
-<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><span class="lt-ico" aria-hidden="true">E</span></button>
+<button id="loadout-toggle" type="button" aria-label="Toggle loadout"><img class="lt-ico-img" src="game icon/E.png" alt="" aria-hidden="true"></button>
 
 <div id="intro">
   <div class="intro-card">
@@ -1278,8 +1296,8 @@
       <div id="intro-progress-text">LOADING 0%</div>
       <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
     </div>
-    <div class="tag" style="margin-top:8px;opacity:0.5;font-size:11px">
-      WASD / Joystick - move · Space / JUMP - jump · F / PUNCH - attack · Drag - camera
+    <div class="tag" style="margin-top:8px;opacity:0.6;font-size:11px;line-height:1.5">
+      點擊Shop可購買清潔劑清洗塗鴉/購買灑水器替植物澆水等等等
     </div>
   </div>
 </div>
@@ -1315,6 +1333,27 @@
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","three-mesh-bvh":"https://unpkg.com/three-mesh-bvh@0.7.5/build/index.module.js"}}</script>
 <script type="module">
+// Block iOS Safari pinch-to-zoom + double-tap-to-zoom on the game
+// surface. The viewport meta + touch-action:manipulation handle most
+// browsers, but iOS still honours gesturestart and rapid-tap zoom
+// unless we kill them explicitly.
+window.addEventListener('gesturestart',e=>e.preventDefault());
+window.addEventListener('gesturechange',e=>e.preventDefault());
+window.addEventListener('gestureend',e=>e.preventDefault());
+let __lastTouchEnd=0;
+document.addEventListener('touchend',e=>{
+  const now=Date.now();
+  if(now-__lastTouchEnd<320){
+    // Only swallow gestures aimed at the canvas — leaderboard inputs
+    // etc. should still get their default tap behavior.
+    if(e.target?.closest?.('input,textarea,select,button[type="submit"]')) return;
+    e.preventDefault();
+  }
+  __lastTouchEnd=now;
+},{passive:false});
+document.addEventListener('touchmove',e=>{
+  if(e.touches && e.touches.length>1) e.preventDefault();
+},{passive:false});
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
@@ -4227,6 +4266,35 @@ function waterPlant(targetPlant){
   // Immediate visual bump so the first drop of water shows SOME growth
   // (the lerp in updateFlowers catches up within a second or two).
   targetPlant.scale.setScalar(Math.max(targetPlant.scale.x,current+base*(WATER_GROW_STEP*0.35)));
+  // Structural bifurcation: each watering also sprouts 1-2 child plants
+  // off the host. Pure scale-up made the bloom look like a single stalk
+  // ballooning; adding new geometry per pour gives the watered patch a
+  // genuinely branching, layered shape over time.
+  const branches=targetPlant.userData.waterBranches||(targetPlant.userData.waterBranches=[]);
+  const cap=IS_MOBILE_LAYOUT?5:9;
+  if(branches.length<cap){
+    const sprouts=branches.length<2?2:1;
+    for(let i=0;i<sprouts;i++){
+      const seed='waterbranch_'+(targetPlant.userData?.seedText||'plant')+'_'+branches.length+'_'+Math.random().toString(36).slice(2,8);
+      const child=makePlant(seed);
+      // Place the child relative to the parent group so it inherits
+      // the host's transform. Offsets stay small in local units —
+      // the parent's own scale multiplies them at render time.
+      const angle=Math.random()*Math.PI*2;
+      const radius=0.35+Math.random()*0.55;
+      child.position.set(Math.cos(angle)*radius,0,Math.sin(angle)*radius);
+      // Start a touch smaller than its own baseScale so the new branch
+      // visibly emerges instead of popping in at full size.
+      const childBase=child.userData?.baseScale||child.scale.x||1;
+      const startScale=childBase*0.42;
+      child.userData.baseScale=childBase;
+      child.userData.targetScale=childBase;
+      child.scale.setScalar(startScale);
+      targetPlant.add(child);
+      registerGrowingFlower(child);
+      branches.push(child);
+    }
+  }
   targetPlant.updateMatrix();
   targetPlant.updateMatrixWorld(true);
   return true;
@@ -5515,7 +5583,7 @@ const UI_LAYOUT_DEFAULTS={
     },
     "timer-box": {
       "x": 50.221,
-      "y": 16.643,
+      "y": 15.147,
       "w": 85.818115234375,
       "h": 39.81818389892578,
       "z": 300,
@@ -5532,8 +5600,8 @@ const UI_LAYOUT_DEFAULTS={
     "coin-box": {
       "x": 78.626,
       "y": 15.008,
-      "w": 62,
-      "h": 19.45452880859375,
+      "w": 69.272705078125,
+      "h": 25.272705078125,
       "z": 2200
     },
     "shop-btn-frame": {
@@ -5710,6 +5778,13 @@ const UI_LAYOUT_DEFAULTS={
       "h": 32.9090576171875,
       "z": 2700,
       "locked": true
+    },
+    "joystick-zone": {
+      "x": 0,
+      "y": 0,
+      "w": 80,
+      "h": 80,
+      "z": 18232323
     }
   },
   "mobile": {
@@ -5914,24 +5989,24 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "loadout-toggle-frame": {
-      "x": 12.892,
-      "y": 78.839,
+      "x": 23.203,
+      "y": 60.227,
       "w": 56,
       "h": 56,
       "z": 2100,
       "locked": true
     },
     "loadout-toggle": {
-      "x": 12.891,
-      "y": 78.637,
+      "x": 23.202,
+      "y": 60.133,
       "w": 34.363616943359375,
       "h": 34.363555908203125,
       "z": 2700,
       "locked": true
     },
     "joystick-zone": {
-      "x": 16,
-      "y": 78,
+      "x": 19.498,
+      "y": 76.279,
       "w": 120,
       "h": 120,
       "z": 1850,
@@ -7703,6 +7778,7 @@ canvas.addEventListener('pointerdown',e=>{
 canvas.addEventListener('pointermove',e=>{
   if(!dragging||e.pointerId!==dragPId)return;
   if(gameState==='ended'){
+    endCameraAutoRotate=false;
     endCameraOrbitAngle=yaw0-(e.clientX-dx0)/W()*4;
     endCameraPitch=clamp(pitch0+(e.clientY-dy0)/H()*2.2,0.3,1.3);
     return;
@@ -7716,6 +7792,7 @@ canvas.addEventListener('pointercancel',endDrag);
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   if(gameState==='ended'){
+    endCameraAutoRotate=false;
     endCameraZoom=clamp(endCameraZoom+e.deltaY*0.0015,0.45,1.85);
     return;
   }
@@ -7724,6 +7801,11 @@ canvas.addEventListener('wheel',e=>{
 
 function updateCam(){
   if(gameState==='ended'){
+    if(endCameraAutoRotate){
+      // dt isn't passed in but the render loop runs ~60fps; advance
+      // by one tick's worth so the orbit feels gentle on phones too.
+      endCameraOrbitAngle+=END_CAMERA_AUTO_RATE/60;
+    }
     const b=getPlayableBounds();
     const radius=Math.max(12,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*0.62)*endCameraZoom;
     const tx=b.centerX;
@@ -8409,6 +8491,10 @@ let replaySceneEntryId=null;
 let endCameraOrbitAngle=0;
 let endCameraPitch=0.78;
 let endCameraZoom=1;
+// Auto-orbit until the player drags / zooms the end-screen camera —
+// then we freeze the angle wherever they left it.
+let endCameraAutoRotate=true;
+const END_CAMERA_AUTO_RATE=0.08; // radians / second
 let introProgressValue=0;
 
 function setEndOverlaySceneView(minimized){
@@ -8594,6 +8680,7 @@ async function endGame(){
   endCameraOrbitAngle=0;
   endCameraPitch=0.78;
   endCameraZoom=1;
+  endCameraAutoRotate=true;
   setEndOverlaySceneView(false);
   endScore.textContent=killCount;
   endOverlay.classList.add('show');
