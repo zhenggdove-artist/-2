@@ -73,15 +73,47 @@
                  0 0 22px rgba(255,245,160,0.35),
                  0 8px 18px rgba(0,0,0,0.45);
   }
-  html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#000;
+  /* iOS Safari URL-bar collapse changes innerHeight mid-session, which
+     stretches the decorative viewport-frame on iPhone 17 Pro. Use 100dvh
+     (dynamic viewport) so html/body track the live viewport height,
+     with 100% as fallback for older browsers. */
+  html,body{width:100%;height:100%;height:100dvh;margin:0;padding:0;overflow:hidden;background:#000;
     font-family:"Trebuchet MS",sans-serif;color:#fff;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
     /* Block iOS double-tap-to-zoom and pinch-zoom across the whole game. */
     touch-action:manipulation;-ms-touch-action:manipulation;overscroll-behavior:none}
+  /* Reserve space for the Dynamic Island and home-indicator. The
+     translateZ promotes body to a containing block so position:fixed
+     descendants (HUD, viewport-frame, action buttons) are constrained
+     to body's content box, i.e. live inside the safe area instead of
+     bleeding under the URL bar / Dynamic Island. */
+  body{
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    padding-left:env(safe-area-inset-left,0px);
+    padding-right:env(safe-area-inset-right,0px);
+    box-sizing:border-box;
+    position:relative;
+    transform:translateZ(0);
+  }
   body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   #c{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
   body.admin-layout-mode *{cursor:default}
+  /* Admin "stage" wrapper. When admin layout mode is active we move all
+     game UI into #admin-stage so we can apply a single transform:scale
+     and reveal a black margin for off-screen dragging. The wrapper has
+     no visual styling at zoom=1; the wheel handler updates the scale
+     dynamically when the user is editing the mobile bucket. */
+  #admin-stage{position:fixed;inset:0;transform-origin:50% 50%;
+    transform:scale(var(--admin-zoom,1));transition:transform .06s linear;
+    will-change:transform}
+  body.admin-stage-active{background:#000!important}
+  body.admin-stage-active.admin-stage-mobile{background:#000!important}
+  /* Subtle outline so the user knows where the simulated mobile viewport
+     sits inside the black canvas. */
+  body.admin-stage-active.admin-stage-mobile #admin-stage{
+    box-shadow:0 0 0 1px rgba(124,248,255,0.35),0 0 24px rgba(124,248,255,0.18) inset}
   .ui-layout-editor{position:fixed;inset:0;pointer-events:none;z-index:1200}
   .ui-layout-guide{position:fixed;background:rgba(255,240,106,0.22);pointer-events:none;opacity:0;transition:opacity .08s ease;z-index:1999999}
   .ui-layout-guide.is-pair{background:rgba(255,151,208,0.45)}
@@ -6252,8 +6284,11 @@ function sanitizeUILayoutConfig(config){
       if(!allowed.has(key)||!val||typeof val!=='object') continue;
       const def=getUILayoutDef(key);
       const next={...val};
-      if(Number.isFinite(next.x)) next.x=Math.max(-20,Math.min(120,next.x));
-      if(Number.isFinite(next.y)) next.y=Math.max(-20,Math.min(140,next.y));
+      // Allow items to live well off-screen so the admin canvas-zoom
+      // mode can park elements in the black margin while still
+      // clamping the wildest values.
+      if(Number.isFinite(next.x)) next.x=Math.max(-80,Math.min(180,next.x));
+      if(Number.isFinite(next.y)) next.y=Math.max(-80,Math.min(180,next.y));
       if(Number.isFinite(next.w) && def) next.w=Math.max(def.minW,next.w);
       if(Number.isFinite(next.h) && def) next.h=Math.max(def.minH,next.h);
       out[key]=next;
@@ -6344,6 +6379,7 @@ function setUILayoutMode(mode){
     }
   }
   uiLayoutState.forcedMode=mode==='desktop'||mode==='mobile' ? mode : null;
+  if(uiLayoutState.active) setAdminStageModeZoom(uiLayoutState.forcedMode);
   applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
   syncJoystickVisibility();
@@ -7002,8 +7038,13 @@ function handleUILayoutPointerMove(e){
   }
   if(!uiLayoutState.active||!uiLayoutState.drag) return;
   const {def,startX,startY,startMetrics,resize,corner}=uiLayoutState.drag;
-  const dx=e.clientX-startX;
-  const dy=e.clientY-startY;
+  // Cursor delta is in viewport pixels. The dragged item lives inside
+  // #admin-stage which may be CSS-scaled (mobile bucket canvas). Divide
+  // by the current stage zoom so 1 viewport-px of cursor travel maps to
+  // 1 intrinsic-px of layout coordinate space.
+  const stageScale=getAdminStageZoom()||1;
+  const dx=(e.clientX-startX)/stageScale;
+  const dy=(e.clientY-startY)/stageScale;
   const store=getUILayoutStore();
   const metrics={...startMetrics};
   if(resize){
@@ -7132,6 +7173,9 @@ function enableUILayoutEditor(){
   uiLayoutState.forcedMode=getUILayoutAutoBucket();
   document.body.classList.add('admin-layout-mode');
   hideUILayoutExportButton();
+  ensureAdminStage();
+  setAdminStageModeZoom(uiLayoutState.forcedMode);
+  window.addEventListener('wheel',handleAdminStageWheel,{passive:false,capture:true});
   document.body.appendChild(buildUILayoutEditor());
   applyUILayoutConfig();
   refreshUILayoutEditor();
@@ -7143,12 +7187,15 @@ function disableUILayoutEditor(openExport=false){
   if(!uiLayoutState.active) return;
   uiLayoutState.active=false;
   document.body.classList.remove('admin-layout-mode');
+  window.removeEventListener('wheel',handleAdminStageWheel,{capture:true});
   uiLayoutState.editor?.remove();
   uiLayoutState.editor=null;
   uiLayoutState.overlays.clear();
   uiLayoutState.selectedId=null;
   uiLayoutState.selectedIds=[];
   uiLayoutState.forcedMode=null;
+  uiLayoutState.adminZoom=1;
+  dismantleAdminStage();
   saveUILayoutConfig();
   ensureUILayoutExportButton();
   if(openExport) showUILayoutExportModal();
@@ -7168,8 +7215,8 @@ function nudgeSelectedUILayoutItems(dx,dy){
     if(!def) continue;
     const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
     if(metrics.locked) continue;
-    metrics.x=Math.max(-20,Math.min(120,(metrics.x||0)+dx));
-    metrics.y=Math.max(-20,Math.min(120,(metrics.y||0)+dy));
+    metrics.x=Math.max(-80,Math.min(180,(metrics.x||0)+dx));
+    metrics.y=Math.max(-80,Math.min(180,(metrics.y||0)+dy));
     getUILayoutStore()[def.id]=metrics;
     applyUILayoutMetrics(def,metrics);
     moved=true;
@@ -7186,6 +7233,94 @@ function scheduleUILayoutNudgeHistory(){
   if(__uiNudgeHistoryTimer) clearTimeout(__uiNudgeHistoryTimer);
   pushUILayoutHistory('nudge');
   __uiNudgeHistoryTimer=setTimeout(()=>{__uiNudgeHistoryTimer=0;},220);
+}
+// === Admin "stage" wrapper + wheel-zoom for mobile bucket editing ===
+// On enter we move all game UI into #admin-stage so a single transform
+// can shrink it inside a black canvas. On exit we put everything back.
+const ADMIN_STAGE_DEFAULT_MOBILE_ZOOM=0.65;
+function isAdminStageKeepOut(el){
+  if(!el||el.nodeType!==1) return false;
+  if(el.id==='admin-stage') return true;
+  if(el.classList?.contains?.('ui-layout-editor')) return true;
+  if(el.classList?.contains?.('ui-layout-modal')) return true;
+  if(el.classList?.contains?.('ui-layout-toast')) return true;
+  if(el.classList?.contains?.('ui-layout-export-btn')) return true;
+  return false;
+}
+function ensureAdminStage(){
+  let stage=document.getElementById('admin-stage');
+  if(stage) return stage;
+  stage=document.createElement('div');
+  stage.id='admin-stage';
+  const children=[...document.body.children];
+  for(const child of children){
+    if(isAdminStageKeepOut(child)) continue;
+    stage.appendChild(child);
+  }
+  document.body.appendChild(stage);
+  document.body.classList.add('admin-stage-active');
+  return stage;
+}
+function dismantleAdminStage(){
+  const stage=document.getElementById('admin-stage');
+  if(!stage) return;
+  while(stage.firstChild) document.body.appendChild(stage.firstChild);
+  stage.remove();
+  document.body.classList.remove('admin-stage-active','admin-stage-mobile');
+  document.body.style.removeProperty('--admin-zoom');
+}
+function applyAdminStageZoom(){
+  const stage=document.getElementById('admin-stage');
+  if(!stage) return;
+  const z=Number.isFinite(uiLayoutState.adminZoom)?uiLayoutState.adminZoom:1;
+  stage.style.setProperty('--admin-zoom',String(z));
+  document.body.style.setProperty('--admin-zoom',String(z));
+  document.body.classList.toggle('admin-stage-mobile',uiLayoutState.forcedMode==='mobile');
+}
+function setAdminStageZoom(z){
+  uiLayoutState.adminZoom=Math.max(0.25,Math.min(2,z));
+  applyAdminStageZoom();
+}
+function getAdminStageZoom(){
+  return Number.isFinite(uiLayoutState.adminZoom)?uiLayoutState.adminZoom:1;
+}
+function handleAdminStageWheel(e){
+  if(!uiLayoutState.active) return;
+  if(uiLayoutState.forcedMode!=='mobile') return;
+  if(e.target?.closest?.('.ui-layout-editor,.ui-layout-modal')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const factor=Math.exp(-e.deltaY*0.0015);
+  setAdminStageZoom(getAdminStageZoom()*factor);
+}
+function setAdminStageModeZoom(mode){
+  uiLayoutState.adminZoom=mode==='mobile' ? ADMIN_STAGE_DEFAULT_MOBILE_ZOOM : 1;
+  applyAdminStageZoom();
+}
+function mirrorSelectedUILayoutItems(axis){
+  const ids=(uiLayoutState.selectedIds?.length?uiLayoutState.selectedIds:[uiLayoutState.selectedId])
+    .filter(id=>id&&UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+  if(!ids.length) return false;
+  pushUILayoutHistory('mirror');
+  let moved=false;
+  for(const id of ids){
+    const def=getUILayoutDef(id);
+    if(!def) continue;
+    const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+    if(metrics.locked) continue;
+    if(axis==='horizontal') metrics.x=+(100-(metrics.x||0)).toFixed(3);
+    else if(axis==='vertical') metrics.y=+(100-(metrics.y||0)).toFixed(3);
+    getUILayoutStore()[def.id]=metrics;
+    applyUILayoutMetrics(def,metrics);
+    moved=true;
+  }
+  if(moved){
+    markUILayoutBucketEdited();
+    refreshUILayoutEditor();
+    refreshUILayoutObjectPanel();
+    showUILayoutToast(`Mirrored ${axis==='horizontal'?'left/right':'top/bottom'}`);
+  }
+  return moved;
 }
 function handleUILayoutHotkeys(e){
   if(!uiLayoutState.active) return false;
@@ -7207,6 +7342,23 @@ function handleUILayoutHotkeys(e){
   }
   if((e.ctrlKey||e.metaKey)&&key==='v'){
     if(pasteSelectedUILayoutItem()){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+  // Ctrl+M / Ctrl+N : mirror selection across the viewport's vertical /
+  // horizontal centre line. x = 100 - x flips left/right; y = 100 - y
+  // flips top/bottom. Locked items are skipped.
+  if((e.ctrlKey||e.metaKey)&&key==='m'){
+    if(mirrorSelectedUILayoutItems('horizontal')){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+  if((e.ctrlKey||e.metaKey)&&key==='n'){
+    if(mirrorSelectedUILayoutItems('vertical')){
       e.preventDefault();
       return true;
     }
