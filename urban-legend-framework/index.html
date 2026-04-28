@@ -628,10 +628,10 @@
   body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
   body.admin-layout-mode #clean-btn-frame.hidden{display:block!important;opacity:0.9}
   #clean-btn:active{transform:scale(0.93)}
-  #clean-btn.cooling{opacity:0.58;filter:saturate(0.55) grayscale(0.24)}
-  #clean-btn .btn-sub{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;
+  #clean-btn.cooling{opacity:0.28;filter:saturate(0.18) grayscale(0.7) brightness(0.66)}
+  #clean-btn .btn-sub{position:absolute;top:-10px;right:-10px;min-width:18px;height:18px;
     padding:0 6px;border-radius:999px;background:#1d1730;color:#9ff7de;
-    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:11px;line-height:20px;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:10px;line-height:18px;
     letter-spacing:0.06em;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(255,255,255,0.25);z-index:4}
   .clean-ico-svg,.clean-ico-img{width:var(--clean-icon-size);height:var(--clean-icon-size);display:block;
     transform:translate(var(--clean-icon-offset-x),var(--clean-icon-offset-y));
@@ -649,7 +649,7 @@
     --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #special-btn .btn-sub{z-index:4}
   #special-btn:active{transform:scale(0.93)}
-  #special-btn.cooling{opacity:0.58;filter:saturate(0.7) grayscale(0.15)}
+  #special-btn.cooling{opacity:0.28;filter:saturate(0.18) grayscale(0.7) brightness(0.66)}
   #special-btn .btn-ico{font-size:28px;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.25)}
   /* SKILL cooldown / uses counter — small badge at top-right of
      the button, so the icon takes the full face. */
@@ -1368,7 +1368,7 @@
   </div>
   <div class="shop-section skill-section">SKILL GEAR</div>
   <div class="shop-card skill-card">
-    <h4>FLAMETHROWER - 10 COINS</h4>
+    <h4>FLAMETHROWER - 5 COINS</h4>
     <p>Short-range jet. Flame origin is lifted to head level. Cooldown 1 second.</p>
     <button class="shop-buy" id="buy-weapon-flame-btn">BUY FLAME</button>
   </div>
@@ -1378,12 +1378,12 @@
     <button class="shop-buy" id="buy-weapon-water-btn">BUY WATER</button>
   </div>
   <div class="shop-card skill-card">
-    <h4>ICE BLOCK - 10 COINS</h4>
+    <h4>ICE BLOCK - 5 COINS</h4>
     <p>Throw an ice block. The front 3x3 freeze zone locks artists in place for 15 seconds.</p>
     <button class="shop-buy" id="buy-weapon-ice-btn">BUY ICE BLOCK</button>
   </div>
   <div class="shop-card skill-card">
-    <h4>BOMB - 10 COINS</h4>
+    <h4>BOMB - 5 COINS</h4>
     <p>Drop traps. Artists that step on one explode and burn for 5 seconds. Cooldown 3 seconds, max 5 active.</p>
     <button class="shop-buy" id="buy-weapon-bomb-btn">BUY BOMB</button>
   </div>
@@ -4475,7 +4475,7 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
   currentSpecialAimTarget={...target,weapon:equippedWeapon,charge};
   const marker=ensureSpecialAimMarker();
   const pulse=1+Math.sin(nowS*8)*0.08;
-  marker.position.set(target.x,target.y+0.14,target.z);
+  marker.position.set(target.x,target.y+0.52,target.z);
   marker.scale.setScalar((equippedWeapon==='ice'?1.08:0.92)*pulse);
   marker.visible=true;
 }
@@ -5688,16 +5688,13 @@ async function loadCoin(){
           const mats=Array.isArray(o.material)?o.material:[o.material];
           for(const m of mats){
             m.side=THREE.DoubleSide;
-            if(m.color) m.color.setHex(0xffd24a);       // warm gold
-            if('metalness' in m) m.metalness=0.92;
-            if('roughness' in m) m.roughness=0.22;
-            if(m.emissive) m.emissive.setHex(0x563000); // gentle amber glow
-            if('emissiveIntensity' in m) m.emissiveIntensity=0.25;
-            if(m.map){
-              // Tint the existing texture so any surface detail stays,
-              // but the overall hue is gold.
-              m.color.setHex(0xffe388);
-            }
+            if(m.map) m.map=null;
+            if(m.color) m.color.setHex(0xffdf57);
+            if('metalness' in m) m.metalness=1;
+            if('roughness' in m) m.roughness=0.12;
+            if(m.emissive) m.emissive.setHex(0x8a6500);
+            if('emissiveIntensity' in m) m.emissiveIntensity=0.42;
+            m.needsUpdate=true;
           }
         }
       }
@@ -5777,9 +5774,9 @@ const BURST_SHOP_ITEMS=[
 ];
 const WEAPON_SHOP_ITEMS=[
   {id:'water',name:'WATER',label:'grow plants',cost:1,icon:'\u{1F4A7}'},
-  {id:'flame',name:'FLAME',label:'1s cd',cost:10,icon:'\u{1F525}'},
-  {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:10,icon:'\u{1F9CA}'},
-  {id:'bomb',name:'BOMB',label:'trap x5',cost:10,icon:'\u{1F4A3}'},
+  {id:'flame',name:'FLAME',label:'1s cd',cost:5,icon:'\u{1F525}'},
+  {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:5,icon:'\u{1F9CA}'},
+  {id:'bomb',name:'BOMB',label:'trap x5',cost:5,icon:'\u{1F4A3}'},
 ];
 const SPECIAL_COOLDOWNS={flame:1,water:0.35,ice:3,bomb:3};
 let cleanerUses=0;
@@ -8026,7 +8023,8 @@ function refreshSpecialButton(){
   }
   const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
   specialBtn.innerHTML=`${skillIcon}${subHtml}`;
-  specialBtn.classList.toggle('cooling',equippedWeapon==='water' ? (!debugCheatMode&&wateringUses<=0) : (cd>0 && !debugCheatMode));
+  const noUses=(equippedWeapon==='water' && !debugCheatMode && wateringUses<=0);
+  specialBtn.classList.toggle('cooling',noUses || (cd>0 && !debugCheatMode));
 }
 function getCleanIconSVG(){
   return `<img class="clean-ico-img" src="game icon/clean.png" alt="" aria-hidden="true">`;
@@ -8035,13 +8033,14 @@ function refreshCleanButton(){
   if(!cleanBtn) return;
   if(debugCheatMode) applyCheatInventory();
   const hasCleaner=debugCheatMode || cleanerUses>0;
+  const canClean=debugCheatMode ? !!currentCleanTarget : (hasCleaner && !!currentCleanTarget);
   const sub=hasCleaner ? (debugCheatMode ? '∞' : String(cleanerUses)) : '';
   const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
   cleanBtn.classList.remove('hidden');
   cleanBtnFrame?.classList.remove('hidden');
   cleanBtn.innerHTML=`${getCleanIconSVG()}${subHtml}`;
-  cleanBtn.classList.toggle('cooling',!hasCleaner);
-  cleanBtn.setAttribute('aria-disabled',hasCleaner?'false':'true');
+  cleanBtn.classList.toggle('cooling',!canClean);
+  cleanBtn.setAttribute('aria-disabled',canClean?'false':'true');
 }
 
 function spendCoins(cost){
@@ -8204,7 +8203,10 @@ function updateCleanPrompt(){
   }
   cleanPromptCooldown=6; // ~10 checks/sec instead of every frame
   currentCleanTarget=null;
-  if(gameState!=='playing' || !player.root) return;
+  if(gameState!=='playing' || !player.root){
+    refreshCleanButton();
+    return;
+  }
   let best=null;
   let bestD=CLEAN_RANGE*CLEAN_RANGE;
   const px=player.root.position.x, pz=player.root.position.z;
@@ -8215,6 +8217,7 @@ function updateCleanPrompt(){
     if(d<bestD){bestD=d;best=p;}
   }
   currentCleanTarget=best;
+  refreshCleanButton();
 }
 
 shopBtn?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
@@ -8418,7 +8421,7 @@ function handleSpecialPress(pointerId=null){
 
 function getSpecialCharge(){
   if(!specialInputState.downAt) return 0;
-  return clamp((performance.now()-specialInputState.downAt)/450,0,1);
+  return clamp((performance.now()-specialInputState.downAt)/600,0,1);
 }
 
 function handleSpecialRelease(pointerId=null){
@@ -8996,7 +8999,7 @@ const SFX_DEFS={
   paintWhisperD:{src:'sound/Cute Goblin Wisper.mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   throwIce:{src:'sound/throw ice.mp3',volume:0.84,maxDuration:0.7,pool:3},
   throwBomb:{src:'sound/throw bomb.mp3',volume:0.84,maxDuration:0.7,pool:3},
-  flame:{src:'sound/Fire Flame.mp3',volume:0.7,maxDuration:0.58,pool:3},
+  flame:{src:'sound/Fire Flame.mp3',volume:1,maxDuration:0.58,pool:3},
   coinPickup:{src:'sound/Got A Mario Gold Coin2.mp3',volume:0.68,maxDuration:0.54,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
   cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
@@ -9497,7 +9500,6 @@ function setIntroProgress(pct,label='LOADING'){
   if(clamped < introProgressTargetValue && label===introProgressLabel) return;
   introProgressTargetValue=Math.max(introProgressTargetValue,clamped);
   introProgressLabel=label;
-  if(introProgressValue>introProgressTargetValue) introProgressValue=introProgressTargetValue;
   renderIntroProgressDisplay();
 }
 
