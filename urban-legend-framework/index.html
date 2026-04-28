@@ -628,8 +628,8 @@
   body.admin-layout-mode #clean-btn.hidden{display:flex!important;opacity:0.9}
   body.admin-layout-mode #clean-btn-frame.hidden{display:block!important;opacity:0.9}
   #clean-btn:active{transform:scale(0.93)}
-  #clean-btn.cooling{opacity:1;filter:saturate(0.16) grayscale(0.72) brightness(0.34) contrast(0.96);
-    box-shadow:inset 0 0 0 999px rgba(0,0,0,0.28),inset 0 0 0 2px rgba(255,255,255,0.12),0 6px 14px rgba(0,0,0,0.32)}
+  #clean-btn.cooling{opacity:1;filter:saturate(0.28) grayscale(0.34) brightness(0.76) contrast(1.04);
+    box-shadow:inset 0 0 0 999px rgba(0,0,0,0.46),inset 0 0 0 2px rgba(255,255,255,0.12),0 6px 14px rgba(0,0,0,0.36)}
   #clean-btn .btn-sub{position:absolute;top:-10px;right:-10px;min-width:18px;height:18px;
     padding:0 6px;border-radius:999px;background:#1d1730;color:#9ff7de;
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:10px;line-height:18px;
@@ -637,6 +637,8 @@
   .clean-ico-svg,.clean-ico-img{width:var(--clean-icon-size);height:var(--clean-icon-size);display:block;
     transform:translate(var(--clean-icon-offset-x),var(--clean-icon-offset-y));
     filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));pointer-events:none}
+  #clean-btn.cooling .clean-ico-svg,#clean-btn.cooling .clean-ico-img{
+    filter:brightness(1.72) contrast(1.22) drop-shadow(0 0 2px rgba(255,255,255,0.34)) drop-shadow(0 2px 3px rgba(0,0,0,0.4))}
   #special-btn{position:fixed;right:214px;bottom:42px;width:72px;height:72px;
     border-radius:50%;cursor:pointer;pointer-events:auto;touch-action:none;
     background:radial-gradient(circle at 30% 20%,#fffdd1 0%,#ffe45a 50%,#d99400 100%);
@@ -650,8 +652,8 @@
     --action-frame-shift-x:4px;--action-frame-shift-y:4px}
   #special-btn .btn-sub{z-index:4}
   #special-btn:active{transform:scale(0.93)}
-  #special-btn.cooling{opacity:1;filter:saturate(0.16) grayscale(0.72) brightness(0.34) contrast(0.96);
-    box-shadow:inset 0 0 0 999px rgba(0,0,0,0.28),inset 0 0 0 2px rgba(255,255,255,0.14),0 8px 18px rgba(0,0,0,0.34)}
+  #special-btn.cooling{opacity:1;filter:saturate(0.28) grayscale(0.34) brightness(0.76) contrast(1.04);
+    box-shadow:inset 0 0 0 999px rgba(0,0,0,0.46),inset 0 0 0 2px rgba(255,255,255,0.14),0 8px 18px rgba(0,0,0,0.36)}
   #special-btn .btn-ico{font-size:28px;line-height:1;text-shadow:0 1px 2px rgba(0,0,0,0.25)}
   /* SKILL cooldown / uses counter — small badge at top-right of
      the button, so the icon takes the full face. */
@@ -668,6 +670,8 @@
   .btn-ico-img{width:78%;height:78%;display:block;object-fit:contain;
     pointer-events:none;user-select:none;-webkit-user-drag:none;
     filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4))}
+  #special-btn.cooling .btn-ico-svg,#special-btn.cooling .btn-ico,#special-btn.cooling .btn-ico-img{
+    filter:brightness(1.72) contrast(1.22) drop-shadow(0 0 2px rgba(255,255,255,0.34)) drop-shadow(0 2px 3px rgba(0,0,0,0.4))}
   #attack-btn .btn-ico-svg,#jump-btn .btn-ico-svg,#special-btn .btn-ico,
   #attack-btn .btn-ico-img,#jump-btn .btn-ico-img,#special-btn .btn-ico-img{position:relative;z-index:3}
   #jump-btn .btn-ico-svg{color:#fff}
@@ -9004,7 +9008,7 @@ const SFX_DEFS={
   paintWhisperD:{src:'sound/Cute Goblin Wisper.mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   throwIce:{src:'sound/throw ice.mp3',volume:0.84,maxDuration:0.7,pool:3},
   throwBomb:{src:'sound/throw bomb.mp3',volume:0.84,maxDuration:0.7,pool:3},
-  flame:{src:'sound/Fire Flame.mp3',volume:1,maxDuration:0.58,pool:3},
+  flame:{src:'sound/Fire Flame.mp3',volume:1.2,maxDuration:0.58,pool:3},
   coinPickup:{src:'sound/Got A Mario Gold Coin2.mp3',volume:0.68,maxDuration:0.54,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
   cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
@@ -9168,7 +9172,7 @@ function playSFX(id,opts={}){
       if(!buffer) return null;
       const source=ctx.createBufferSource();
       const gain=ctx.createGain();
-      gain.gain.value=clamp(opts.volume ?? def.volume ?? 1,0,1);
+      gain.gain.value=clamp(opts.volume ?? def.volume ?? 1,0,2);
       source.buffer=buffer;
       source.playbackRate.value=opts.playbackRate ?? def.playbackRate ?? 1;
       source.connect(gain);
