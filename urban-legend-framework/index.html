@@ -4182,10 +4182,10 @@ function disposeSpecialVisual(obj){
   if(!obj) return;
   scene.remove(obj);
   obj.traverse?.(o=>{
-    if(o.isMesh){
-      o.geometry?.dispose?.();
+    if(o.isMesh||o.isPoints||o.isLine){
+      if(!o.userData?.sharedSpecialVisual) o.geometry?.dispose?.();
       const mats=Array.isArray(o.material)?o.material:[o.material];
-      mats?.forEach(m=>m?.dispose?.());
+      if(!o.userData?.sharedSpecialVisual) mats?.forEach(m=>m?.dispose?.());
     }
   });
 }
@@ -4431,12 +4431,59 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
   marker.visible=true;
 }
 
+let iceProjectileGeometry=null;
+let iceProjectileMaterial=null;
+let iceProjectileTrailGeometry=null;
+let iceProjectileTrailMaterial=null;
+let iceFieldBlockGeometry=null;
+let iceFieldBlockMaterial=null;
+let iceFieldPointsGeometry=null;
+let iceFieldPointsMaterial=null;
+let iceFieldRingGeometry=null;
+let iceFieldRingMaterial=null;
+function ensureIceSpecialVisualAssets(){
+  if(iceProjectileGeometry) return;
+  iceProjectileGeometry=new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false);
+  iceProjectileMaterial=new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35});
+  iceProjectileTrailGeometry=new THREE.TorusGeometry(0.55,0.05,10,30);
+  iceProjectileTrailMaterial=new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.72,depthWrite:false});
+
+  iceFieldBlockGeometry=iceProjectileGeometry;
+  iceFieldBlockMaterial=iceProjectileMaterial;
+  iceFieldRingGeometry=new THREE.TorusGeometry(1.55,0.06,10,48);
+  iceFieldRingMaterial=new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.7,depthWrite:false});
+
+  const count=180;
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(count*3);
+  const col=new Float32Array(count*3);
+  const colors=[new THREE.Color('#f3feff'),new THREE.Color('#baf4ff'),new THREE.Color('#6edfff'),new THREE.Color('#2fb9ff')];
+  for(let i=0;i<count;i++){
+    const layer=i/count;
+    const arm=((i%6)/6)*Math.PI*2;
+    const radius=(0.08+layer*0.9)*(0.55+Math.random()*0.55);
+    const spiral=arm+layer*8.5;
+    pos[i*3]=Math.cos(spiral)*radius;
+    pos[i*3+1]=(Math.random()-0.5)*0.9 + Math.sin(layer*Math.PI)*0.28;
+    pos[i*3+2]=Math.sin(spiral)*radius;
+    const c=colors[i%colors.length];
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  iceFieldPointsGeometry=geo;
+  iceFieldPointsMaterial=new THREE.PointsMaterial({size:0.09,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true});
+}
+
 function createSpecialProjectileGroup(kind){
   if(kind==='ice'){
+    ensureIceSpecialVisualAssets();
     const group=new THREE.Group();
-    const block=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false),new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35}));
+    const block=new THREE.Mesh(iceProjectileGeometry,iceProjectileMaterial);
+    block.userData.sharedSpecialVisual=true;
     block.rotation.y=Math.PI/6;
-    const trail=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.05,10,30),new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.72,depthWrite:false}));
+    const trail=new THREE.Mesh(iceProjectileTrailGeometry,iceProjectileTrailMaterial);
+    trail.userData.sharedSpecialVisual=true;
     trail.rotation.x=Math.PI*0.5;
     trail.position.y=-0.02;
     group.add(block,trail);
@@ -4456,9 +4503,9 @@ function launchThrownProjectile(kind,throwData){
   if(!throwData) return false;
   const {dirX,dirZ,target}=throwData;
   const group=createSpecialProjectileGroup(kind);
-  const startY=player.root.position.y+1.1;
-  const startX=player.root.position.x+dirX*0.55;
-  const startZ=player.root.position.z+dirZ*0.55;
+  const startX=Number.isFinite(throwData.startX) ? throwData.startX : player.root.position.x+dirX*0.55;
+  const startY=Number.isFinite(throwData.startY) ? throwData.startY : player.root.position.y+1.1;
+  const startZ=Number.isFinite(throwData.startZ) ? throwData.startZ : player.root.position.z+dirZ*0.55;
   group.position.set(startX,startY,startZ);
   group.rotation.y=Math.atan2(dirX,dirZ);
   scene.add(group);
@@ -4476,29 +4523,15 @@ function launchThrownProjectile(kind,throwData){
   return true;
 }
 function spawnIceField(target){
+  ensureIceSpecialVisualAssets();
   const group=new THREE.Group();
-  const block=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false),new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35}));
+  const block=new THREE.Mesh(iceFieldBlockGeometry,iceFieldBlockMaterial);
+  block.userData.sharedSpecialVisual=true;
   block.rotation.y=Math.PI/6;
-  const count=180;
-  const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(count*3);
-  const col=new Float32Array(count*3);
-  const colors=[new THREE.Color('#f3feff'),new THREE.Color('#baf4ff'),new THREE.Color('#6edfff'),new THREE.Color('#2fb9ff')];
-  for(let i=0;i<count;i++){
-    const layer=i/count;
-    const arm=((i%6)/6)*Math.PI*2;
-    const radius=(0.08+layer*0.9)*(0.55+Math.random()*0.55);
-    const spiral=arm+layer*8.5;
-    pos[i*3]=Math.cos(spiral)*radius;
-    pos[i*3+1]=(Math.random()-0.5)*0.9 + Math.sin(layer*Math.PI)*0.28;
-    pos[i*3+2]=Math.sin(spiral)*radius;
-    const c=colors[i%colors.length];
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-  }
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const crystalPoints=new THREE.Points(geo,new THREE.PointsMaterial({size:0.09,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(1.55,0.06,10,48),new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.7,depthWrite:false}));
+  const crystalPoints=new THREE.Points(iceFieldPointsGeometry,iceFieldPointsMaterial);
+  crystalPoints.userData.sharedSpecialVisual=true;
+  const ring=new THREE.Mesh(iceFieldRingGeometry,iceFieldRingMaterial);
+  ring.userData.sharedSpecialVisual=true;
   ring.rotation.x=Math.PI*0.5;
   ring.position.y=0.06;
   group.add(block,crystalPoints,ring);
@@ -4787,20 +4820,26 @@ function useSpecialWeapon(charge=0){
   }else if(equippedWeapon==='ice'){
     const throwData=getSpecialThrowTarget(charge,'ice',player.yaw);
     if(!throwData) return false;
+    const releaseOriginX=player.root.position.x+throwData.dirX*0.55;
+    const releaseOriginY=player.root.position.y+1.1;
+    const releaseOriginZ=player.root.position.z+throwData.dirZ*0.55;
     const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:THROW_SPECIAL_TIME_SCALE});
     player.pendingSpecialAction='ice';
     player.pendingSpecialTimer=getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE);
     player.pendingSpecialCharge=charge;
-    player.pendingSpecialThrow={weapon:'ice',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,target:throwData};
+    player.pendingSpecialThrow={weapon:'ice',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else if(equippedWeapon==='bomb'){
     if(activeBombs.length+(activeThrownProjectiles.filter(p=>p.kind==='bomb').length)>=5 && !debugCheatMode) return false;
     const throwData=getSpecialThrowTarget(charge,'bomb',player.yaw);
     if(!throwData) return false;
+    const releaseOriginX=player.root.position.x+throwData.dirX*0.55;
+    const releaseOriginY=player.root.position.y+1.1;
+    const releaseOriginZ=player.root.position.z+throwData.dirZ*0.55;
     const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:THROW_SPECIAL_TIME_SCALE});
     player.pendingSpecialAction='bomb';
     player.pendingSpecialTimer=getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE);
     player.pendingSpecialCharge=charge;
-    player.pendingSpecialThrow={weapon:'bomb',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,target:throwData};
+    player.pendingSpecialThrow={weapon:'bomb',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else{
     return false;
   }
@@ -6129,15 +6168,15 @@ const UI_LAYOUT_DEFAULTS={
     },
     "clean-btn-frame": {
       "x": 85.887,
-      "y": 56.782,
+      "y": 56.682,
       "w": 56,
       "h": 56,
       "z": 1800,
       "locked": true
     },
     "clean-btn": {
-      "x": 85.787,
-      "y": 56.681999999999995,
+      "x": 85.887,
+      "y": 56.682,
       "w": 36.47,
       "h": 35.61,
       "z": 2400,
@@ -7728,6 +7767,7 @@ function handleUILayoutHotkeys(e){
 
 function setShopOpen(open){
   if(!shopPanel) return;
+  if(open) setLoadoutExpanded(false);
   shopPanel.classList.toggle('show',!!open);
   document.body.classList.toggle('shop-open',!!open);
 }
@@ -8005,7 +8045,6 @@ function renderLoadoutBar(){
         cycleOwnedWeapon();
         renderShopState();
       }
-      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
     };
     el.addEventListener('click',cycle);
     el.querySelector('button')?.addEventListener('click',e=>{
@@ -8199,6 +8238,12 @@ specialBtn?.addEventListener('pointerleave',e=>{
   if(specialInputState.isDown && e.pointerType==='mouse') handleSpecialRelease(e.pointerId);
 });
 loadoutToggle?.addEventListener('click',()=>setLoadoutExpanded(!document.body.classList.contains('loadout-open')));
+document.addEventListener('pointerdown',e=>{
+  if(!document.body.classList.contains('loadout-open')) return;
+  const target=e.target;
+  if(target?.closest?.('#loadout-bar,#loadout-toggle,#loadout-toggle-frame,.ui-layout-editor,.ui-layout-modal')) return;
+  setLoadoutExpanded(false);
+});
 mobileLoadoutQuery.addEventListener?.('change',()=>syncLoadoutLayout(true));
 syncLoadoutLayout(true);
 if(layoutQuery.get('layoutAdmin')==='1'){
@@ -9670,9 +9715,11 @@ async function init(){
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
   // computeBoundsTree runs on its geometry right after load.
-  await setupBVH();
+  const bvhPromise=setupBVH();
+  const playerAssetsPromise=loadPlayerAssets();
+  await bvhPromise;
   setIntroProgress(8,'BOOT');
-  await loadPlayerAssets();
+  await playerAssetsPromise;
   setIntroProgress(18,'PLAYER');
   await loadPlayground();
   setIntroProgress(30,'WORLD');
@@ -9704,16 +9751,22 @@ async function init(){
   }
   attachPlayer();
   placePlayerOnPlayableLayer();
-  await schedulePlaygroundBVHBuild(playgroundRoot);
-  setIntroProgress(44,'WORLD');
-  await loadDeferredPlayerSkillClips();
-  setIntroProgress(58,'PLAYER');
-  await loadCharacterTemplate();
-  setIntroProgress(70,'ARTISTS');
-  await loadExtraCharacterClips();
-  setIntroProgress(78,'ARTISTS');
-  await loadCoin();
+  setIntroProgress(40,'WORLD');
+  const playgroundBVHPromise=schedulePlaygroundBVHBuild(playgroundRoot);
+  const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
+  const characterTemplatePromise=loadCharacterTemplate();
+  const extraCharacterClipsReadyPromise=characterTemplatePromise.then(async()=>{
+    setIntroProgress(62,'ARTISTS');
+    return loadExtraCharacterClips();
+  });
+  const coinPromise=loadCoin();
+  await deferredPlayerClipsPromise;
+  setIntroProgress(52,'PLAYER');
+  await Promise.all([playgroundBVHPromise,characterTemplatePromise,coinPromise]);
+  setIntroProgress(76,'ARTISTS');
+  await extraCharacterClipsReadyPromise;
   setIntroProgress(84,'ITEMS');
+  ensureIceSpecialVisualAssets();
   if(false&&bvhReady){
     Promise.resolve().then(async()=>{
       try{
