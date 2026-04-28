@@ -174,12 +174,23 @@
     box-shadow:0 20px 60px rgba(0,0,0,0.45);pointer-events:auto;z-index:2000002}
   .ui-layout-object-panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;cursor:move}
   .ui-layout-object-panel-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .ui-layout-object-panel-chrome{display:flex;align-items:center;gap:8px;flex:0 0 auto}
   .ui-layout-object-panel h3{margin:0;color:#fff3b2;font:600 16px/1.2 "Trebuchet MS",sans-serif}
   .ui-layout-object-panel p{margin:0;color:#f8efc0;font:11px/1.45 monospace;opacity:0.82}
   .ui-layout-object-panel-tools{display:flex;gap:6px;flex-wrap:wrap}
   .ui-layout-object-panel-handle{flex:0 0 auto;width:18px;height:18px;border-radius:999px;background:#fff06a;
     box-shadow:0 0 0 2px #2a1738 inset,0 2px 8px rgba(0,0,0,0.45)}
+  .ui-layout-object-panel-toggle{min-width:36px;padding:7px 12px!important}
   .ui-layout-object-list{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+  .ui-layout-object-panel.is-collapsed{gap:0;overflow:hidden}
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-header{align-items:center;cursor:move}
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-copy p,
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-tools,
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-list,
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-resize{display:none}
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-copy{gap:0}
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-copy h3{font-size:14px;line-height:1.1}
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-handle{opacity:0.55}
   .ui-layout-object-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;
     padding:8px 10px;border-radius:12px;background:rgba(255,255,255,0.04);box-shadow:0 0 0 1px rgba(255,235,120,0.1) inset}
   .ui-layout-object-row.is-selected{background:rgba(124,248,255,0.12);box-shadow:0 0 0 1px rgba(124,248,255,0.34) inset}
@@ -6249,7 +6260,8 @@ const UI_LAYOUT_COMPARE_PAIRS={
   'loadout-toggle-frame':'loadout-toggle',
   'loadout-toggle':'loadout-toggle-frame',
 };
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false,editedBuckets:new Set()};
+const UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT=66;
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelCollapsed:false,objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false,editedBuckets:new Set()};
 window.__uiLayoutConfig=uiLayoutState.config;
 
 function cloneUILayoutConfig(config){
@@ -6430,6 +6442,56 @@ function getUILayoutBoxRect(def,metrics){
     height,
   };
 }
+function buildUILayoutMetricsFromRect(def,metrics,rect){
+  const nextRect={
+    left:rect.left,
+    top:rect.top,
+    width:Math.max(def.minW,rect.width),
+    height:Math.max(def.minH,rect.height),
+  };
+  metrics.w=+nextRect.width.toFixed(2);
+  metrics.h=+nextRect.height.toFixed(2);
+  if(def.anchor==='topLeft'){
+    metrics.x=+((nextRect.left/window.innerWidth)*100).toFixed(3);
+    metrics.y=+((nextRect.top/window.innerHeight)*100).toFixed(3);
+  }else{
+    metrics.x=+(((nextRect.left+nextRect.width*0.5)/window.innerWidth)*100).toFixed(3);
+    metrics.y=+(((nextRect.top+nextRect.height*0.5)/window.innerHeight)*100).toFixed(3);
+  }
+  return metrics;
+}
+function resizeUILayoutRectFromEdge(startRect,corner,dx,dy,def){
+  const next={...startRect};
+  if(corner==='e'){
+    next.width=Math.max(def.minW,startRect.width+dx);
+  }else if(corner==='w'){
+    const width=Math.max(def.minW,startRect.width-dx);
+    next.left=startRect.left+(startRect.width-width);
+    next.width=width;
+  }else if(corner==='s'){
+    next.height=Math.max(def.minH,startRect.height+dy);
+  }else if(corner==='n'){
+    const height=Math.max(def.minH,startRect.height-dy);
+    next.top=startRect.top+(startRect.height-height);
+    next.height=height;
+  }
+  return next;
+}
+function resizeUILayoutRectFromCorner(startRect,corner,dx,dy,def){
+  const aspect=startRect.width/Math.max(1e-6,startRect.height);
+  const minScale=Math.max(def.minW/startRect.width,def.minH/startRect.height);
+  const scaleX=(corner.includes('e') ? (startRect.width+dx) : (startRect.width-dx))/Math.max(1e-6,startRect.width);
+  const scaleY=(corner.includes('s') ? (startRect.height+dy) : (startRect.height-dy))/Math.max(1e-6,startRect.height);
+  const useX=Math.abs(scaleX-1)>=Math.abs(scaleY-1);
+  const rawScale=useX ? scaleX : scaleY;
+  const scale=Math.max(minScale,rawScale);
+  const width=Math.max(def.minW,startRect.width*scale);
+  const height=Math.max(def.minH,width/aspect);
+  const next={width,height,left:startRect.left,top:startRect.top};
+  if(corner.includes('w')) next.left=startRect.left+(startRect.width-width);
+  if(corner.includes('n')) next.top=startRect.top+(startRect.height-height);
+  return next;
+}
 function getUILayoutDefaultLayer(def){
   const el=document.getElementById(def.id);
   if(!el) return UI_LAYOUT_TARGET_DEFS.indexOf(def);
@@ -6475,7 +6537,8 @@ function applyUILayoutLayerOrder(orderedIdsDesc){
 }
 function clampUILayoutPanelRect(rect){
   const width=Math.max(260,Math.min(rect.width,window.innerWidth-16));
-  const height=Math.max(220,Math.min(rect.height,window.innerHeight-16));
+  const minHeight=uiLayoutState.objectPanelCollapsed ? UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT : 220;
+  const height=Math.max(minHeight,Math.min(rect.height,window.innerHeight-16));
   const maxLeft=Math.max(0,window.innerWidth-width);
   const maxTop=Math.max(0,window.innerHeight-height);
   return {
@@ -6488,12 +6551,23 @@ function clampUILayoutPanelRect(rect){
 function applyUILayoutObjectPanelRect(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
   if(!panel) return;
-  const rect=clampUILayoutPanelRect(uiLayoutState.panelRect);
-  uiLayoutState.panelRect=rect;
+  const sourceRect=uiLayoutState.objectPanelCollapsed
+    ? {...uiLayoutState.panelRect,height:UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT}
+    : uiLayoutState.panelRect;
+  const rect=clampUILayoutPanelRect(sourceRect);
+  if(uiLayoutState.objectPanelCollapsed) uiLayoutState.panelRect.left=rect.left, uiLayoutState.panelRect.top=rect.top, uiLayoutState.panelRect.width=rect.width;
+  else uiLayoutState.panelRect=rect;
+  panel.classList.toggle('is-collapsed',uiLayoutState.objectPanelCollapsed);
   panel.style.left=`${rect.left}px`;
   panel.style.top=`${rect.top}px`;
   panel.style.width=`${rect.width}px`;
   panel.style.height=`${rect.height}px`;
+  const toggle=panel.querySelector('.ui-layout-object-panel-toggle');
+  if(toggle) toggle.textContent=uiLayoutState.objectPanelCollapsed ? '+' : '−';
+}
+function toggleUILayoutObjectPanelCollapsed(force){
+  uiLayoutState.objectPanelCollapsed=force===undefined ? !uiLayoutState.objectPanelCollapsed : !!force;
+  applyUILayoutObjectPanelRect();
 }
 function ensureUILayoutMetrics(def){
   const store=getUILayoutStore();
@@ -6891,7 +6965,7 @@ function buildUILayoutEditor(){
   editor.appendChild(toolbar);
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
-  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-handle"></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-chrome"><button type="button" class="ui-layout-object-panel-toggle" data-action="collapse">−</button><div class="ui-layout-object-panel-handle"></div></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
   panel.querySelector('.ui-layout-object-list')?.addEventListener('scroll',()=>{
     captureUILayoutObjectPanelScroll();
   });
@@ -6906,6 +6980,11 @@ function buildUILayoutEditor(){
       e.preventDefault();
       e.stopPropagation();
       moveSelectedUILayoutItems('bottom');
+    }
+    if(action==='collapse'){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleUILayoutObjectPanelCollapsed();
     }
   });
   panel.addEventListener('pointerdown',e=>{
@@ -7014,6 +7093,7 @@ function handleUILayoutPointerMove(e){
     const dx=e.clientX-drag.startX;
     const dy=e.clientY-drag.startY;
     if(drag.mode==='resize'){
+      if(uiLayoutState.objectPanelCollapsed) return;
       const next={...drag.startRect};
       if(drag.corner.includes('e')) next.width=drag.startRect.width+dx;
       if(drag.corner.includes('s')) next.height=drag.startRect.height+dy;
@@ -7048,33 +7128,11 @@ function handleUILayoutPointerMove(e){
   const store=getUILayoutStore();
   const metrics={...startMetrics};
   if(resize){
-    if(def.anchor==='topLeft'){
-      const startLeftPx=(startMetrics.x/100)*window.innerWidth;
-      const startTopPx=(startMetrics.y/100)*window.innerHeight;
-      let nextLeftPx=startLeftPx;
-      let nextTopPx=startTopPx;
-      let nextWidth=startMetrics.w;
-      let nextHeight=startMetrics.h;
-      if(corner.includes('e')) nextWidth=startMetrics.w+dx;
-      if(corner.includes('s')) nextHeight=startMetrics.h+dy;
-      if(corner.includes('w')){
-        nextLeftPx=startLeftPx+dx;
-        nextWidth=startMetrics.w-dx;
-      }
-      if(corner.includes('n')){
-        nextTopPx=startTopPx+dy;
-        nextHeight=startMetrics.h-dy;
-      }
-      metrics.w=Math.max(def.minW,nextWidth);
-      metrics.h=Math.max(def.minH,nextHeight);
-      if(corner.includes('w')) metrics.x=+((nextLeftPx/window.innerWidth)*100).toFixed(3);
-      if(corner.includes('n')) metrics.y=+((nextTopPx/window.innerHeight)*100).toFixed(3);
-    }else{
-      const signX=corner.includes('w') ? -1 : 1;
-      const signY=corner.includes('n') ? -1 : 1;
-      metrics.w=Math.max(def.minW,startMetrics.w+dx*signX);
-      metrics.h=Math.max(def.minH,startMetrics.h+dy*signY);
-    }
+    const startRect=getUILayoutBoxRect(def,startMetrics);
+    const nextRect=corner.length===1
+      ? resizeUILayoutRectFromEdge(startRect,corner,dx,dy,def)
+      : resizeUILayoutRectFromCorner(startRect,corner,dx,dy,def);
+    buildUILayoutMetricsFromRect(def,metrics,nextRect);
   }else if(def.anchor==='topLeft'){
     metrics.x=+(((startMetrics.x/100*window.innerWidth)+dx)/window.innerWidth*100).toFixed(3);
     metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
