@@ -4664,42 +4664,49 @@ function spawnFlameJet(){
 
 function spawnCleanMagicBurst(origin,target){
   if(!origin) return;
-  const count=84;
-  const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(count*3);
-  const col=new Float32Array(count*3);
-  const vel=new Float32Array(count*3);
   const colors=['#fff6a6','#87fff6','#ff8fd3','#9be08c','#8cc9ff','#ffd16c'].map(c=>new THREE.Color(c));
+  const count=52;
+  const group=new THREE.Group();
+  const droplets=[];
   for(let i=0;i<count;i++){
-    pos[i*3]=0;
-    pos[i*3+1]=0;
-    pos[i*3+2]=0;
     const c=colors[i%colors.length];
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
     const ang=Math.random()*Math.PI*2;
-    const lift=0.55+Math.random()*1.15;
-    const drift=0.35+Math.random()*1.1;
-    vel[i*3]=Math.cos(ang)*drift;
-    vel[i*3+1]=lift;
-    vel[i*3+2]=Math.sin(ang)*drift;
+    const drift=0.45+Math.random()*1.2;
+    const rise=0.4+Math.random()*1.0;
+    const mat=new THREE.SpriteMaterial({
+      map:splashTexture,
+      color:c,
+      transparent:true,
+      opacity:0,
+      depthWrite:false,
+      depthTest:true,
+    });
+    const sprite=new THREE.Sprite(mat);
+    sprite.visible=true;
+    const baseScale=0.12+Math.random()*0.12;
+    sprite.scale.setScalar(baseScale);
+    sprite.position.set(
+      origin.x+(Math.random()-0.5)*0.06,
+      origin.y+(Math.random()-0.5)*0.04,
+      origin.z+(Math.random()-0.5)*0.06
+    );
+    sprite.renderOrder=13;
+    group.add(sprite);
+    droplets.push({
+      sprite,
+      vx:Math.cos(ang)*drift,
+      vy:rise,
+      vz:Math.sin(ang)*drift,
+      baseScale,
+      seed:Math.random()*Math.PI*2,
+    });
   }
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const mat=new THREE.PointsMaterial({
-    size:0.18,
-    transparent:true,
-    opacity:0.96,
-    depthWrite:false,
-    vertexColors:true,
-    sizeAttenuation:true,
-  });
-  const points=new THREE.Points(geo,mat);
-  points.position.set(origin.x,origin.y,origin.z);
-  points.frustumCulled=false;
-  scene.add(points);
+  group.frustumCulled=false;
+  scene.add(group);
   activeCleanMagicBursts.push({
-    mesh:points,vel,count,life:0,maxLife:0.9,
+    mesh:group,droplets,count,life:0,maxLife:0.9,
     driftX:target?.x ?? origin.x,
+    driftY:target?.y ?? origin.y,
     driftZ:target?.z ?? origin.z,
   });
 }
@@ -5212,22 +5219,21 @@ function updateSpecialWeapons(dt,nowS){
     const burst=activeCleanMagicBursts[i];
     burst.life+=dt;
     const t=clamp(burst.life/burst.maxLife,0,1);
-    const arr=burst.mesh.geometry.attributes.position.array;
-    const driftPull=Math.min(1,t*1.35);
-    for(let p=0;p<burst.count;p++){
-      arr[p*3]+=burst.vel[p*3]*dt;
-      arr[p*3+1]+=burst.vel[p*3+1]*dt;
-      arr[p*3+2]+=burst.vel[p*3+2]*dt;
-      burst.vel[p*3]*=0.972;
-      burst.vel[p*3+1]=burst.vel[p*3+1]*0.95-dt*1.6;
-      burst.vel[p*3+2]*=0.972;
+    const driftPull=Math.min(1,t*1.6);
+    for(const d of burst.droplets){
+      d.vx*=0.972;
+      d.vy=d.vy*0.95-dt*1.5;
+      d.vz*=0.972;
+      d.sprite.position.x+=d.vx*dt;
+      d.sprite.position.y+=d.vy*dt;
+      d.sprite.position.z+=d.vz*dt;
+      d.sprite.position.x=lerp(d.sprite.position.x,burst.driftX,driftPull*0.022);
+      d.sprite.position.y=lerp(d.sprite.position.y,burst.driftY+0.18,driftPull*0.015);
+      d.sprite.position.z=lerp(d.sprite.position.z,burst.driftZ,driftPull*0.022);
+      d.sprite.material.rotation+=dt*(1.4+Math.sin(d.seed+nowS*4.2)*0.9);
+      d.sprite.material.opacity=Math.max(0,0.94*(1-t));
+      d.sprite.scale.setScalar(d.baseScale*(1+t*0.45));
     }
-    burst.mesh.position.x=lerp(burst.mesh.position.x,burst.driftX,driftPull*0.06);
-    burst.mesh.position.z=lerp(burst.mesh.position.z,burst.driftZ,driftPull*0.06);
-    burst.mesh.geometry.attributes.position.needsUpdate=true;
-    burst.mesh.rotation.y+=dt*2.1;
-    burst.mesh.material.opacity=0.96*(1-t);
-    burst.mesh.material.size=0.18+0.16*(1-t);
     if(t>=1){
       disposeSpecialVisual(burst.mesh);
       activeCleanMagicBursts.splice(i,1);
