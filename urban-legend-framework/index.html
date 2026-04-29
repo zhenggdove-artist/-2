@@ -4266,8 +4266,8 @@ function applySoftSceneGlowMaterial(material,strength=0.12){
     material.userData.baseEnvMapIntensity=('envMapIntensity' in material) ? (material.envMapIntensity||0) : null;
   }
   const baseStrength=material.userData.baseGlowStrength??strength;
-  const glowT=clamp(sceneGlowStrength/2.4,0,1);
-  const intensityBoost=baseStrength*sceneGlowStrength*0.32;
+  const glowT=clamp(sceneGlowStrength/4.8,0,1);
+  const intensityBoost=baseStrength*sceneGlowStrength*0.16;
   if(material.emissive){
     const baseColor=(material.userData.baseColor?.clone?.()||material.color?.clone?.()||SCENE_SOFT_GLOW_TINT.clone());
     const baseEmissive=(material.userData.baseEmissive?.clone?.()||new THREE.Color(0x000000));
