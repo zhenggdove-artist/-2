@@ -813,10 +813,10 @@
      These rules replace the earlier pseudo-element approach so the
      admin editor can move/resize the ornament frame and the UI body
      separately. */
-  #ui-frame-layer{position:fixed;inset:0;pointer-events:none}
+  #ui-frame-layer{position:fixed;inset:0;pointer-events:none;z-index:19}
   .ui-deco-frame{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
     background-position:center;background-repeat:no-repeat;background-size:100% 100%}
-  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%;z-index:18}
+  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%;z-index:20}
   .hud-small-frame{background-image:url("img/hud_small_frame_overlay.png")}
   .hud-coin-frame{background-image:url("img/hud_small_frame_overlay.png")}
   .paint-frame{background-image:url("game icon/左側彩虹br.png");background-size:100% 100%}
