@@ -2691,30 +2691,25 @@ function rewireArtistActions(){
 }
 
 const ARTIST_SKIN_TARGET=new THREE.Color('#FFDCBD');
-const ARTIST_SKIN_EMISSIVE=new THREE.Color('#8d6448');
+const ARTIST_SKIN_EMISSIVE=new THREE.Color('#5a3925');
 function isLikelyArtistSkin(mesh,material){
   const hint=`${mesh?.name||''} ${material?.name||''}`.toLowerCase();
   if(/skin|face|head|neck|hand|arm|leg|body/.test(hint)) return true;
   const c=material?.color;
   if(!c) return false;
   const {r,g,b}=c;
-  return r>0.3 && g>0.18 && b>0.12 && r>=g*1.02 && g>=b*1.01 && (r-b)>0.035;
+  return r>0.34 && g>0.2 && b>0.14 && r>=g*1.03 && g>=b*1.02 && (r-b)>0.05;
 }
 function tuneArtistMaterial(mesh,material){
   if(!material) return;
   if(isLikelyArtistSkin(mesh,material)){
-    if('map' in material) material.map=null;
-    if('aoMap' in material) material.aoMap=null;
-    if('lightMap' in material) material.lightMap=null;
-    if('emissiveMap' in material) material.emissiveMap=null;
     if(material.color) material.color.copy(ARTIST_SKIN_TARGET);
     if(material.emissive){
       material.emissive.copy(ARTIST_SKIN_EMISSIVE);
-      if('emissiveIntensity' in material) material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.34);
+      if('emissiveIntensity' in material) material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.2);
     }
-    if('roughness' in material) material.roughness=Math.min(material.roughness??0.75,0.52);
+    if('roughness' in material) material.roughness=Math.min(material.roughness??0.75,0.58);
     if('metalness' in material) material.metalness=Math.min(material.metalness??0,0.02);
-    if('toneMapped' in material) material.toneMapped=true;
   }else{
     if(material.color) material.color.multiplyScalar(1.06);
     if(material.emissive && 'emissiveIntensity' in material){
