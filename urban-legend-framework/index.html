@@ -2168,7 +2168,7 @@ function buildPlayableFootprint(samples,step){
 }
 
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
-const RIVER_CACHE_KEY='ul-river-bounds-v1';
+const RIVER_CACHE_KEY='ul-river-bounds-v3';
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
@@ -2369,60 +2369,38 @@ function isInRiver(x,z,groundY){
 }
 
 async function detectRiverBounds(progressFn){
-  const cacheKey=`${RIVER_CACHE_KEY}:${Math.round((playableLayer?.minX||0)*10)}:${Math.round((playableLayer?.maxX||0)*10)}:${Math.round((playableLayer?.minZ||0)*10)}:${Math.round((playableLayer?.maxZ||0)*10)}:${Math.round((playableLayer?.y||0)*10)}`;
-  const cached=loadCachedJSON(cacheKey);
-  if(Array.isArray(cached) && cached.length){
-    if(progressFn) progressFn(1);
-    return cached;
-  }
   const samples=playableLayer?playableLayer.samples:[];
   if(progressFn) progressFn(1);
   if(samples.length<20) return null;
   const ys=samples.map(s=>s.y).sort((a,b)=>a-b);
-  await yieldToMainThread();
-  if(progressFn) progressFn(0.28);
   // Take bottom ~20% as low cells
   const lowCount=Math.max(6,Math.floor(samples.length*0.18));
   const threshold=ys[Math.min(ys.length-1,lowCount)];
   const low=samples.filter(s=>s.y<=threshold);
-  await yieldToMainThread();
-  if(progressFn) progressFn(0.56);
   if(low.length<5) return null;
   const sideGap=(playableLayer?.step||1)*0.6;
   const pick=(arr,p)=>{
     const sorted=[...arr].sort((a,b)=>a-b);
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
   };
-  // Build exactly 2 river channels: one along the BACK (âˆ’Z) side and
-  // one along the FRONT (+Z) side. Each stretches the FULL X range so
-  // the water reads as a single continuous channel, not chopped puddles.
-  const sides=[
-    low.filter(s=>s.z<playableLayer.centerZ-sideGap),
-    low.filter(s=>s.z>playableLayer.centerZ+sideGap),
-  ].filter(side=>side.length>=4);
-  const bandStep=(playableLayer.step||1);
-  const arenaMinX=playableLayer.minX-bandStep*0.5;
-  const arenaMaxX=playableLayer.maxX+bandStep*0.5;
-  const trenches=sides.map(side=>{
+  const trenches=[
+    low.filter(s=>s.x<playableLayer.centerX-sideGap),
+    low.filter(s=>s.x>playableLayer.centerX+sideGap),
+  ].filter(side=>side.length>=4).map(side=>{
     const floorY=Math.min(...side.map(s=>s.y));
     const surfaceY=floorY+0.62;
-    const minZ=pick(side.map(s=>s.z),0.08)-0.45;
-    const maxZ=pick(side.map(s=>s.z),0.92)+0.45;
-    // Extend each channel end-to-end across the arena X axis so any
-    // sampling gap inside it gets bridged into one continuous river.
-    const minX=arenaMinX;
-    const maxX=arenaMaxX;
+    const minX=pick(side.map(s=>s.x),0.08)-0.45;
+    const maxX=pick(side.map(s=>s.x),0.92)+0.45;
+    const minZ=Math.min(...side.map(s=>s.z))-(playableLayer.step||1)*0.75;
+    const maxZ=Math.max(...side.map(s=>s.z))+(playableLayer.step||1)*0.75;
     return {
       minX,maxX,minZ,maxZ,
       floorY,surfaceY,
       centerX:(minX+maxX)*0.5,
       centerZ:(minZ+maxZ)*0.5,
-      axis:'x'
+      axis:'z'
     };
-  }).sort((a,b)=>a.centerZ-b.centerZ);
-  if(progressFn) progressFn(0.86);
-  await yieldToMainThread();
-  if(trenches.length) saveCachedJSON(cacheKey,trenches);
+  }).sort((a,b)=>a.centerX-b.centerX);
   return trenches.length?trenches:null;
 }
 
@@ -2692,13 +2670,7 @@ function liftCeilingGeometry(root,anchorY,factor=5){
 
 async function loadPlayground(){
   try{
-    let gltf=null;
-    try{
-      gltf=await loader.loadAsync('field/playground_optimized.glb?v=2026-04-24a');
-    }catch(optErr){
-      console.warn('[playground] optimized load failed, falling back to original:',optErr);
-      gltf=await loader.loadAsync('field/playground.glb');
-    }
+    const gltf=await loader.loadAsync('field/playground.glb');
     const root=gltf.scene;
     // Auto-scale+center: compute bbox, target a reasonable size
     const bbox=new THREE.Box3().setFromObject(root);
@@ -2719,8 +2691,6 @@ async function loadPlayground(){
     root.position.z-=cz;
     root.position.y-=bbox2.min.y;
     root.updateMatrixWorld(true);
-    playgroundBounds=new THREE.Box3().setFromObject(root);
-
     root.traverse(o=>{
       if(o.isMesh){
         o.frustumCulled=false;
@@ -2733,7 +2703,6 @@ async function loadPlayground(){
         }
       }
     });
-    freezeStaticObject(root);
     scene.add(root);
     playgroundRoot=root;
 
