@@ -716,7 +716,7 @@
     justify-content:flex-start;max-width:min(78vw,520px);flex-wrap:wrap;
     padding:8px 8px 10px;border-radius:26px;
     background:transparent;box-shadow:none}
-  #loadout-toggle{display:block;position:fixed;left:6.6%;top:81%;transform:translate(-50%,-50%);z-index:26;width:54px;height:54px;border-radius:999px;
+  #loadout-toggle{display:block;position:fixed;left:6.6%;top:81%;transform:translate(-50%,-50%);z-index:15;width:54px;height:54px;border-radius:999px;
     border:2px solid rgba(255,215,235,0.92);background:radial-gradient(circle at 30% 24%,rgba(255,244,251,0.98),rgba(255,122,191,0.96) 55%,rgba(203,22,112,0.98));
     color:#fff;box-shadow:0 10px 26px rgba(0,0,0,0.35),0 0 0 3px rgba(255,138,201,0.18);
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
@@ -824,7 +824,7 @@
   #kill-box::before,#coin-box::before,#shop-btn::before,
   .loadout-slot::before,#paint-bar::before,#paint-bar::after{content:none!important;display:none!important}
 
-  #kill-box,#timer-box,#coin-box,#shop-btn,#paint-bar,#attack-btn,#jump-btn,#special-btn{
+  #kill-box,#timer-box,#coin-box,#shop-btn,#paint-bar,#attack-btn,#jump-btn,#special-btn,#clean-btn,#loadout-toggle{
     z-index:15!important;
   }
   #kill-box-frame{left:11%;top:9.6%;width:176px;height:96px}
@@ -861,16 +861,16 @@
     font-size:10px!important;letter-spacing:0.14em}
 
   #clean-btn-frame{left:16%;top:74%;width:132px;height:132px}
-  #clean-btn{left:16%;top:74%;width:64px!important;height:64px!important;transform:translate(-50%,-50%)!important;
-    padding:0!important;border:none!important;z-index:17!important}
+  #clean-btn{left:16%;top:74%;width:64px!important;height:64px!important;transform:translate(-50%,-50%)!important;z-index:15!important;
+    padding:0!important;border:none!important}
   #special-btn-frame{left:74.6%;top:83.4%;width:152px;height:152px}
-  #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important;z-index:17!important}
+  #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important;z-index:15!important}
   #jump-btn-frame{left:84.8%;top:83.4%;width:152px;height:152px}
-  #jump-btn{left:84.8%;top:83.4%;width:74px!important;height:74px!important;z-index:17!important}
+  #jump-btn{left:84.8%;top:83.4%;width:74px!important;height:74px!important;z-index:15!important}
   #attack-btn-frame{left:94.5%;top:83.4%;width:152px;height:152px}
-  #attack-btn{left:94.5%;top:83.4%;width:74px!important;height:74px!important;z-index:17!important}
+  #attack-btn{left:94.5%;top:83.4%;width:74px!important;height:74px!important;z-index:15!important}
   #loadout-toggle-frame{left:6.6%;top:81%;width:116px;height:116px}
-  #loadout-toggle{z-index:17!important}
+  #loadout-toggle{z-index:15!important}
 
   #loadout-bar{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;top:auto!important;
     width:auto!important;height:auto!important;max-width:none!important;padding:0!important;background:none!important;
@@ -6484,20 +6484,6 @@ const UI_LAYOUT_COMPARE_PAIRS={
   'loadout-toggle-frame':'loadout-toggle',
   'loadout-toggle':'loadout-toggle-frame',
 };
-const UI_LAYOUT_FRAME_DRIVEN_BUTTONS={
-  'clean-btn':'clean-btn-frame',
-  'special-btn':'special-btn-frame',
-  'jump-btn':'jump-btn-frame',
-  'attack-btn':'attack-btn-frame',
-  'loadout-toggle':'loadout-toggle-frame',
-};
-const UI_LAYOUT_FRAME_INNER_FIT={
-  'clean-btn':{scale:0.61,offsetXPx:-3.5,offsetYPx:-4},
-  'special-btn':{scale:0.61,offsetXPx:-4,offsetYPx:-4},
-  'jump-btn':{scale:0.61,offsetXPx:-4,offsetYPx:-4},
-  'attack-btn':{scale:0.61,offsetXPx:-4,offsetYPx:-4},
-  'loadout-toggle':{scale:0.58,offsetXPx:-3,offsetYPx:-3.5},
-};
 const UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT=66;
 const MOBILE_LAYOUT_REFERENCE_WIDTH=430;
 const MOBILE_LAYOUT_REFERENCE_HEIGHT=932;
@@ -6796,29 +6782,7 @@ function currentUILayoutMetrics(def){
 function getUILayoutDef(targetId){
   return UI_LAYOUT_TARGET_DEFS.find(def=>def.id===targetId)||null;
 }
-function getUILayoutResolvedMetrics(def,metrics){
-  if(!def||!metrics) return metrics;
-  const frameId=UI_LAYOUT_FRAME_DRIVEN_BUTTONS[def.id];
-  if(!frameId) return metrics;
-  const frameDef=getUILayoutDef(frameId);
-  const frameMetrics=frameDef ? (ensureUILayoutMetrics(frameDef)||currentUILayoutMetrics(frameDef)) : null;
-  if(!frameDef||!frameMetrics) return metrics;
-  const fit=UI_LAYOUT_FRAME_INNER_FIT[def.id]||{scale:def.baseW/frameDef.baseW,offsetXPx:0,offsetYPx:0};
-  const frameSize=resolveUILayoutSize(frameDef,frameMetrics);
-  const bounds=getUILayoutViewportBounds();
-  const next={...metrics};
-  next.w=+(frameSize.width*fit.scale).toFixed(2);
-  next.h=+(frameSize.height*fit.scale).toFixed(2);
-  next.x=+(frameMetrics.x + ((fit.offsetXPx||0)/bounds.width)*100).toFixed(3);
-  next.y=+(frameMetrics.y + ((fit.offsetYPx||0)/bounds.height)*100).toFixed(3);
-  if(isMobileUILayoutBucket()){
-    next.wp=+((next.w/bounds.width)*100).toFixed(4);
-    next.hp=+((next.h/bounds.height)*100).toFixed(4);
-  }
-  return next;
-}
 function getUILayoutBoxRect(def,metrics){
-  metrics=getUILayoutResolvedMetrics(def,metrics);
   const bounds=getUILayoutViewportBounds();
   const {width,height}=resolveUILayoutSize(def,metrics);
   if(def.anchor==='topLeft'){
@@ -6979,7 +6943,6 @@ function ensureUILayoutMetrics(def){
 function applyUILayoutMetrics(def,metrics){
   const el=document.getElementById(def.id);
   if(!el||!metrics) return;
-  metrics=getUILayoutResolvedMetrics(def,metrics);
   if(metrics.hidden){
     el.style.setProperty('display','none','important');
     return;
