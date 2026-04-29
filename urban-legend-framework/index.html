@@ -5244,55 +5244,131 @@ function spawnIceField(target){
 }
 
 function spawnBombMushroomCloud(x,y,z){
-  const scale=0.68;
-  const count=IS_MOBILE_LAYOUT?168:252;
+  const scale=0.9;
+  const count=IS_MOBILE_LAYOUT?2200:3600;
   const group=new THREE.Group();
   const droplets=[];
-  for(let i=0;i<count;i++){
-    const t=i/count;
-    const trunk=t<0.26;
-    const ring=t>0.6;
+  const geometry=new THREE.IcosahedronGeometry(0.12,0);
+  const makeMat=(hex)=>new THREE.MeshStandardMaterial({
+    color:hex,
+    emissive:hex,
+    emissiveIntensity:0.95,
+    transparent:true,
+    opacity:0.98,
+    depthWrite:false,
+    depthTest:true,
+    roughness:0.36,
+    metalness:0.02,
+    vertexColors:true,
+  });
+  const trunkCount=Math.floor(count*0.24);
+  const capCount=Math.floor(count*0.56);
+  const ringCount=count-trunkCount-capCount;
+  const trunkMesh=new THREE.InstancedMesh(geometry,makeMat('#ffd5ff'),trunkCount);
+  const capMesh=new THREE.InstancedMesh(geometry,makeMat('#ff96df'),capCount);
+  const ringMesh=new THREE.InstancedMesh(geometry,makeMat('#8fd8ff'),ringCount);
+  trunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  capMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  ringMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  trunkMesh.frustumCulled=false;
+  capMesh.frustumCulled=false;
+  ringMesh.frustumCulled=false;
+  const palette=[
+    '#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#c6ff7d','#ffa15e','#ffffff'
+  ];
+  const phaseStart=Math.random()*1000;
+  const configureInstance=(instancedMesh,index,px,py,pz,baseScale,colorHex)=>{
+    tempInstanceObject.position.set(px,py,pz);
+    tempInstanceObject.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    tempInstanceObject.scale.setScalar(baseScale);
+    tempInstanceObject.updateMatrix();
+    instancedMesh.setMatrixAt(index,tempInstanceObject.matrix);
+    instancedMesh.setColorAt(index,new THREE.Color(colorHex));
+  };
+  for(let i=0;i<trunkCount;i++){
     const ang=Math.random()*Math.PI*2;
-    const radius=(trunk?(Math.random()*0.38):(ring?(1.25+Math.random()*1.8):(Math.random()*1.8)))*scale;
-    const py=(trunk?(Math.random()*2.2):(1.0+Math.random()*2.6))*scale;
-    const mesh=new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.08+(trunk?0.018:0.03),0),
-      new THREE.MeshStandardMaterial({
-        color:(i%4===0?'#fff4c0':i%4===1?'#ffd766':i%4===2?'#ff8a2d':'#ff4316'),
-        transparent:true,
-        opacity:0.96,
-        depthWrite:false,
-        depthTest:true,
-        emissive:(i%4===0?'#ffe6a6':i%4===1?'#ffcf5a':i%4===2?'#ff7a20':'#ff3b14'),
-        emissiveIntensity:0.85,
-        roughness:0.42,
-        metalness:0.02,
-      })
-    );
-    mesh.position.set(
-      x+Math.cos(ang)*radius*(trunk?0.45:1),
-      y+py,
-      z+Math.sin(ang)*radius*(trunk?0.45:1)
-    );
-    const outward=((ring?3.6:1.4)+(Math.random()*1.7))*scale;
-    const baseScale=(trunk?0.075:0.095)+Math.random()*0.055;
-    mesh.scale.setScalar(baseScale*(trunk?0.85:1.18));
-    mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
-    group.add(mesh);
+    const radius=(Math.random()*0.34)*scale;
+    const py=y+(Math.random()*3.2)*scale;
+    const px=x+Math.cos(ang)*radius;
+    const pz=z+Math.sin(ang)*radius;
+    const baseScale=(0.52+Math.random()*0.38);
+    configureInstance(trunkMesh,i,px,py,pz,baseScale,palette[(i+1)%palette.length]);
     droplets.push({
-      mesh,
-      vx:Math.cos(ang)*outward*(trunk?0.24:1),
-      vy:((trunk?3.35:2.15)+Math.random()*1.85)*scale,
-      vz:Math.sin(ang)*outward*(trunk?0.24:1),
-      drag:0.95+Math.random()*0.015,
-      gravity:1.4+Math.random()*0.6,
+      instanceMesh:trunkMesh,
+      instanceIndex:i,
+      px,py,pz,
+      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+      rvx:(Math.random()-0.5)*2.6,rvy:(Math.random()-0.5)*2.2,rvz:(Math.random()-0.5)*2.5,
+      vx:Math.cos(ang)*(0.18+Math.random()*0.28),
+      vy:(3.7+Math.random()*2.2)*scale,
+      vz:Math.sin(ang)*(0.18+Math.random()*0.28),
+      drag:0.952+Math.random()*0.012,
+      gravity:1.28+Math.random()*0.35,
       baseScale,
-      seed:Math.random()*1000,
+      seed:phaseStart+i*0.37,
     });
   }
+  for(let i=0;i<capCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(1.25+Math.random()*2.45)*scale;
+    const dome=(2.9+Math.pow(Math.random(),0.55)*2.4)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const py=y+dome-(radial*0.11)+(Math.random()-0.5)*0.26;
+    const baseScale=(0.72+Math.random()*0.72);
+    configureInstance(capMesh,i,px,py,pz,baseScale,palette[(i*3+2)%palette.length]);
+    droplets.push({
+      instanceMesh:capMesh,
+      instanceIndex:i,
+      px,py,pz,
+      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+      rvx:(Math.random()-0.5)*2.1,rvy:(Math.random()-0.5)*1.9,rvz:(Math.random()-0.5)*2.1,
+      vx:Math.cos(ang)*(1.35+Math.random()*1.85),
+      vy:(1.55+Math.random()*1.45)*scale,
+      vz:Math.sin(ang)*(1.35+Math.random()*1.85),
+      drag:0.962+Math.random()*0.012,
+      gravity:1.1+Math.random()*0.28,
+      baseScale,
+      seed:phaseStart+100+i*0.29,
+    });
+  }
+  for(let i=0;i<ringCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(2.45+Math.random()*3.1)*scale;
+    const py=y+(2.05+Math.random()*0.9)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const baseScale=(0.66+Math.random()*0.64);
+    configureInstance(ringMesh,i,px,py,pz,baseScale,palette[(i*5+4)%palette.length]);
+    droplets.push({
+      instanceMesh:ringMesh,
+      instanceIndex:i,
+      px,py,pz,
+      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+      rvx:(Math.random()-0.5)*2.5,rvy:(Math.random()-0.5)*2.3,rvz:(Math.random()-0.5)*2.5,
+      vx:Math.cos(ang)*(3.8+Math.random()*2.4),
+      vy:(0.95+Math.random()*1.1)*scale,
+      vz:Math.sin(ang)*(3.8+Math.random()*2.4),
+      drag:0.968+Math.random()*0.009,
+      gravity:0.92+Math.random()*0.22,
+      baseScale,
+      seed:phaseStart+200+i*0.23,
+    });
+  }
+  group.add(trunkMesh,capMesh,ringMesh);
   group.frustumCulled=false;
   scene.add(group);
-  activeFlameJets.push({mesh:group,life:2,maxLife:2,dirX:0,dirZ:0,hitTick:-99,droplets,gravity:1.7,drag:0.978,isExplosion:true});
+  activeFlameJets.push({
+    mesh:group,
+    life:2.1,
+    maxLife:2.1,
+    dirX:0,dirZ:0,hitTick:-99,
+    droplets,
+    gravity:1.14,
+    drag:0.972,
+    isExplosion:true,
+    instancedMeshes:[trunkMesh,capMesh,ringMesh],
+  });
 }
 
 function triggerBombExplosion(bomb){
@@ -5417,8 +5493,30 @@ function updateSpecialWeapons(dt,nowS){
     const t=Math.max(0,jet.life/jet.maxLife);
     jet.hitTick+=dt;
     if(jet.droplets){
+      const touchedInstancedMeshes=jet.instancedMeshes?new Set():null;
       for(const d of jet.droplets){
         const node=d.sprite||d.mesh;
+        if(d.instanceMesh){
+          d.px+=d.vx*dt;
+          d.py+=d.vy*dt + Math.sin(nowS*12+d.seed)*0.008;
+          d.pz+=d.vz*dt;
+          d.vx*=d.drag||0.96;
+          d.vz*=d.drag||0.96;
+          d.vy=(d.vy+(jet.tail?(d.rise||0):0)*dt)*0.94;
+          d.vy-=(d.gravity||jet.gravity||0)*dt;
+          d.rx+=dt*(2.2+d.rvx);
+          d.ry+=dt*(1.8+d.rvy);
+          d.rz+=dt*(2.0+d.rvz);
+          const wobble=1+Math.sin(nowS*5.8+d.seed)*0.12;
+          const size=d.baseScale*((jet.isExplosion?0.85:0.9)+t*(jet.isExplosion?1.25:0.55))*wobble;
+          tempInstanceObject.position.set(d.px,d.py,d.pz);
+          tempInstanceObject.rotation.set(d.rx,d.ry,d.rz);
+          tempInstanceObject.scale.setScalar(size);
+          tempInstanceObject.updateMatrix();
+          d.instanceMesh.setMatrixAt(d.instanceIndex,tempInstanceObject.matrix);
+          touchedInstancedMeshes?.add(d.instanceMesh);
+          continue;
+        }
         if(!node) continue;
         node.position.x+=d.vx*dt;
         node.position.y+=d.vy*dt + Math.sin(nowS*18+d.seed)*0.004;
@@ -5440,6 +5538,16 @@ function updateSpecialWeapons(dt,nowS){
           d.mesh.rotation.y+=dt*(2.8+Math.cos(d.seed*0.7));
           d.mesh.rotation.z+=dt*(3.1+Math.sin(d.seed*1.4));
           d.mesh.scale.setScalar(d.baseScale*(0.9+t*0.55));
+        }
+      }
+      if(touchedInstancedMeshes){
+        for(const inst of touchedInstancedMeshes){
+          inst.instanceMatrix.needsUpdate=true;
+          const mat=inst.material;
+          if(mat){
+            mat.opacity=Math.max(0,0.98*t);
+            if(mat.emissiveIntensity!==undefined) mat.emissiveIntensity=0.5+0.9*t;
+          }
         }
       }
     }else{
