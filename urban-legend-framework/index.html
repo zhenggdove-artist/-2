@@ -2169,6 +2169,7 @@ function buildPlayableFootprint(samples,step){
 
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
+const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
@@ -2358,6 +2359,89 @@ async function detectPlayableLayer(progressFn){
 let RIVER=null; // primary river region for legacy callers
 let RIVERS=[]; // [{minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis:'x'|'z'}]
 const waterMeshes=[];
+const riverEditorState={active:false,regions:[],selectedIndex:-1,drag:null,dirty:false,group:null};
+const riverEditorRaycaster=new THREE.Raycaster();
+const riverEditorPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+const riverEditorPointerNDC=new THREE.Vector2();
+const riverEditorHitPoint=new THREE.Vector3();
+
+function normalizeRiverRegion(region){
+  const minX=Math.min(region?.minX??0,region?.maxX??0);
+  const maxX=Math.max(region?.minX??0,region?.maxX??0);
+  const minZ=Math.min(region?.minZ??0,region?.maxZ??0);
+  const maxZ=Math.max(region?.minZ??0,region?.maxZ??0);
+  const floorY=Number.isFinite(region?.floorY) ? region.floorY : ((playableLayer?.y??0)-1.8);
+  const surfaceY=Number.isFinite(region?.surfaceY) ? region.surfaceY : (floorY+0.62);
+  return {
+    minX,maxX,minZ,maxZ,
+    floorY,surfaceY,
+    centerX:(minX+maxX)*0.5,
+    centerZ:(minZ+maxZ)*0.5,
+    axis:(maxX-minX>=maxZ-minZ)?'x':'z',
+  };
+}
+
+function sanitizeRiverRegions(regions){
+  if(!Array.isArray(regions)) return [];
+  return regions
+    .map(normalizeRiverRegion)
+    .filter(r=>Number.isFinite(r.minX)&&Number.isFinite(r.maxX)&&Number.isFinite(r.minZ)&&Number.isFinite(r.maxZ)&&((r.maxX-r.minX)>=0.45)&&((r.maxZ-r.minZ)>=0.45));
+}
+
+function loadManualRiverRegions(){
+  try{
+    return sanitizeRiverRegions(JSON.parse(localStorage.getItem(RIVER_MANUAL_STORAGE_KEY)||'[]'));
+  }catch{
+    return [];
+  }
+}
+
+function saveManualRiverRegions(regions){
+  const clean=sanitizeRiverRegions(regions);
+  if(!clean.length){
+    localStorage.removeItem(RIVER_MANUAL_STORAGE_KEY);
+    return [];
+  }
+  localStorage.setItem(RIVER_MANUAL_STORAGE_KEY,JSON.stringify(clean));
+  return clean;
+}
+
+function disposeRiverVisual(obj){
+  obj?.traverse?.(child=>{
+    child.geometry?.dispose?.();
+    if(Array.isArray(child.material)) child.material.forEach(m=>m?.dispose?.());
+    else child.material?.dispose?.();
+  });
+}
+
+function clearWaterMeshes(){
+  while(waterMeshes.length){
+    const mesh=waterMeshes.pop();
+    scene.remove(mesh);
+    disposeRiverVisual(mesh);
+  }
+}
+
+function applyRiverRegions(regions){
+  const clean=sanitizeRiverRegions(regions);
+  clearWaterMeshes();
+  RIVERS=clean;
+  RIVER=clean[0]||null;
+  if(clean.length){
+    waterMeshes.splice(0,0,...clean.map(r=>createWaterMesh(r)));
+  }
+  return clean;
+}
+
+function ensureRiverEditorGroup(){
+  if(riverEditorState.group) return riverEditorState.group;
+  const group=new THREE.Group();
+  group.visible=false;
+  group.renderOrder=15;
+  scene.add(group);
+  riverEditorState.group=group;
+  return group;
+}
 
 function isInRiver(x,z,groundY){
   if(!RIVERS.length) return false;
@@ -3111,6 +3195,283 @@ function getRiverSurfaceY(x,z,groundY){
     }
   }
   return best ? best.surfaceY : y;
+}
+
+function getRiverEditorPointerWorld(clientX,clientY,out=new THREE.Vector3()){
+  const rect=canvas.getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return null;
+  riverEditorPointerNDC.set(
+    ((clientX-rect.left)/rect.width)*2-1,
+    -(((clientY-rect.top)/rect.height)*2-1)
+  );
+  riverEditorRaycaster.setFromCamera(riverEditorPointerNDC,camera);
+  riverEditorPlane.constant=-(playableLayer?.y??0);
+  return riverEditorRaycaster.ray.intersectPlane(riverEditorPlane,out) ? out : null;
+}
+
+function pickRiverEditorObject(clientX,clientY){
+  if(!riverEditorState.group||!riverEditorState.active) return null;
+  const rect=canvas.getBoundingClientRect();
+  riverEditorPointerNDC.set(
+    ((clientX-rect.left)/rect.width)*2-1,
+    -(((clientY-rect.top)/rect.height)*2-1)
+  );
+  riverEditorRaycaster.setFromCamera(riverEditorPointerNDC,camera);
+  const picks=[];
+  riverEditorState.group.traverse(obj=>{ if(obj.visible&&obj.userData?.riverEditPick) picks.push(obj); });
+  const hit=riverEditorRaycaster.intersectObjects(picks,false)[0];
+  return hit?.object||null;
+}
+
+function clearRiverEditorVisuals(){
+  const group=riverEditorState.group;
+  if(!group) return;
+  while(group.children.length){
+    const child=group.children[group.children.length-1];
+    group.remove(child);
+    disposeRiverVisual(child);
+  }
+}
+
+function refreshRiverEditorVisuals(){
+  const group=ensureRiverEditorGroup();
+  clearRiverEditorVisuals();
+  group.visible=riverEditorState.active;
+  if(!riverEditorState.active) return;
+  riverEditorState.regions=sanitizeRiverRegions(riverEditorState.regions);
+  riverEditorState.regions.forEach((region,index)=>{
+    const selected=index===riverEditorState.selectedIndex;
+    const wrap=new THREE.Group();
+    const w=Math.max(0.45,region.maxX-region.minX);
+    const h=Math.max(0.45,region.maxZ-region.minZ);
+    const depth=Math.max(0.18,region.surfaceY-region.floorY);
+    const body=new THREE.Mesh(
+      new THREE.BoxGeometry(w,depth,h),
+      new THREE.MeshBasicMaterial({
+        color:selected?'#6cf5ff':'#33a6ff',
+        transparent:true,
+        opacity:selected?0.28:0.18,
+        depthWrite:false,
+      })
+    );
+    body.position.set(region.centerX,region.floorY+depth*0.5+0.02,region.centerZ);
+    body.renderOrder=15;
+    body.userData={riverEditPick:true,riverEditType:'body',regionIndex:index};
+    wrap.add(body);
+    const edge=new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(w,depth,h)),
+      new THREE.LineBasicMaterial({color:selected?'#f6fdff':'#aeefff',transparent:true,opacity:0.92})
+    );
+    edge.position.copy(body.position);
+    edge.renderOrder=16;
+    wrap.add(edge);
+    const handleSize=Math.max(0.24,Math.min(w,h)*0.08);
+    const handleY=region.surfaceY+0.16;
+    const handles=[
+      ['nw',region.minX,region.minZ],
+      ['ne',region.maxX,region.minZ],
+      ['sw',region.minX,region.maxZ],
+      ['se',region.maxX,region.maxZ],
+    ];
+    for(const [corner,x,z] of handles){
+      const handle=new THREE.Mesh(
+        new THREE.BoxGeometry(handleSize,handleSize,handleSize),
+        new THREE.MeshBasicMaterial({
+          color:selected?'#fff4fd':'#d7f6ff',
+          transparent:true,
+          opacity:selected?0.95:0.8,
+          depthWrite:false,
+        })
+      );
+      handle.position.set(x,handleY,z);
+      handle.renderOrder=17;
+      handle.userData={riverEditPick:true,riverEditType:'handle',regionIndex:index,corner};
+      wrap.add(handle);
+    }
+    group.add(wrap);
+  });
+}
+
+function seedDefaultRiverRegion(){
+  const bounds=getPlayableBounds();
+  const w=Math.max(1.6,(bounds.maxX-bounds.minX)*0.18);
+  const h=Math.max(3.6,(bounds.maxZ-bounds.minZ)*0.22);
+  const floorY=(playableLayer?.y??0)-1.7;
+  const centerX=bounds.centerX;
+  const centerZ=bounds.centerZ;
+  return normalizeRiverRegion({
+    minX:centerX-w*0.5,maxX:centerX+w*0.5,
+    minZ:centerZ-h*0.5,maxZ:centerZ+h*0.5,
+    floorY,surfaceY:floorY+0.62,
+  });
+}
+
+function refreshRiverEditorButtonState(){
+  const toolbar=uiLayoutState.editor?.querySelector('.ui-layout-toolbar');
+  if(!toolbar) return;
+  const riverBtn=toolbar.querySelector('[data-action="river-edit"]');
+  const addBtn=toolbar.querySelector('[data-action="river-add"]');
+  const delBtn=toolbar.querySelector('[data-action="river-del"]');
+  const saveBtn=toolbar.querySelector('[data-action="river-save"]');
+  riverBtn?.classList.toggle('is-active',riverEditorState.active);
+  if(addBtn) addBtn.disabled=!uiLayoutState.active;
+  if(delBtn) delBtn.disabled=!uiLayoutState.active||riverEditorState.selectedIndex<0;
+  if(saveBtn) saveBtn.disabled=!uiLayoutState.active||!riverEditorState.regions.length;
+}
+
+function toggleRiverEditor(force){
+  const next=force===undefined ? !riverEditorState.active : !!force;
+  if(next){
+    const manual=loadManualRiverRegions();
+    riverEditorState.regions=sanitizeRiverRegions(manual.length?manual:RIVERS);
+    if(!riverEditorState.regions.length) riverEditorState.regions=[seedDefaultRiverRegion()];
+    riverEditorState.selectedIndex=Math.min(Math.max(0,riverEditorState.selectedIndex),riverEditorState.regions.length-1);
+    riverEditorState.active=true;
+    riverEditorState.dirty=false;
+    applyRiverRegions(riverEditorState.regions);
+    refreshRiverEditorVisuals();
+    showUILayoutToast('River edit enabled');
+  }else{
+    riverEditorState.active=false;
+    riverEditorState.drag=null;
+    refreshRiverEditorVisuals();
+    showUILayoutToast('River edit disabled');
+  }
+  refreshRiverEditorButtonState();
+}
+
+function addRiverEditorRegion(){
+  if(!riverEditorState.active) toggleRiverEditor(true);
+  const base=riverEditorState.regions[riverEditorState.selectedIndex]||seedDefaultRiverRegion();
+  const copy=normalizeRiverRegion({
+    minX:base.minX+0.8,maxX:base.maxX+0.8,
+    minZ:base.minZ+0.8,maxZ:base.maxZ+0.8,
+    floorY:base.floorY,surfaceY:base.surfaceY,
+  });
+  riverEditorState.regions.push(copy);
+  riverEditorState.selectedIndex=riverEditorState.regions.length-1;
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+}
+
+function deleteRiverEditorRegion(){
+  if(riverEditorState.selectedIndex<0) return false;
+  riverEditorState.regions.splice(riverEditorState.selectedIndex,1);
+  riverEditorState.selectedIndex=Math.min(riverEditorState.selectedIndex,riverEditorState.regions.length-1);
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  return true;
+}
+
+function saveRiverEditorRegions(){
+  const clean=saveManualRiverRegions(riverEditorState.regions);
+  riverEditorState.regions=clean;
+  riverEditorState.dirty=false;
+  applyRiverRegions(clean);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  showUILayoutToast('River regions saved');
+}
+
+async function autoDetectRiverEditorRegions(){
+  const detected=await detectRiverBounds();
+  riverEditorState.regions=sanitizeRiverRegions(detected||[]);
+  if(!riverEditorState.regions.length) riverEditorState.regions=[seedDefaultRiverRegion()];
+  riverEditorState.selectedIndex=0;
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  showUILayoutToast('Loaded auto river regions');
+}
+
+function clampRiverRegionToBounds(region){
+  const bounds=getPlayableBounds();
+  const width=Math.max(0.45,region.maxX-region.minX);
+  const height=Math.max(0.45,region.maxZ-region.minZ);
+  let minX=clamp(region.minX,bounds.minX,bounds.maxX-0.45);
+  let maxX=clamp(region.maxX,bounds.minX+0.45,bounds.maxX);
+  let minZ=clamp(region.minZ,bounds.minZ,bounds.maxZ-0.45);
+  let maxZ=clamp(region.maxZ,bounds.minZ+0.45,bounds.maxZ);
+  if(maxX-minX<0.45){
+    const cx=(minX+maxX)*0.5;
+    minX=clamp(cx-0.225,bounds.minX,bounds.maxX-0.45);
+    maxX=minX+0.45;
+  }
+  if(maxZ-minZ<0.45){
+    const cz=(minZ+maxZ)*0.5;
+    minZ=clamp(cz-0.225,bounds.minZ,bounds.maxZ-0.45);
+    maxZ=minZ+0.45;
+  }
+  return normalizeRiverRegion({...region,minX,maxX,minZ,maxZ,width,height});
+}
+
+function handleRiverEditorCanvasPointerDown(e){
+  if(!riverEditorState.active||e.target!==canvas) return false;
+  const picked=pickRiverEditorObject(e.clientX,e.clientY);
+  if(!picked){
+    riverEditorState.selectedIndex=-1;
+    refreshRiverEditorVisuals();
+    refreshRiverEditorButtonState();
+    return true;
+  }
+  const point=getRiverEditorPointerWorld(e.clientX,e.clientY,riverEditorHitPoint);
+  if(!point) return true;
+  const {riverEditType,regionIndex,corner=''}=picked.userData;
+  riverEditorState.selectedIndex=regionIndex;
+  riverEditorState.drag={
+    pointerId:e.pointerId,
+    mode:riverEditType==='handle'?'resize':'move',
+    corner,
+    startPoint:point.clone(),
+    startRegion:{...riverEditorState.regions[regionIndex]},
+    regionIndex,
+  };
+  canvas.setPointerCapture?.(e.pointerId);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  return true;
+}
+
+function handleRiverEditorCanvasPointerMove(e){
+  const drag=riverEditorState.drag;
+  if(!riverEditorState.active||!drag||drag.pointerId!==e.pointerId) return false;
+  const point=getRiverEditorPointerWorld(e.clientX,e.clientY,riverEditorHitPoint);
+  if(!point) return true;
+  const start=drag.startRegion;
+  let next={...start};
+  if(drag.mode==='move'){
+    const dx=point.x-drag.startPoint.x;
+    const dz=point.z-drag.startPoint.z;
+    next.minX=start.minX+dx;
+    next.maxX=start.maxX+dx;
+    next.minZ=start.minZ+dz;
+    next.maxZ=start.maxZ+dz;
+  }else{
+    if(drag.corner.includes('w')) next.minX=point.x;
+    if(drag.corner.includes('e')) next.maxX=point.x;
+    if(drag.corner.includes('n')) next.minZ=point.z;
+    if(drag.corner.includes('s')) next.maxZ=point.z;
+  }
+  next=clampRiverRegionToBounds(next);
+  riverEditorState.regions[drag.regionIndex]=next;
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  return true;
+}
+
+function handleRiverEditorCanvasPointerUp(e){
+  if(!riverEditorState.drag||riverEditorState.drag.pointerId!==e.pointerId) return false;
+  riverEditorState.drag=null;
+  canvas.releasePointerCapture?.(e.pointerId);
+  refreshRiverEditorButtonState();
+  return true;
 }
 
 function clampToPlayableArea(pos,margin=0.35){
@@ -7164,6 +7525,11 @@ function refreshUILayoutEditorToolbar(){
   const autoMode=getUILayoutAutoBucket();
   const desktopBtn=toolbar.querySelector('[data-mode="desktop"]');
   const mobileBtn=toolbar.querySelector('[data-mode="mobile"]');
+  const riverEditBtn=toolbar.querySelector('[data-action="river-edit"]');
+  const riverAddBtn=toolbar.querySelector('[data-action="river-add"]');
+  const riverDelBtn=toolbar.querySelector('[data-action="river-del"]');
+  const riverSaveBtn=toolbar.querySelector('[data-action="river-save"]');
+  const riverAutoBtn=toolbar.querySelector('[data-action="river-auto"]');
   const exportBtn=toolbar.querySelector('[data-action="export"]');
   const closeBtn=toolbar.querySelector('[data-action="close"]');
   const isMobileEditor=mode==='mobile';
@@ -7173,6 +7539,11 @@ function refreshUILayoutEditorToolbar(){
   if(desktopBtn) desktopBtn.hidden=isMobileEditor;
   if(mobileBtn) mobileBtn.hidden=isMobileEditor;
   if(exportBtn) exportBtn.hidden=isMobileEditor;
+  if(riverEditBtn) riverEditBtn.hidden=isMobileEditor;
+  if(riverAddBtn) riverAddBtn.hidden=isMobileEditor;
+  if(riverDelBtn) riverDelBtn.hidden=isMobileEditor;
+  if(riverSaveBtn) riverSaveBtn.hidden=isMobileEditor;
+  if(riverAutoBtn) riverAutoBtn.hidden=isMobileEditor;
   if(closeBtn) closeBtn.textContent=isMobileEditor?'SAVE':'Save & Exit';
   const pill=toolbar.querySelector('.ui-layout-mode-pill');
   if(pill){
@@ -7181,6 +7552,7 @@ function refreshUILayoutEditorToolbar(){
       ? `Editing: ${mode} | Viewport: ${autoMode}`
       : `Editing: ${mode} (auto)`;
   }
+  refreshRiverEditorButtonState();
 }
 function toggleUILayoutLock(targetId){
   const def=getUILayoutDef(targetId);
@@ -7416,7 +7788,7 @@ function buildUILayoutEditor(){
   editor.innerHTML='<div class="ui-layout-guide guide-v"></div><div class="ui-layout-guide guide-h"></div><div class="ui-layout-guide guide-v pair-v is-pair"></div><div class="ui-layout-guide guide-h pair-h is-pair"></div>';
   const toolbar=document.createElement('div');
   toolbar.className='ui-layout-toolbar';
-  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
+  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="river-edit">River Edit</button><button type="button" data-action="river-add">+ River</button><button type="button" data-action="river-del">Delete River</button><button type="button" data-action="river-save">Save Rivers</button><button type="button" data-action="river-auto">Auto Rivers</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
   toolbar.addEventListener('click',e=>{
     const action=e.target?.dataset?.action;
     const mode=e.target?.dataset?.mode;
@@ -7424,6 +7796,11 @@ function buildUILayoutEditor(){
       setUILayoutMode(mode);
       return;
     }
+    if(action==='river-edit'){ toggleRiverEditor(); return; }
+    if(action==='river-add'){ addRiverEditorRegion(); return; }
+    if(action==='river-del'){ deleteRiverEditorRegion(); return; }
+    if(action==='river-save'){ saveRiverEditorRegions(); return; }
+    if(action==='river-auto'){ autoDetectRiverEditorRegions(); return; }
     if(action==='export') showUILayoutExportModal();
     if(action==='close') disableUILayoutEditor(true);
   });
@@ -7500,6 +7877,7 @@ function buildUILayoutEditor(){
   window.addEventListener('pointercancel',handleUILayoutPointerUp);
   uiLayoutState.editor=editor;
   refreshUILayoutEditorToolbar();
+  refreshRiverEditorButtonState();
   refreshUILayoutObjectPanel();
   return editor;
 }
@@ -7716,6 +8094,7 @@ function enableUILayoutEditor(){
   refreshUILayoutEditor();
   setUILayoutSelection(null);
   refreshUILayoutEditorToolbar();
+  refreshRiverEditorButtonState();
   syncJoystickVisibility();
 }
 function disableUILayoutEditor(openExport=false){
@@ -7723,6 +8102,11 @@ function disableUILayoutEditor(openExport=false){
   uiLayoutState.active=false;
   document.body.classList.remove('admin-layout-mode');
   window.removeEventListener('wheel',handleAdminStageWheel,{capture:true});
+  if(riverEditorState.active||riverEditorState.dirty){
+    saveManualRiverRegions(riverEditorState.regions);
+    riverEditorState.dirty=false;
+  }
+  toggleRiverEditor(false);
   uiLayoutState.editor?.remove();
   uiLayoutState.editor=null;
   uiLayoutState.overlays.clear();
@@ -8679,6 +9063,7 @@ function tryJump(){
 let camYaw=Math.PI,camPitch=0.25,camDist=3.15;
 let dragging=false,dragPId=null,dx0=0,dy0=0,yaw0=0,pitch0=0;
 canvas.addEventListener('pointerdown',e=>{
+  if(handleRiverEditorCanvasPointerDown(e)) return;
   if(e.target!==canvas)return;
   dragging=true;dragPId=e.pointerId;
   dx0=e.clientX;dy0=e.clientY;
@@ -8686,6 +9071,7 @@ canvas.addEventListener('pointerdown',e=>{
   pitch0=gameState==='ended' ? endCameraPitch : camPitch;
 });
 canvas.addEventListener('pointermove',e=>{
+  if(handleRiverEditorCanvasPointerMove(e)) return;
   if(!dragging||e.pointerId!==dragPId)return;
   if(gameState==='ended'){
     endCameraAutoRotate=false;
@@ -8697,8 +9083,8 @@ canvas.addEventListener('pointermove',e=>{
   camPitch=clamp(pitch0+(e.clientY-dy0)/H()*3,-0.2,1.0);
 });
 const endDrag=e=>{if(e.pointerId===dragPId){dragging=false;dragPId=null}};
-canvas.addEventListener('pointerup',endDrag);
-canvas.addEventListener('pointercancel',endDrag);
+canvas.addEventListener('pointerup',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; endDrag(e); });
+canvas.addEventListener('pointercancel',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; endDrag(e); });
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   if(gameState==='ended'){
@@ -10049,15 +10435,22 @@ async function init(){
         console.warn('[floor] detection failed',e);
       }finally{}
       try{
-        RIVERS=await detectRiverBounds();
-        RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
-        if(RIVERS&&RIVERS.length){
-          console.log('[river] detected:',RIVERS);
-          waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
+        const manualRiverRegions=loadManualRiverRegions();
+        if(manualRiverRegions.length){
+          applyRiverRegions(manualRiverRegions);
           placePlayerOnPlayableLayer();
           setIntroProgress(100,'READY');
         }else{
-          console.warn('[river] no trench detected Ã¢â‚¬â€ playground may be flat');
+          RIVERS=await detectRiverBounds();
+          RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
+          if(RIVERS&&RIVERS.length){
+            console.log('[river] detected:',RIVERS);
+            applyRiverRegions(RIVERS);
+            placePlayerOnPlayableLayer();
+            setIntroProgress(100,'READY');
+          }else{
+            console.warn('[river] no trench detected Ã¢â‚¬â€ playground may be flat');
+          }
         }
       }catch(e){
         console.warn('[river] detection failed',e);
@@ -10069,7 +10462,11 @@ async function init(){
   tick(); // begin rendering â€” intro is still on top
 
   // River detection needs many raycasts. Only attempt when BVH is available.
-  if(bvhReady){
+  const manualRiverRegions=loadManualRiverRegions();
+  if(manualRiverRegions.length){
+    applyRiverRegions(manualRiverRegions);
+    placePlayerOnPlayableLayer();
+  }else if(bvhReady){
     try{
       startBtn.textContent='SCANNING TERRAINâ€¦';
       RIVERS=await detectRiverBounds(p=>{ 
@@ -10080,7 +10477,7 @@ async function init(){
       RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
       if(RIVERS&&RIVERS.length){
         console.log('[river] detected:',RIVERS);
-        waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
+        applyRiverRegions(RIVERS);
         placePlayerOnPlayableLayer();
       }else{
         console.warn('[river] no trench detected â€” playground may be flat');
