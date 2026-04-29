@@ -5246,6 +5246,7 @@ function spawnIceField(target){
 function spawnBombMushroomCloud(x,y,z){
   const scale=0.9;
   const count=IS_MOBILE_LAYOUT?2200:3600;
+  const groundCount=IS_MOBILE_LAYOUT?520:880;
   const group=new THREE.Group();
   const droplets=[];
   const geometry=new THREE.IcosahedronGeometry(0.12,0);
@@ -5264,15 +5265,27 @@ function spawnBombMushroomCloud(x,y,z){
   const trunkCount=Math.floor(count*0.24);
   const capCount=Math.floor(count*0.56);
   const ringCount=count-trunkCount-capCount;
+  const groundTrunkCount=Math.floor(groundCount*0.28);
+  const groundCapCount=Math.floor(groundCount*0.47);
+  const groundRingCount=groundCount-groundTrunkCount-groundCapCount;
   const trunkMesh=new THREE.InstancedMesh(geometry,makeMat('#ffd5ff'),trunkCount);
   const capMesh=new THREE.InstancedMesh(geometry,makeMat('#ff96df'),capCount);
   const ringMesh=new THREE.InstancedMesh(geometry,makeMat('#8fd8ff'),ringCount);
+  const groundTrunkMesh=new THREE.InstancedMesh(geometry,makeMat('#ffbd7a'),groundTrunkCount);
+  const groundCapMesh=new THREE.InstancedMesh(geometry,makeMat('#ff75cf'),groundCapCount);
+  const groundRingMesh=new THREE.InstancedMesh(geometry,makeMat('#fff27c'),groundRingCount);
   trunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   capMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   ringMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  groundTrunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  groundCapMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  groundRingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   trunkMesh.frustumCulled=false;
   capMesh.frustumCulled=false;
   ringMesh.frustumCulled=false;
+  groundTrunkMesh.frustumCulled=false;
+  groundCapMesh.frustumCulled=false;
+  groundRingMesh.frustumCulled=false;
   const palette=[
     '#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#c6ff7d','#ffa15e','#ffffff'
   ];
@@ -5355,7 +5368,77 @@ function spawnBombMushroomCloud(x,y,z){
       seed:phaseStart+200+i*0.23,
     });
   }
-  group.add(trunkMesh,capMesh,ringMesh);
+  for(let i=0;i<groundTrunkCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radius=(Math.random()*0.2)*scale;
+    const py=y+(0.15+Math.random()*0.78)*scale;
+    const px=x+Math.cos(ang)*radius;
+    const pz=z+Math.sin(ang)*radius;
+    const baseScale=(0.42+Math.random()*0.22);
+    configureInstance(groundTrunkMesh,i,px,py,pz,baseScale,palette[(i+3)%palette.length]);
+    droplets.push({
+      instanceMesh:groundTrunkMesh,
+      instanceIndex:i,
+      px,py,pz,
+      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+      rvx:(Math.random()-0.5)*2.2,rvy:(Math.random()-0.5)*1.9,rvz:(Math.random()-0.5)*2.1,
+      vx:Math.cos(ang)*(0.12+Math.random()*0.18),
+      vy:(1.45+Math.random()*1.15)*scale,
+      vz:Math.sin(ang)*(0.12+Math.random()*0.18),
+      drag:0.956+Math.random()*0.011,
+      gravity:1.12+Math.random()*0.22,
+      baseScale,
+      seed:phaseStart+300+i*0.31,
+    });
+  }
+  for(let i=0;i<groundCapCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(0.48+Math.random()*1.08)*scale;
+    const dome=(0.72+Math.pow(Math.random(),0.55)*0.94)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const py=y+dome-(radial*0.09)+(Math.random()-0.5)*0.11;
+    const baseScale=(0.46+Math.random()*0.34);
+    configureInstance(groundCapMesh,i,px,py,pz,baseScale,palette[(i*2+1)%palette.length]);
+    droplets.push({
+      instanceMesh:groundCapMesh,
+      instanceIndex:i,
+      px,py,pz,
+      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+      rvx:(Math.random()-0.5)*1.8,rvy:(Math.random()-0.5)*1.5,rvz:(Math.random()-0.5)*1.8,
+      vx:Math.cos(ang)*(0.58+Math.random()*0.84),
+      vy:(0.72+Math.random()*0.65)*scale,
+      vz:Math.sin(ang)*(0.58+Math.random()*0.84),
+      drag:0.965+Math.random()*0.009,
+      gravity:0.98+Math.random()*0.18,
+      baseScale,
+      seed:phaseStart+400+i*0.27,
+    });
+  }
+  for(let i=0;i<groundRingCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(0.92+Math.random()*1.52)*scale;
+    const py=y+(0.44+Math.random()*0.42)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const baseScale=(0.38+Math.random()*0.26);
+    configureInstance(groundRingMesh,i,px,py,pz,baseScale,palette[(i*4+5)%palette.length]);
+    droplets.push({
+      instanceMesh:groundRingMesh,
+      instanceIndex:i,
+      px,py,pz,
+      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+      rvx:(Math.random()-0.5)*1.9,rvy:(Math.random()-0.5)*1.7,rvz:(Math.random()-0.5)*1.9,
+      vx:Math.cos(ang)*(1.2+Math.random()*0.95),
+      vy:(0.4+Math.random()*0.42)*scale,
+      vz:Math.sin(ang)*(1.2+Math.random()*0.95),
+      drag:0.969+Math.random()*0.007,
+      gravity:0.9+Math.random()*0.15,
+      baseScale,
+      seed:phaseStart+500+i*0.21,
+    });
+  }
+  group.add(trunkMesh,capMesh,ringMesh,groundTrunkMesh,groundCapMesh,groundRingMesh);
   group.frustumCulled=false;
   scene.add(group);
   activeFlameJets.push({
@@ -5367,7 +5450,7 @@ function spawnBombMushroomCloud(x,y,z){
     gravity:1.14,
     drag:0.972,
     isExplosion:true,
-    instancedMeshes:[trunkMesh,capMesh,ringMesh],
+    instancedMeshes:[trunkMesh,capMesh,ringMesh,groundTrunkMesh,groundCapMesh,groundRingMesh],
   });
 }
 
