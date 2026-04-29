@@ -382,7 +382,7 @@
     z-index:12;pointer-events:none;color:var(--ink);white-space:nowrap;
     text-shadow:0 1px 0 rgba(255,255,255,0.55),0 2px 4px rgba(180,150,30,0.35);
     transition:opacity 1s ease;
-    --ornate-size:34px;--ornate-bleed:8px;display:block!important}
+    --ornate-size:34px;--ornate-bleed:8px;display:none!important}
   #title::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
     background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
     background-position:top left,top right,bottom left,bottom right;
@@ -550,6 +550,30 @@
     80%{filter:drop-shadow(0 0 2px rgba(180,145,255,0.72)) drop-shadow(0 0 8px rgba(180,145,255,0.48));}
     100%{filter:drop-shadow(0 0 2px rgba(255,110,180,0.7)) drop-shadow(0 0 8px rgba(255,110,180,0.45));}
   }
+  .rainbow-word{
+    background:linear-gradient(90deg,#ff72bd 0%,#ffd86b 18%,#96ffbe 40%,#91d6ff 62%,#ceb1ff 82%,#ff72bd 100%);
+    background-size:240% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    color:transparent;-webkit-text-fill-color:transparent;
+    animation:rainbowGlow 3.8s linear infinite,awShimmer 4.4s linear infinite;
+    text-shadow:none;
+    filter:drop-shadow(0 0 2px rgba(255,255,255,0.76)) drop-shadow(0 0 7px rgba(255,185,225,0.48));
+  }
+  #coin-label{
+    display:inline-block;
+    font:inherit;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
+    letter-spacing:0.05em;
+    line-height:1;
+  }
+  #shop-label{
+    display:inline-block;
+    font:inherit;
+    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
+    letter-spacing:0.05em;
+    line-height:1;
+    pointer-events:none;
+  }
   #coin-count{
     animation:rainbowGlow 3.8s linear infinite;
     text-shadow:
@@ -557,9 +581,7 @@
       0 0 5px rgba(255,174,220,0.45),
       0 0 10px rgba(164,222,255,0.42);
   }
-  #shop-btn,#shop-icon{
-    animation:rainbowGlow 3.4s linear infinite;
-  }
+  #shop-icon{animation:none}
   #checkout-btn{
     border:none;background:transparent;color:#9E9A91;
     font:inherit;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
@@ -569,6 +591,10 @@
       0 0 7px rgba(255,176,228,0.42),
       0 0 12px rgba(126,214,255,0.34);
     animation:rainbowGlow 3.8s linear infinite;
+    width:100%;height:100%;
+    display:flex;align-items:center;justify-content:center;
+    pointer-events:auto;
+    font-size:1em;line-height:1;
   }
   #checkout-btn:hover{transform:scale(1.02)}
   #checkout-btn:active{transform:scale(0.985)}
@@ -587,6 +613,7 @@
     #coin-count{left:85%;top:17.7%;width:36px;height:24px;font-size:calc(16px * var(--ui-scale,1))}
     #shop-icon{left:81%;top:24.5%;height:24px}
   }
+  #timer-box{pointer-events:auto}
   #timer-box.warn{color:#b3173a;animation:pulse 0.8s infinite alternate;
     background:transparent!important}
   /* Mini thorn flares attached to the side of the SHOP button and
@@ -604,6 +631,13 @@
   /* Game controls */
   #game-controls{position:fixed;bottom:0;left:0;right:0;height:40vh;z-index:15;
     pointer-events:none;display:block}
+  #scene-soft-glow{position:fixed;inset:0;pointer-events:none;z-index:9;
+    background:
+      radial-gradient(70% 22% at 50% -3%, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 38%, transparent 72%),
+      radial-gradient(40% 52% at -4% 50%, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 42%, transparent 74%),
+      radial-gradient(40% 52% at 104% 50%, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 42%, transparent 74%),
+      radial-gradient(74% 24% at 50% 103%, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 36%, transparent 70%);
+    filter:blur(14px)}
   #joystick-zone{position:fixed;left:14%;top:78%;width:120px;height:120px;
     transform:translate(-50%,-50%);
     pointer-events:auto;touch-action:none;z-index:18}
@@ -1192,6 +1226,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="scene-soft-glow" aria-hidden="true"></div>
 <!-- VIEWPORT FRAME — four neon-thorn clusters anchored to the
      screen corners. Pure decoration: pointer-events:none and z=11
      so the gameplay UI (z=12+) sits ABOVE the spikes but they
@@ -1317,7 +1352,7 @@
 <div id="hud">
   <div class="hud-box" id="kill-box"></div>
   <div class="hud-box" id="timer-box"><button id="checkout-btn" type="button">Check Out Sweet Home</button></div>
-  <div class="hud-box" id="coin-box"></div>
+  <div class="hud-box" id="coin-box"><span id="coin-label" class="rainbow-word">Coin</span></div>
   <img id="kill-icon" class="hud-icon hud-icon-skull hud-detached" src="game icon/artistcount icon.png" alt="" aria-hidden="true">
   <span id="kill-count" class="hud-detached hud-detached-count">0</span>
   <span id="coin-glyph" class="hud-icon-coin-glyph hud-detached" aria-hidden="true"><svg class="hud-coin-svg" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="coin-glyph-grad" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="#fff2b0"/><stop offset="55%" stop-color="#f5cd54"/><stop offset="100%" stop-color="#b8830d"/></radialGradient></defs><circle cx="12" cy="12" r="10" fill="url(#coin-glyph-grad)" stroke="#7a5300" stroke-width="1.2"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#6e4500" font-family="Georgia,serif">$</text></svg></span>
@@ -1372,7 +1407,7 @@
 </div>
 <div id="clean-btn-badge" aria-hidden="true"></div>
 
-<button id="shop-btn" aria-label="Shop"></button>
+<button id="shop-btn" aria-label="Shop"><span id="shop-label" class="rainbow-word">Shop</span></button>
 <img id="shop-icon" class="hud-icon hud-icon-shop hud-detached" src="game icon/shop icon.png" alt="Shop">
 <div id="shop-panel">
   <button id="shop-close" aria-label="Close shop">Ã—</button>
@@ -10514,6 +10549,10 @@ startBtn.addEventListener('click',()=>{
   startGame();
 });
 checkoutBtn?.addEventListener('click',()=>{
+  if(gameState==='playing') endGame();
+});
+timerBox?.addEventListener('click',e=>{
+  if(e.target?.closest?.('#checkout-btn')) return;
   if(gameState==='playing') endGame();
 });
 
