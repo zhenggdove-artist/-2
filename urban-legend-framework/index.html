@@ -617,15 +617,7 @@
   /* Game controls */
   #game-controls{position:fixed;bottom:0;left:0;right:0;height:40vh;z-index:15;
     pointer-events:none;display:block}
-  #scene-soft-glow{position:fixed;inset:0;pointer-events:none;z-index:9;
-    background:
-      radial-gradient(88% 30% at 50% -2%, rgba(255,255,255,0.98), rgba(255,255,255,0.48) 28%, rgba(255,255,255,0.12) 48%, transparent 72%),
-      radial-gradient(52% 76% at -5% 50%, rgba(255,255,255,0.92), rgba(255,255,255,0.44) 24%, rgba(255,255,255,0.1) 44%, transparent 72%),
-      radial-gradient(52% 76% at 105% 50%, rgba(255,255,255,0.92), rgba(255,255,255,0.44) 24%, rgba(255,255,255,0.1) 44%, transparent 72%),
-      radial-gradient(88% 32% at 50% 102%, rgba(255,255,255,0.98), rgba(255,255,255,0.5) 28%, rgba(255,255,255,0.12) 48%, transparent 72%);
-    filter:blur(42px);
-    opacity:1;
-    mix-blend-mode:screen}
+  #scene-soft-glow{display:none!important}
   #joystick-zone{position:fixed;left:14%;top:78%;width:120px;height:120px;
     transform:translate(-50%,-50%);
     pointer-events:auto;touch-action:none;z-index:18}
@@ -2865,6 +2857,7 @@ async function loadPlayground(){
           for(const m of mats){
             m.side=THREE.DoubleSide;
             if('envMapIntensity' in m) m.envMapIntensity=0.5;
+            applySoftSceneGlowMaterial(m,0.18);
           }
         }
       }
@@ -2915,7 +2908,9 @@ async function loadPlayground(){
     // Fallback plain ground
     const g=new THREE.CircleGeometry(40,64);
     g.rotateX(-Math.PI/2);
-    const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:'#6a8a5a',roughness:0.9}));
+    const mtl=new THREE.MeshStandardMaterial({color:'#6a8a5a',roughness:0.9});
+    applySoftSceneGlowMaterial(mtl,0.18);
+    const m=new THREE.Mesh(g,mtl);
     scene.add(m);
     // Fallback pillars: 8 in a circle
     for(let i=0;i<8;i++){
@@ -4235,6 +4230,20 @@ function rewireArtistActions(){
 
 const ARTIST_SKIN_TARGET=new THREE.Color('#FFE9DF');
 const ARTIST_SKIN_EMISSIVE=new THREE.Color('#9a6672');
+const SCENE_SOFT_GLOW_TINT=new THREE.Color('#fff8ff');
+function applySoftSceneGlowMaterial(material,strength=0.12){
+  if(!material) return;
+  if(material.emissive){
+    const base=material.color?.clone?.()||SCENE_SOFT_GLOW_TINT.clone();
+    const glow=base.lerp(SCENE_SOFT_GLOW_TINT,0.72);
+    material.emissive.copy(glow);
+    if('emissiveIntensity' in material){
+      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,strength);
+    }
+  }
+  if('roughness' in material) material.roughness=Math.min(material.roughness??1,0.62);
+  if('envMapIntensity' in material) material.envMapIntensity=Math.max(material.envMapIntensity||0,0.72);
+}
 function isLikelyArtistSkin(mesh,material){
   const hint=`${mesh?.name||''} ${material?.name||''}`.toLowerCase();
   if(/skin|face|head|neck|hand|arm|leg|body/.test(hint)) return true;
@@ -4279,6 +4288,7 @@ function buildCharacterInstance(tint,isArtist){
           }
           if('envMapIntensity' in cm) cm.envMapIntensity=0.5;
           if(isArtist) tuneArtistMaterial(o,cm);
+          applySoftSceneGlowMaterial(cm,isArtist?0.2:0.16);
           materialEntries.push({
             material:cm,
             color:cm.color?.clone?.()||null,
@@ -4354,6 +4364,7 @@ function buildPlayerInstance(){
           if(playerTextureSet?.normal && !cm.normalMap) cm.normalMap=playerTextureSet.normal;
           if(playerTextureSet?.rough && !cm.roughnessMap) cm.roughnessMap=playerTextureSet.rough;
           if(playerTextureSet?.metal && !cm.metalnessMap) cm.metalnessMap=playerTextureSet.metal;
+          applySoftSceneGlowMaterial(cm,0.18);
           cm.needsUpdate=true;
           return cm;
         });
