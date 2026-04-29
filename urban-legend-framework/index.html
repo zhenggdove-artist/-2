@@ -1184,6 +1184,10 @@
   @media (max-width:640px){
     #end-overlay{padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));align-items:flex-start}
     #end-box{width:min(94vw,460px);max-height:none;min-height:calc(100dvh - 24px - env(safe-area-inset-bottom,0px));padding:24px 16px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    #end-overlay.scene-view{padding:12px 12px calc(12px + env(safe-area-inset-top,0px));align-items:flex-start;justify-content:flex-end}
+    #end-box.minimized{min-height:0;width:auto;max-width:calc(100vw - 24px);padding:10px 12px;border-radius:999px;overflow:visible}
+    #end-box.minimized h2{font-size:13px;letter-spacing:0.08em;white-space:nowrap}
+    #end-box.minimized #end-toggle{width:22px;height:22px;font-size:15px}
   }
 
   /* Stone tablet cutscene */
@@ -4271,8 +4275,8 @@ function applySoftSceneGlowMaterial(material,strength=0.12){
     material.userData.baseEnvMapIntensity=('envMapIntensity' in material) ? (material.envMapIntensity||0) : null;
   }
   const baseStrength=material.userData.baseGlowStrength??strength;
-  const glowT=clamp(sceneGlowStrength/4.8,0,1);
-  const intensityBoost=baseStrength*sceneGlowStrength*0.16;
+  const glowT=clamp(sceneGlowStrength/7.3846153846,0,1);
+  const intensityBoost=baseStrength*sceneGlowStrength*0.104;
   if(material.emissive){
     const baseColor=(material.userData.baseColor?.clone?.()||material.color?.clone?.()||SCENE_SOFT_GLOW_TINT.clone());
     const baseEmissive=(material.userData.baseEmissive?.clone?.()||new THREE.Color(0x000000));
