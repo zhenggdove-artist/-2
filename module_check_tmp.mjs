@@ -2944,7 +2944,36 @@ function createSplashTexture(){
   tex.needsUpdate=true;
   return tex;
 }
+function createFireTexture(){
+  const size=96;
+  const canvas=document.createElement('canvas');
+  canvas.width=size;
+  canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  if(!ctx) return null;
+  ctx.clearRect(0,0,size,size);
+  ctx.save();
+  ctx.translate(size*0.5,size*0.54);
+  ctx.scale(1,1.18);
+  const grad=ctx.createRadialGradient(0,-size*0.12,size*0.04,0,0,size*0.42);
+  grad.addColorStop(0,'rgba(255,250,214,0.98)');
+  grad.addColorStop(0.24,'rgba(255,221,130,0.96)');
+  grad.addColorStop(0.56,'rgba(255,130,38,0.82)');
+  grad.addColorStop(0.82,'rgba(255,58,18,0.34)');
+  grad.addColorStop(1,'rgba(255,58,18,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.moveTo(0,-size*0.42);
+  ctx.bezierCurveTo(size*0.22,-size*0.18,size*0.36,size*0.06,0,size*0.42);
+  ctx.bezierCurveTo(-size*0.36,size*0.06,-size*0.22,-size*0.18,0,-size*0.42);
+  ctx.fill();
+  ctx.restore();
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.needsUpdate=true;
+  return tex;
+}
 const splashTexture=createSplashTexture();
+const fireTexture=createFireTexture();
 const splashRoot=new THREE.Group();
 splashRoot.renderOrder=12;
 scene.add(splashRoot);
@@ -3226,35 +3255,50 @@ function spawnFlameJet(){
   const mouthX=player.root.position.x+fx*0.34;
   const mouthY=player.root.position.y+1.46;
   const mouthZ=player.root.position.z+fz*0.34;
-  const count=132;
-  const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(count*3);
-  const col=new Float32Array(count*3);
-  const vel=new Float32Array(count*3);
-  const colors=[new THREE.Color('#fff1bf'),new THREE.Color('#ffd15a'),new THREE.Color('#ff7a28'),new THREE.Color('#ff3b12')];
+  const count=IS_MOBILE_LAYOUT?58:82;
+  const group=new THREE.Group();
+  const droplets=[];
   const rightX=fz, rightZ=-fx;
   for(let i=0;i<count;i++){
-    const c=colors[i%colors.length];
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    const mat=new THREE.SpriteMaterial({
+      map:fireTexture,
+      color:(i%4===0?'#fff2b8':i%4===1?'#ffd36d':i%4===2?'#ff8a2d':'#ff4c18'),
+      transparent:true,
+      opacity:0.94,
+      depthWrite:false,
+      depthTest:true,
+      blending:THREE.AdditiveBlending,
+    });
+    const sprite=new THREE.Sprite(mat);
     const depth=Math.random()*1.55*FLAME_VISUAL_SCALE;
     const ring=Math.sqrt(Math.random())*(0.02+depth*0.16);
     const ang=Math.random()*Math.PI*2 + depth*9.5;
-    pos[i*3]=fx*(0.02+depth) + rightX*Math.cos(ang)*ring;
-    pos[i*3+1]=(Math.random()-0.5)*(0.03+depth*0.025)*FLAME_VISUAL_SCALE;
-    pos[i*3+2]=fz*(0.02+depth) + rightZ*Math.cos(ang)*ring;
+    sprite.position.set(
+      fx*(0.02+depth) + rightX*Math.cos(ang)*ring,
+      (Math.random()-0.5)*(0.03+depth*0.025)*FLAME_VISUAL_SCALE,
+      fz*(0.02+depth) + rightZ*Math.cos(ang)*ring
+    );
     const forwardSpeed=(4.4+Math.random()*2.6+depth*0.95)*1.08;
     const swirl=Math.sin(ang)*(0.18+depth*0.14);
-    vel[i*3]=fx*forwardSpeed + rightX*swirl;
-    vel[i*3+1]=((Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03)*FLAME_VISUAL_SCALE;
-    vel[i*3+2]=fz*forwardSpeed + rightZ*swirl;
+    const baseScale=0.28+Math.random()*0.22;
+    sprite.scale.setScalar(baseScale*(1+depth*0.18));
+    sprite.material.rotation=Math.random()*Math.PI*2;
+    group.add(sprite);
+    droplets.push({
+      sprite,
+      vx:fx*forwardSpeed + rightX*swirl,
+      vy:((Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03)*FLAME_VISUAL_SCALE,
+      vz:fz*forwardSpeed + rightZ*swirl,
+      drag:0.94+Math.random()*0.02,
+      rise:0.12+Math.random()*0.18,
+      baseScale,
+      seed:Math.random()*1000,
+    });
   }
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.32,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
-  points.position.set(mouthX,mouthY,mouthZ);
-  points.frustumCulled=false;
-  scene.add(points);
-  activeFlameJets.push({mesh:points,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true,originX:mouthX,originZ:mouthZ});
+  group.position.set(mouthX,mouthY,mouthZ);
+  group.frustumCulled=false;
+  scene.add(group);
+  activeFlameJets.push({mesh:group,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,droplets,tail:true,originX:mouthX,originZ:mouthZ});
   forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a,'flame'));
 }
 
@@ -3310,24 +3354,30 @@ function spawnCleanMagicBurst(origin,target){
 function ensureSpecialAimMarker(){
   if(specialAimMarker) return specialAimMarker;
   const ring=new THREE.Mesh(
-    new THREE.TorusGeometry(0.58,0.05,12,48),
-    new THREE.MeshBasicMaterial({color:'#ff4d4d',transparent:true,opacity:0.92,depthWrite:false})
+    new THREE.TorusGeometry(0.58,0.065,12,56),
+    new THREE.MeshBasicMaterial({color:'#ff2f3b',transparent:true,opacity:0.98,depthWrite:false})
   );
   ring.rotation.x=Math.PI*0.5;
   const core=new THREE.Mesh(
-    new THREE.CircleGeometry(0.34,28),
-    new THREE.MeshBasicMaterial({color:'#ff3b3b',transparent:true,opacity:0.22,depthWrite:false,side:THREE.DoubleSide})
+    new THREE.CircleGeometry(0.58,40),
+    new THREE.MeshBasicMaterial({color:'#ff3b3b',transparent:true,opacity:0.18,depthWrite:false,side:THREE.DoubleSide})
   );
   core.rotation.x=-Math.PI*0.5;
   core.position.y=0.01;
   const crossMat=new THREE.MeshBasicMaterial({color:'#ffd0d0',transparent:true,opacity:0.95,depthWrite:false});
-  const crossA=new THREE.Mesh(new THREE.PlaneGeometry(0.16,1.1),crossMat);
+  const crossA=new THREE.Mesh(new THREE.PlaneGeometry(0.18,1.16),crossMat);
   crossA.rotation.x=-Math.PI*0.5;
   crossA.position.y=0.02;
   const crossB=crossA.clone();
   crossB.rotation.z=Math.PI*0.5;
+  const outer=new THREE.Mesh(
+    new THREE.RingGeometry(0.68,0.78,48),
+    new THREE.MeshBasicMaterial({color:'#ff5b63',transparent:true,opacity:0.38,depthWrite:false,side:THREE.DoubleSide})
+  );
+  outer.rotation.x=-Math.PI*0.5;
+  outer.position.y=0.015;
   specialAimMarker=new THREE.Group();
-  specialAimMarker.add(ring,core,crossA,crossB);
+  specialAimMarker.add(ring,core,crossA,crossB,outer);
   specialAimMarker.visible=false;
   specialAimMarker.frustumCulled=false;
   scene.add(specialAimMarker);
@@ -3519,8 +3569,10 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
   currentSpecialAimTarget={...target,weapon:equippedWeapon,charge};
   const marker=ensureSpecialAimMarker();
   const pulse=1+Math.sin(nowS*8)*0.08;
-  marker.position.set(target.x,target.y+0.52,target.z);
-  marker.scale.setScalar((equippedWeapon==='ice'?1.08:0.92)*pulse);
+  const effectRadius=(equippedWeapon==='ice'?ICE_FIELD_RADIUS:BOMB_BLAST_RADIUS);
+  const radiusScale=(effectRadius/0.58)*pulse;
+  marker.position.set(target.x,target.y+0.2,target.z);
+  marker.scale.setScalar(radiusScale);
   marker.visible=true;
 }
 
@@ -3636,12 +3688,9 @@ function spawnIceField(target){
 
 function spawnBombMushroomCloud(x,y,z){
   const scale=0.6;
-  const count=780;
-  const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(count*3);
-  const col=new Float32Array(count*3);
-  const vel=new Float32Array(count*3);
-  const colors=[new THREE.Color('#fff1bf'),new THREE.Color('#ffd15a'),new THREE.Color('#ff7a28'),new THREE.Color('#ff3b12')];
+  const count=IS_MOBILE_LAYOUT?72:108;
+  const group=new THREE.Group();
+  const droplets=[];
   for(let i=0;i<count;i++){
     const t=i/count;
     const trunk=t<0.26;
@@ -3649,22 +3698,39 @@ function spawnBombMushroomCloud(x,y,z){
     const ang=Math.random()*Math.PI*2;
     const radius=(trunk?(Math.random()*0.38):(ring?(1.25+Math.random()*1.8):(Math.random()*1.8)))*scale;
     const py=(trunk?(Math.random()*2.2):(1.0+Math.random()*2.6))*scale;
-    pos[i*3]=x+Math.cos(ang)*radius*(trunk?0.45:1);
-    pos[i*3+1]=y+py;
-    pos[i*3+2]=z+Math.sin(ang)*radius*(trunk?0.45:1);
-    const c=colors[(Math.random()*colors.length)|0];
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
+      map:fireTexture,
+      color:(i%4===0?'#fff4c0':i%4===1?'#ffd766':i%4===2?'#ff8a2d':'#ff4316'),
+      transparent:true,
+      opacity:0.96,
+      depthWrite:false,
+      depthTest:true,
+      blending:THREE.AdditiveBlending,
+    }));
+    sprite.position.set(
+      x+Math.cos(ang)*radius*(trunk?0.45:1),
+      y+py,
+      z+Math.sin(ang)*radius*(trunk?0.45:1)
+    );
     const outward=((ring?3.6:1.4)+(Math.random()*1.7))*scale;
-    vel[i*3]=Math.cos(ang)*outward*(trunk?0.24:1);
-    vel[i*3+1]=((trunk?3.1:1.95)+Math.random()*1.9)*scale;
-    vel[i*3+2]=Math.sin(ang)*outward*(trunk?0.24:1);
+    const baseScale=(trunk?0.3:0.38)+Math.random()*0.24;
+    sprite.scale.setScalar(baseScale*(trunk?0.8:1.15));
+    sprite.material.rotation=Math.random()*Math.PI*2;
+    group.add(sprite);
+    droplets.push({
+      sprite,
+      vx:Math.cos(ang)*outward*(trunk?0.24:1),
+      vy:((trunk?3.1:1.95)+Math.random()*1.9)*scale,
+      vz:Math.sin(ang)*outward*(trunk?0.24:1),
+      drag:0.95+Math.random()*0.015,
+      gravity:1.9+Math.random()*0.9,
+      baseScale,
+      seed:Math.random()*1000,
+    });
   }
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.1,vertexColors:true,transparent:true,opacity:0.96,depthWrite:false,sizeAttenuation:true}));
-  points.frustumCulled=false;
-  scene.add(points);
-  activeFlameJets.push({mesh:points,life:1.5,maxLife:1.5,dirX:0,dirZ:0,hitTick:-99,vel,count,gravity:2.2,drag:0.965});
+  group.frustumCulled=false;
+  scene.add(group);
+  activeFlameJets.push({mesh:group,life:1.5,maxLife:1.5,dirX:0,dirZ:0,hitTick:-99,droplets,gravity:2.2,drag:0.965,isExplosion:true});
 }
 
 function triggerBombExplosion(bomb){
@@ -3788,20 +3854,35 @@ function updateSpecialWeapons(dt,nowS){
     jet.life-=dt;
     const t=Math.max(0,jet.life/jet.maxLife);
     jet.hitTick+=dt;
-    const arr=jet.mesh.geometry.attributes.position.array;
-    for(let p=0;p<jet.count;p++){
-      arr[p*3]+=jet.vel[p*3]*dt;
-      arr[p*3+1]+=jet.vel[p*3+1]*dt + Math.sin(nowS*22+p*0.35)*0.006;
-      arr[p*3+2]+=jet.vel[p*3+2]*dt;
-      const drag=jet.drag||0.972;
-      jet.vel[p*3]*=drag;
-      jet.vel[p*3+1]*=(jet.dragY||0.94);
-      jet.vel[p*3+2]*=drag;
-      jet.vel[p*3+1]-=(jet.gravity||0)*dt;
+    if(jet.droplets){
+      for(const d of jet.droplets){
+        d.sprite.position.x+=d.vx*dt;
+        d.sprite.position.y+=d.vy*dt + Math.sin(nowS*18+d.seed)*0.004;
+        d.sprite.position.z+=d.vz*dt;
+        d.vx*=d.drag||0.96;
+        d.vz*=d.drag||0.96;
+        d.vy=(d.vy+(jet.tail?(d.rise||0):0)*dt)*0.92;
+        d.vy-=(d.gravity||jet.gravity||0)*dt;
+        d.sprite.material.opacity=Math.max(0,0.96*t);
+        d.sprite.material.rotation+=dt*(3.5+Math.sin(d.seed+nowS*5.2));
+        d.sprite.scale.setScalar(d.baseScale*(jet.tail?(0.9+t*0.85):(1+t*0.45)));
+      }
+    }else{
+      const arr=jet.mesh.geometry.attributes.position.array;
+      for(let p=0;p<jet.count;p++){
+        arr[p*3]+=jet.vel[p*3]*dt;
+        arr[p*3+1]+=jet.vel[p*3+1]*dt + Math.sin(nowS*22+p*0.35)*0.006;
+        arr[p*3+2]+=jet.vel[p*3+2]*dt;
+        const drag=jet.drag||0.972;
+        jet.vel[p*3]*=drag;
+        jet.vel[p*3+1]*=(jet.dragY||0.94);
+        jet.vel[p*3+2]*=drag;
+        jet.vel[p*3+1]-=(jet.gravity||0)*dt;
+      }
+      jet.mesh.geometry.attributes.position.needsUpdate=true;
+      jet.mesh.material.opacity=0.96*t;
+      jet.mesh.material.size=(jet.tail?0.18:0.15)+(jet.tail?0.1:0.18)*t;
     }
-    jet.mesh.geometry.attributes.position.needsUpdate=true;
-    jet.mesh.material.opacity=0.96*t;
-    jet.mesh.material.size=(jet.tail?0.18:0.15)+(jet.tail?0.1:0.18)*t;
     if(jet.hitTick>0.07){
       jet.hitTick=0;
       forEachArtistInCone(jet.originX??player.root.position.x,jet.originZ??player.root.position.z,jet.dirX,jet.dirZ,6.1,Math.PI*0.48,a=>killArtist(a,'flame'));
@@ -4004,6 +4085,10 @@ const PLAYER_ACCEL=22;
 const PLAYER_DECEL=26;
 const BOMB_THROW_SPEED=2.0;
 const THROW_SPECIAL_TIME_SCALE=BOMB_THROW_SPEED*1.5;
+function getThrowReleaseTimeScale(charge=0){
+  const c=clamp(charge,0,1);
+  return lerp(THROW_SPECIAL_TIME_SCALE*1.95,THROW_SPECIAL_TIME_SCALE,c);
+}
 const BOMB_FUSE_TIME=10;
 const BOMB_BLAST_RADIUS=2.5;
 const ICE_FIELD_RADIUS=2.5;
@@ -7117,7 +7202,7 @@ function refreshSpecialButton(){
   }
   const cd=specialCooldownRemaining(equippedWeapon);
   let sub='';
-  if(cd>0 && !debugCheatMode){
+  if(cd>0 && !debugCheatMode && equippedWeapon!=='ice' && equippedWeapon!=='bomb'){
     sub=cd.toFixed(1)+'s';
   }
   const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
@@ -7717,7 +7802,7 @@ function updateCam(){
       endCameraOrbitAngle+=END_CAMERA_AUTO_RATE/60;
     }
     const b=getPlayableBounds();
-    const radius=Math.max(12,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*0.62)*endCameraZoom;
+    const radius=Math.max(24,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*1.24)*endCameraZoom;
     const tx=b.centerX;
     const tz=b.centerZ;
     const ty=(playableLayer?.y||0)+1.2;
