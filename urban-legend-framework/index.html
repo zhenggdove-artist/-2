@@ -2369,14 +2369,24 @@ function isInRiver(x,z,groundY){
 }
 
 async function detectRiverBounds(progressFn){
+  const cacheKey=`${RIVER_CACHE_KEY}:${Math.round((playableLayer?.minX||0)*10)}:${Math.round((playableLayer?.maxX||0)*10)}:${Math.round((playableLayer?.minZ||0)*10)}:${Math.round((playableLayer?.maxZ||0)*10)}:${Math.round((playableLayer?.y||0)*10)}`;
+  const cached=loadCachedJSON(cacheKey);
+  if(Array.isArray(cached) && cached.length){
+    if(progressFn) progressFn(1);
+    return cached;
+  }
   const samples=playableLayer?playableLayer.samples:[];
   if(progressFn) progressFn(1);
   if(samples.length<20) return null;
   const ys=samples.map(s=>s.y).sort((a,b)=>a-b);
+  await yieldToMainThread();
+  if(progressFn) progressFn(0.28);
   // Take bottom ~20% as low cells
   const lowCount=Math.max(6,Math.floor(samples.length*0.18));
   const threshold=ys[Math.min(ys.length-1,lowCount)];
   const low=samples.filter(s=>s.y<=threshold);
+  await yieldToMainThread();
+  if(progressFn) progressFn(0.56);
   if(low.length<5) return null;
   const sideGap=(playableLayer?.step||1)*0.6;
   const pick=(arr,p)=>{
@@ -2384,23 +2394,26 @@ async function detectRiverBounds(progressFn){
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
   };
   const trenches=[
-    low.filter(s=>s.x<playableLayer.centerX-sideGap),
-    low.filter(s=>s.x>playableLayer.centerX+sideGap),
+    low.filter(s=>s.z<playableLayer.centerZ-sideGap),
+    low.filter(s=>s.z>playableLayer.centerZ+sideGap),
   ].filter(side=>side.length>=4).map(side=>{
     const floorY=Math.min(...side.map(s=>s.y));
     const surfaceY=floorY+0.62;
-    const minX=pick(side.map(s=>s.x),0.08)-0.45;
-    const maxX=pick(side.map(s=>s.x),0.92)+0.45;
-    const minZ=Math.min(...side.map(s=>s.z))-(playableLayer.step||1)*0.75;
-    const maxZ=Math.max(...side.map(s=>s.z))+(playableLayer.step||1)*0.75;
+    const minX=Math.min(...side.map(s=>s.x))-(playableLayer.step||1)*0.75;
+    const maxX=Math.max(...side.map(s=>s.x))+(playableLayer.step||1)*0.75;
+    const minZ=pick(side.map(s=>s.z),0.08)-0.45;
+    const maxZ=pick(side.map(s=>s.z),0.92)+0.45;
     return {
       minX,maxX,minZ,maxZ,
       floorY,surfaceY,
       centerX:(minX+maxX)*0.5,
       centerZ:(minZ+maxZ)*0.5,
-      axis:'z'
+      axis:'x'
     };
-  }).sort((a,b)=>a.centerX-b.centerX);
+  }).sort((a,b)=>a.centerZ-b.centerZ);
+  if(progressFn) progressFn(0.86);
+  await yieldToMainThread();
+  if(trenches.length) saveCachedJSON(cacheKey,trenches);
   return trenches.length?trenches:null;
 }
 
@@ -3938,52 +3951,100 @@ function findBone(root,rx){
 }
 
 // ===== Splash particles =====
-const SPLASH_MAX=400;
-const splashGeo=new THREE.BufferGeometry();
-const splashPos=new Float32Array(SPLASH_MAX*3);
-const splashVel=new Float32Array(SPLASH_MAX*3);
-const splashLife=new Float32Array(SPLASH_MAX);
-const splashAge=new Float32Array(SPLASH_MAX);
-// Init all particle positions off-screen
-for(let i=0;i<SPLASH_MAX;i++){splashPos[i*3+1]=-9999;splashLife[i]=0;splashAge[i]=1}
-splashGeo.setAttribute('position',new THREE.BufferAttribute(splashPos,3));
-const splashMat=new THREE.PointsMaterial({color:'#cce8ff',size:0.18,transparent:true,opacity:0.9,depthWrite:false,sizeAttenuation:true});
-const splashPoints=new THREE.Points(splashGeo,splashMat);
-splashPoints.frustumCulled=false;
-scene.add(splashPoints);
+const SPLASH_MAX=160;
+function createSplashTexture(){
+  const size=96;
+  const canvas=document.createElement('canvas');
+  canvas.width=size;
+  canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  if(!ctx) return null;
+  const grad=ctx.createRadialGradient(size*0.5,size*0.38,size*0.04,size*0.5,size*0.5,size*0.48);
+  grad.addColorStop(0,'rgba(255,255,255,0.98)');
+  grad.addColorStop(0.32,'rgba(214,242,255,0.92)');
+  grad.addColorStop(0.72,'rgba(116,205,255,0.35)');
+  grad.addColorStop(1,'rgba(116,205,255,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(size*0.5,size*0.5,size*0.44,0,Math.PI*2);
+  ctx.fill();
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.needsUpdate=true;
+  return tex;
+}
+const splashTexture=createSplashTexture();
+const splashRoot=new THREE.Group();
+splashRoot.renderOrder=12;
+scene.add(splashRoot);
+const splashPool=Array.from({length:SPLASH_MAX},()=>{
+  const spriteMat=new THREE.SpriteMaterial({
+    map:splashTexture,
+    color:'#e4f7ff',
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    depthTest:true,
+  });
+  const sprite=new THREE.Sprite(spriteMat);
+  sprite.visible=false;
+  sprite.scale.setScalar(0.001);
+  sprite.renderOrder=12;
+  splashRoot.add(sprite);
+  return {sprite,age:1,life:0,vx:0,vy:0,vz:0,baseY:0,baseScale:0.1,spin:0,spinVel:0,active:false};
+});
 let splashCursor=0;
 function spawnSplash(x,y,z,strength){
-  const n=Math.min(60,Math.floor(20+strength*30));
+  const n=Math.min(34,Math.floor(10+strength*18));
   for(let i=0;i<n;i++){
-    const idx=splashCursor;splashCursor=(splashCursor+1)%SPLASH_MAX;
-    splashPos[idx*3]=x+(Math.random()-0.5)*0.2;
-    splashPos[idx*3+1]=y+0.05;
-    splashPos[idx*3+2]=z+(Math.random()-0.5)*0.2;
+    const p=splashPool[splashCursor];
+    splashCursor=(splashCursor+1)%SPLASH_MAX;
     const ang=Math.random()*Math.PI*2;
-    const speed=1+Math.random()*2.5*strength;
-    splashVel[idx*3]=Math.cos(ang)*speed*0.5;
-    splashVel[idx*3+1]=2+Math.random()*3*strength;
-    splashVel[idx*3+2]=Math.sin(ang)*speed*0.5;
-    splashLife[idx]=0.45+Math.random()*0.4;
-    splashAge[idx]=0;
+    const speed=(0.55+Math.random()*1.6)*Math.max(0.45,strength);
+    const rise=1.1+Math.random()*1.9*strength;
+    const startY=y+0.06+Math.random()*0.06;
+    p.sprite.visible=true;
+    p.sprite.position.set(
+      x+Math.cos(ang)*(0.06+Math.random()*0.18),
+      startY,
+      z+Math.sin(ang)*(0.06+Math.random()*0.18)
+    );
+    const scale=0.12+Math.random()*0.14*strength;
+    p.baseScale=scale;
+    p.sprite.scale.set(scale,scale,scale);
+    p.sprite.material.opacity=0.82;
+    p.sprite.material.rotation=Math.random()*Math.PI*2;
+    p.vx=Math.cos(ang)*speed;
+    p.vy=rise;
+    p.vz=Math.sin(ang)*speed;
+    p.baseY=y+0.035;
+    p.life=0.36+Math.random()*0.22;
+    p.age=0;
+    p.spin=(Math.random()-0.5)*0.02;
+    p.spinVel=(Math.random()-0.5)*2.2;
+    p.active=true;
   }
 }
 function updateSplash(dt){
-  let anyActive=false;
-  for(let i=0;i<SPLASH_MAX;i++){
-    if(splashAge[i]>=splashLife[i]) continue;
-    anyActive=true;
-    splashAge[i]+=dt;
-    splashVel[i*3+1]-=14*dt; // gravity
-    splashPos[i*3]+=splashVel[i*3]*dt;
-    splashPos[i*3+1]+=splashVel[i*3+1]*dt;
-    splashPos[i*3+2]+=splashVel[i*3+2]*dt;
-    if(splashAge[i]>=splashLife[i]){
-      // Hide by moving far below
-      splashPos[i*3+1]=-9999;
+  for(const p of splashPool){
+    if(!p.active) continue;
+    p.age+=dt;
+    p.vy-=9.8*dt;
+    p.sprite.position.x+=p.vx*dt;
+    p.sprite.position.y+=p.vy*dt;
+    p.sprite.position.z+=p.vz*dt;
+    p.sprite.material.rotation+=p.spinVel*dt;
+    const t=clamp(p.age/Math.max(0.001,p.life),0,1);
+    const fade=t<0.22 ? t/0.22 : 1-((t-0.22)/0.78);
+    p.sprite.material.opacity=Math.max(0,fade*0.88);
+    const scaleMul=1+(t*0.55);
+    p.sprite.scale.setScalar(p.baseScale*scaleMul);
+    if(p.sprite.position.y<=p.baseY || p.age>=p.life){
+      p.active=false;
+      p.sprite.visible=false;
+      p.sprite.material.opacity=0;
+      p.sprite.position.y=-9999;
     }
   }
-  if(anyActive){splashGeo.attributes.position.needsUpdate=true}
 }
 
 // ===== Knockout burst particles =====
