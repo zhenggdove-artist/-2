@@ -190,6 +190,7 @@
   .ui-layout-object-panel.is-collapsed{gap:0;overflow:hidden}
   .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-header{align-items:center;cursor:move}
   .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-copy p,
+  .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-control,
   .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-tools,
   .ui-layout-object-panel.is-collapsed .ui-layout-object-list,
   .ui-layout-object-panel.is-collapsed .ui-layout-object-panel-resize{display:none}
@@ -4289,10 +4290,6 @@ function refreshSceneGlowMaterials(){
     });
   };
   visitRoot(playgroundRoot);
-  visitRoot(player?.root);
-  for(const a of artists){
-    visitRoot(a?.inst?.root);
-  }
 }
 function setSceneGlowStrength(next,{persist=true,refresh=true}={}){
   sceneGlowStrength=clamp(Number(next)||0,0,2.4);
@@ -4344,7 +4341,6 @@ function buildCharacterInstance(tint,isArtist){
           }
           if('envMapIntensity' in cm) cm.envMapIntensity=0.5;
           if(isArtist) tuneArtistMaterial(o,cm);
-          applySoftSceneGlowMaterial(cm,isArtist?0.2:0.16);
           materialEntries.push({
             material:cm,
             color:cm.color?.clone?.()||null,
@@ -4420,7 +4416,6 @@ function buildPlayerInstance(){
           if(playerTextureSet?.normal && !cm.normalMap) cm.normalMap=playerTextureSet.normal;
           if(playerTextureSet?.rough && !cm.roughnessMap) cm.roughnessMap=playerTextureSet.rough;
           if(playerTextureSet?.metal && !cm.metalnessMap) cm.metalnessMap=playerTextureSet.metal;
-          applySoftSceneGlowMaterial(cm,0.18);
           cm.needsUpdate=true;
           return cm;
         });
@@ -8410,7 +8405,10 @@ function buildUILayoutEditor(){
   editor.appendChild(toolbar);
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
-  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div><div class="ui-layout-object-panel-control"><div class="ui-layout-object-panel-control-row"><span class="ui-layout-object-panel-control-label">Scene Glow</span><span class="ui-layout-object-panel-control-value" data-scene-glow-value>100%</span></div><input type="range" min="0" max="2.4" step="0.01" value="1" data-scene-glow-slider></div></div><div class="ui-layout-object-panel-chrome"><button type="button" class="ui-layout-object-panel-toggle" data-action="collapse">−</button><div class="ui-layout-object-panel-handle"></div></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-chrome"><button type="button" class="ui-layout-object-panel-toggle" data-action="collapse">−</button><div class="ui-layout-object-panel-handle"></div></div></div><div class="ui-layout-object-panel-control"><div class="ui-layout-object-panel-control-row"><span class="ui-layout-object-panel-control-label">Scene Glow</span><span class="ui-layout-object-panel-control-value" data-scene-glow-value>100%</span></div><input type="range" min="0" max="2.4" step="0.01" value="1" data-scene-glow-slider></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.querySelector('.ui-layout-object-panel-control')?.addEventListener('pointerdown',e=>{
+    e.stopPropagation();
+  });
   panel.querySelector('[data-scene-glow-slider]')?.addEventListener('input',e=>{
     setSceneGlowStrength(e.target.value,{persist:false,refresh:true});
   });
