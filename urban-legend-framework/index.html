@@ -816,7 +816,7 @@
   #ui-frame-layer{position:fixed;inset:0;pointer-events:none}
   .ui-deco-frame{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;
     background-position:center;background-repeat:no-repeat;background-size:100% 100%}
-  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%}
+  .action-frame{background-image:url("img/action_frame_overlay.png");background-size:100% 100%;z-index:18}
   .hud-small-frame{background-image:url("img/hud_small_frame_overlay.png")}
   .hud-coin-frame{background-image:url("img/hud_small_frame_overlay.png")}
   .paint-frame{background-image:url("game icon/左側彩虹br.png");background-size:100% 100%}
@@ -862,14 +862,15 @@
 
   #clean-btn-frame{left:16%;top:74%;width:132px;height:132px}
   #clean-btn{left:16%;top:74%;width:64px!important;height:64px!important;transform:translate(-50%,-50%)!important;
-    padding:0!important;border:none!important;z-index:15}
+    padding:0!important;border:none!important;z-index:17!important}
   #special-btn-frame{left:74.6%;top:83.4%;width:152px;height:152px}
-  #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important}
+  #special-btn{left:74.6%;top:83.4%;width:74px!important;height:74px!important;z-index:17!important}
   #jump-btn-frame{left:84.8%;top:83.4%;width:152px;height:152px}
-  #jump-btn{left:84.8%;top:83.4%;width:74px!important;height:74px!important}
+  #jump-btn{left:84.8%;top:83.4%;width:74px!important;height:74px!important;z-index:17!important}
   #attack-btn-frame{left:94.5%;top:83.4%;width:152px;height:152px}
-  #attack-btn{left:94.5%;top:83.4%;width:74px!important;height:74px!important}
+  #attack-btn{left:94.5%;top:83.4%;width:74px!important;height:74px!important;z-index:17!important}
   #loadout-toggle-frame{left:6.6%;top:81%;width:116px;height:116px}
+  #loadout-toggle{z-index:17!important}
 
   #loadout-bar{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;top:auto!important;
     width:auto!important;height:auto!important;max-width:none!important;padding:0!important;background:none!important;
@@ -6490,6 +6491,13 @@ const UI_LAYOUT_FRAME_DRIVEN_BUTTONS={
   'attack-btn':'attack-btn-frame',
   'loadout-toggle':'loadout-toggle-frame',
 };
+const UI_LAYOUT_FRAME_INNER_FIT={
+  'clean-btn':{scale:0.61,offsetXPx:-3.5,offsetYPx:-4},
+  'special-btn':{scale:0.61,offsetXPx:-4,offsetYPx:-4},
+  'jump-btn':{scale:0.61,offsetXPx:-4,offsetYPx:-4},
+  'attack-btn':{scale:0.61,offsetXPx:-4,offsetYPx:-4},
+  'loadout-toggle':{scale:0.58,offsetXPx:-3,offsetYPx:-3.5},
+};
 const UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT=66;
 const MOBILE_LAYOUT_REFERENCE_WIDTH=430;
 const MOBILE_LAYOUT_REFERENCE_HEIGHT=932;
@@ -6795,14 +6803,15 @@ function getUILayoutResolvedMetrics(def,metrics){
   const frameDef=getUILayoutDef(frameId);
   const frameMetrics=frameDef ? (ensureUILayoutMetrics(frameDef)||currentUILayoutMetrics(frameDef)) : null;
   if(!frameDef||!frameMetrics) return metrics;
+  const fit=UI_LAYOUT_FRAME_INNER_FIT[def.id]||{scale:def.baseW/frameDef.baseW,offsetXPx:0,offsetYPx:0};
   const frameSize=resolveUILayoutSize(frameDef,frameMetrics);
+  const bounds=getUILayoutViewportBounds();
   const next={...metrics};
-  next.x=frameMetrics.x;
-  next.y=frameMetrics.y;
-  next.w=+(frameSize.width*(def.baseW/frameDef.baseW)).toFixed(2);
-  next.h=+(frameSize.height*(def.baseH/frameDef.baseH)).toFixed(2);
+  next.w=+(frameSize.width*fit.scale).toFixed(2);
+  next.h=+(frameSize.height*fit.scale).toFixed(2);
+  next.x=+(frameMetrics.x + ((fit.offsetXPx||0)/bounds.width)*100).toFixed(3);
+  next.y=+(frameMetrics.y + ((fit.offsetYPx||0)/bounds.height)*100).toFixed(3);
   if(isMobileUILayoutBucket()){
-    const bounds=getUILayoutViewportBounds();
     next.wp=+((next.w/bounds.width)*100).toFixed(4);
     next.hp=+((next.h/bounds.height)*100).toFixed(4);
   }
