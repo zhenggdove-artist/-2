@@ -1860,6 +1860,10 @@ renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
 
 const scene=new THREE.Scene();
+let sceneWrapVideo=null;
+let sceneWrapVideoTexture=null;
+let sceneWrapMesh=null;
+const FLAME_VISUAL_SCALE=2;
 
 // Sky gradient
 const skyCV=document.createElement('canvas');skyCV.width=2;skyCV.height=512;
@@ -1886,6 +1890,53 @@ envTex.mapping=THREE.EquirectangularReflectionMapping;
 scene.environment=envTex;
 
 scene.fog=new THREE.FogExp2('#f0d5e0',0.012);
+
+function ensureSceneWrapVideo(){
+  if(sceneWrapMesh) return sceneWrapMesh;
+  const video=document.createElement('video');
+  video.src=encodeURI('background/movie01.mp4');
+  video.crossOrigin='anonymous';
+  video.loop=true;
+  video.muted=true;
+  video.playsInline=true;
+  video.preload='auto';
+  video.setAttribute('playsinline','');
+  video.setAttribute('webkit-playsinline','');
+  const tex=new THREE.VideoTexture(video);
+  tex.colorSpace=THREE.SRGBColorSpace;
+  tex.wrapS=THREE.RepeatWrapping;
+  tex.wrapT=THREE.ClampToEdgeWrapping;
+  tex.repeat.set(2.4,1);
+  tex.needsUpdate=true;
+  const mat=new THREE.MeshBasicMaterial({
+    map:tex,
+    side:THREE.BackSide,
+    transparent:true,
+    opacity:0.98,
+    toneMapped:false,
+    fog:false,
+  });
+  const mesh=new THREE.Mesh(new THREE.CylinderGeometry(74,74,36,56,1,true),mat);
+  mesh.position.set(0,11.5,0);
+  mesh.renderOrder=-20;
+  mesh.frustumCulled=false;
+  scene.add(mesh);
+  sceneWrapVideo=video;
+  sceneWrapVideoTexture=tex;
+  sceneWrapMesh=mesh;
+  return mesh;
+}
+function setSceneWrapVideoVisible(visible){
+  if(!sceneWrapMesh) ensureSceneWrapVideo();
+  if(sceneWrapMesh) sceneWrapMesh.visible=!!visible;
+  if(!sceneWrapVideo) return;
+  if(visible){
+    const p=sceneWrapVideo.play();
+    if(p&&p.catch) p.catch(()=>{});
+  }else{
+    sceneWrapVideo.pause();
+  }
+}
 
 // Lights
 scene.add(new THREE.HemisphereLight('#ffe4f2','#6a5a8a',0.85));
@@ -4232,26 +4283,64 @@ function spawnFlameJet(){
   for(let i=0;i<count;i++){
     const c=colors[i%colors.length];
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    const depth=Math.random()*1.55;
+    const depth=Math.random()*1.55*FLAME_VISUAL_SCALE;
     const ring=Math.sqrt(Math.random())*(0.02+depth*0.16);
     const ang=Math.random()*Math.PI*2 + depth*9.5;
     pos[i*3]=fx*(0.02+depth) + rightX*Math.cos(ang)*ring;
-    pos[i*3+1]=(Math.random()-0.5)*(0.03+depth*0.025);
+    pos[i*3+1]=(Math.random()-0.5)*(0.03+depth*0.025)*FLAME_VISUAL_SCALE;
     pos[i*3+2]=fz*(0.02+depth) + rightZ*Math.cos(ang)*ring;
-    const forwardSpeed=4.4+Math.random()*2.6+depth*0.95;
+    const forwardSpeed=(4.4+Math.random()*2.6+depth*0.95)*1.08;
     const swirl=Math.sin(ang)*(0.18+depth*0.14);
     vel[i*3]=fx*forwardSpeed + rightX*swirl;
-    vel[i*3+1]=(Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03;
+    vel[i*3+1]=((Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03)*FLAME_VISUAL_SCALE;
     vel[i*3+2]=fz*forwardSpeed + rightZ*swirl;
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.16,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.32,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
   points.position.set(mouthX,mouthY,mouthZ);
   points.frustumCulled=false;
   scene.add(points);
   activeFlameJets.push({mesh:points,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true,originX:mouthX,originZ:mouthZ});
   forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a,'flame'));
+}
+
+function spawnCleanMagicBurst(pillar){
+  if(!pillar?.pos) return;
+  const count=84;
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(count*3);
+  const col=new Float32Array(count*3);
+  const vel=new Float32Array(count*3);
+  const colors=['#fff6a6','#87fff6','#ff8fd3','#9be08c','#8cc9ff','#ffd16c'].map(c=>new THREE.Color(c));
+  for(let i=0;i<count;i++){
+    pos[i*3]=0;
+    pos[i*3+1]=0;
+    pos[i*3+2]=0;
+    const c=colors[i%colors.length];
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    const ang=Math.random()*Math.PI*2;
+    const lift=0.55+Math.random()*1.15;
+    const drift=0.35+Math.random()*1.1;
+    vel[i*3]=Math.cos(ang)*drift;
+    vel[i*3+1]=lift;
+    vel[i*3+2]=Math.sin(ang)*drift;
+  }
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const mat=new THREE.PointsMaterial({
+    size:0.18,
+    transparent:true,
+    opacity:0.96,
+    depthWrite:false,
+    vertexColors:true,
+    sizeAttenuation:true,
+  });
+  const points=new THREE.Points(geo,mat);
+  points.position.set(pillar.pos.x,pillar.pos.y+0.88,pillar.pos.z);
+  points.frustumCulled=false;
+  scene.add(points);
+  activeCleanMagicBursts.push({mesh:points,vel,count,life:0,maxLife:0.9});
 }
 
 function ensureSpecialAimMarker(){
@@ -4771,6 +4860,28 @@ function updateSpecialWeapons(dt,nowS){
     if(jet.life<=0){
       disposeSpecialVisual(jet.mesh);
       activeFlameJets.splice(i,1);
+    }
+  }
+  for(let i=activeCleanMagicBursts.length-1;i>=0;i--){
+    const burst=activeCleanMagicBursts[i];
+    burst.life+=dt;
+    const t=clamp(burst.life/burst.maxLife,0,1);
+    const arr=burst.mesh.geometry.attributes.position.array;
+    for(let p=0;p<burst.count;p++){
+      arr[p*3]+=burst.vel[p*3]*dt;
+      arr[p*3+1]+=burst.vel[p*3+1]*dt;
+      arr[p*3+2]+=burst.vel[p*3+2]*dt;
+      burst.vel[p*3]*=0.972;
+      burst.vel[p*3+1]=burst.vel[p*3+1]*0.95-dt*1.6;
+      burst.vel[p*3+2]*=0.972;
+    }
+    burst.mesh.geometry.attributes.position.needsUpdate=true;
+    burst.mesh.rotation.y+=dt*2.1;
+    burst.mesh.material.opacity=0.96*(1-t);
+    burst.mesh.material.size=0.18+0.16*(1-t);
+    if(t>=1){
+      disposeSpecialVisual(burst.mesh);
+      activeCleanMagicBursts.splice(i,1);
     }
   }
   for(let i=activeIceFields.length-1;i>=0;i--){
@@ -5800,6 +5911,7 @@ let currentCleanTarget=null;
 let cleanPromptCooldown=0;
 const activeBombs=[];
 const activeFlameJets=[];
+const activeCleanMagicBursts=[];
 const activeIceFields=[];
 const activeWaterStreams=[];
 const activeThrownProjectiles=[];
@@ -8147,6 +8259,8 @@ function resetShopState(){
   debugCheatMode=false;
   for(const jet of activeFlameJets) scene.remove(jet.mesh);
   activeFlameJets.length=0;
+  for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
+  activeCleanMagicBursts.length=0;
   for(const bomb of activeBombs) scene.remove(bomb.group);
   activeBombs.length=0;
   for(const field of activeIceFields) disposeSpecialVisual(field.group);
@@ -8173,6 +8287,7 @@ function disposeGraffiti(p){
 function cleanPillar(p){
   if(!p||(!debugCheatMode&&cleanerUses<=0)) return false;
   playSFX('cleanGraffiti');
+  spawnCleanMagicBurst(p);
   if(!debugCheatMode) cleanerUses=Math.max(0,cleanerUses-1);
   if(p.fillCounted){
     p.fillCounted=false;
@@ -9413,6 +9528,8 @@ function clearLeaderboardSceneVisuals(){
   activeThrownProjectiles.length=0;
   for(const jet of activeFlameJets) disposeSpecialVisual(jet.mesh);
   activeFlameJets.length=0;
+  for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
+  activeCleanMagicBursts.length=0;
   for(const bomb of activeBombs) disposeSpecialVisual(bomb.group);
   activeBombs.length=0;
   for(const field of activeIceFields) disposeSpecialVisual(field.group);
@@ -9517,6 +9634,7 @@ startBtn.addEventListener('click',()=>{
 
 function startGame(){
   unlockSFX();
+  setSceneWrapVideoVisible(true);
   setEndOverlaySceneView(false);
   setGameOverUIHidden(false);
   gameState='playing';
@@ -9550,6 +9668,7 @@ function startGame(){
 async function endGame(){
   if(gameState==='ended') return;
   gameState='ended';
+  setSceneWrapVideoVisible(false);
   endGameSceneState=captureSceneState();
   replaySceneEntryId=null;
   endCameraOrbitAngle=0;
@@ -9663,6 +9782,8 @@ function resetWorld(){
   for(let i=COINS_FLOATING.length-1;i>=0;i--){disposeCoin(COINS_FLOATING[i]);COINS_FLOATING.splice(i,1)}
   for(const proj of activeThrownProjectiles) disposeSpecialVisual(proj.group);
   activeThrownProjectiles.length=0;
+  for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
+  activeCleanMagicBursts.length=0;
   // Reset pillars graffiti
   for(const p of pillars){
     if(p.graffiti){
@@ -9827,6 +9948,9 @@ function tick(){
 
 // ===== Init =====
 async function init(){
+  ensureSceneWrapVideo();
+  sceneWrapVideo?.load?.();
+  setSceneWrapVideoVisible(true);
   // Gate the Start button while heavy work runs
   startBtn.disabled=true;
   const origLabel=startBtn.textContent;
