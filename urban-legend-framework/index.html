@@ -4255,27 +4255,32 @@ function applySoftSceneGlowMaterial(material,strength=0.12){
   if(!material.userData) material.userData={};
   if(material.userData.baseGlowStrength===undefined){
     material.userData.baseGlowStrength=strength;
+    material.userData.baseColor=material.color?.clone?.()||null;
+    material.userData.baseEmissive=material.emissive?.clone?.()||new THREE.Color(0x000000);
     material.userData.baseEmissiveIntensity=('emissiveIntensity' in material) ? (material.emissiveIntensity||0) : 0;
     material.userData.baseRoughness=('roughness' in material) ? (material.roughness??1) : null;
     material.userData.baseEnvMapIntensity=('envMapIntensity' in material) ? (material.envMapIntensity||0) : null;
   }
   const baseStrength=material.userData.baseGlowStrength??strength;
+  const glowT=clamp(sceneGlowStrength/2.4,0,1);
+  const intensityBoost=baseStrength*sceneGlowStrength*0.32;
   if(material.emissive){
-    const base=material.color?.clone?.()||SCENE_SOFT_GLOW_TINT.clone();
-    const glow=base.lerp(SCENE_SOFT_GLOW_TINT,0.72);
-    material.emissive.copy(glow);
+    const baseColor=(material.userData.baseColor?.clone?.()||material.color?.clone?.()||SCENE_SOFT_GLOW_TINT.clone());
+    const baseEmissive=(material.userData.baseEmissive?.clone?.()||new THREE.Color(0x000000));
+    const glowColor=baseColor.lerp(SCENE_SOFT_GLOW_TINT,0.58);
+    material.emissive.copy(baseEmissive.lerp(glowColor,glowT));
     if('emissiveIntensity' in material){
       const baseEmissive=material.userData.baseEmissiveIntensity??0;
-      material.emissiveIntensity=baseEmissive+(baseStrength*sceneGlowStrength);
+      material.emissiveIntensity=baseEmissive+intensityBoost;
     }
   }
   if('roughness' in material){
     const baseRoughness=material.userData.baseRoughness??1;
-    material.roughness=Math.min(baseRoughness,0.82-(0.20*sceneGlowStrength));
+    material.roughness=Math.max(0.08,baseRoughness-(0.18*glowT));
   }
   if('envMapIntensity' in material){
     const baseEnv=material.userData.baseEnvMapIntensity??0;
-    material.envMapIntensity=Math.max(baseEnv,0.52+(0.2*sceneGlowStrength));
+    material.envMapIntensity=baseEnv+(0.18*glowT);
   }
   material.needsUpdate=true;
 }
