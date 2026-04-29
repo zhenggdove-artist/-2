@@ -1324,7 +1324,6 @@
 <div id="game-controls">
   <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
   <button id="clean-btn" class="hidden">CLEAN</button>
-  <div id="clean-btn-badge" aria-hidden="true"></div>
   <button id="special-btn" aria-label="Use special skill">
     <img class="btn-ico-img" src="game icon/skill.png" alt="" aria-hidden="true">
   </button>
@@ -1335,6 +1334,7 @@
     <img class="btn-ico-img" src="game icon/punch.png" alt="" aria-hidden="true">
   </button>
 </div>
+<div id="clean-btn-badge" aria-hidden="true"></div>
 
 <button id="shop-btn" aria-label="Shop"></button>
 <img id="shop-icon" class="hud-icon hud-icon-shop hud-detached" src="game icon/shop icon.png" alt="Shop">
@@ -9025,7 +9025,7 @@ document.body.classList.add('intro-active');
 let gameTime=0;
 let killCount=0;
 let paintFillCount=0;
-const PAINT_FILL_GOAL=15;
+const PAINT_FILL_GOAL=20;
 const killEl=document.getElementById('kill-count');
 const timerEl=document.getElementById('timer-text');
 const timerBox=document.getElementById('timer-box');
