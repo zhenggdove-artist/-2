@@ -2473,6 +2473,7 @@ async function detectRiverBounds(progressFn){
   if(progressFn) progressFn(0.56);
   if(low.length<5) return null;
   const sideGap=(playableLayer?.step||1)*0.6;
+  const worldBounds=getRiverWorldBounds();
   const pick=(arr,p)=>{
     const sorted=[...arr].sort((a,b)=>a-b);
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
@@ -2483,8 +2484,8 @@ async function detectRiverBounds(progressFn){
   ].filter(side=>side.length>=4).map(side=>{
     const floorY=Math.min(...side.map(s=>s.y));
     const surfaceY=floorY+0.62;
-    const minX=Math.min(...side.map(s=>s.x))-(playableLayer.step||1)*0.75;
-    const maxX=Math.max(...side.map(s=>s.x))+(playableLayer.step||1)*0.75;
+    const minX=worldBounds.minX;
+    const maxX=worldBounds.maxX;
     const minZ=pick(side.map(s=>s.z),0.08)-0.45;
     const maxZ=pick(side.map(s=>s.z),0.92)+0.45;
     return {
@@ -3097,6 +3098,20 @@ function getPlayableBounds(){
   };
 }
 
+function getRiverWorldBounds(){
+  if(playgroundBounds){
+    return {
+      minX:playgroundBounds.min.x,
+      maxX:playgroundBounds.max.x,
+      minZ:playgroundBounds.min.z,
+      maxZ:playgroundBounds.max.z,
+      centerX:(playgroundBounds.min.x+playgroundBounds.max.x)*0.5,
+      centerZ:(playgroundBounds.min.z+playgroundBounds.max.z)*0.5,
+    };
+  }
+  return getPlayableBounds();
+}
+
 // Build a cell grid over playableLayer.samples so findNearestPlayableSample
 // can run in O(1) instead of O(N). Called once after detectPlayableLayer,
 // and after any change to the sample set. Empty cells mean we fall back to
@@ -3293,7 +3308,7 @@ function refreshRiverEditorVisuals(){
 }
 
 function seedDefaultRiverRegion(){
-  const bounds=getPlayableBounds();
+  const bounds=getRiverWorldBounds();
   const w=Math.max(1.6,(bounds.maxX-bounds.minX)*0.18);
   const h=Math.max(3.6,(bounds.maxZ-bounds.minZ)*0.22);
   const floorY=(playableLayer?.y??0)-1.7;
@@ -3390,7 +3405,7 @@ async function autoDetectRiverEditorRegions(){
 }
 
 function clampRiverRegionToBounds(region){
-  const bounds=getPlayableBounds();
+  const bounds=getRiverWorldBounds();
   const width=Math.max(0.45,region.maxX-region.minX);
   const height=Math.max(0.45,region.maxZ-region.minZ);
   let minX=clamp(region.minX,bounds.minX,bounds.maxX-0.45);
@@ -4600,7 +4615,7 @@ function disposeSpecialVisual(obj){
   if(!obj) return;
   scene.remove(obj);
   obj.traverse?.(o=>{
-    if(o.isMesh||o.isPoints||o.isLine){
+    if(o.isMesh||o.isPoints||o.isLine||o.isSprite){
       if(!o.userData?.sharedSpecialVisual) o.geometry?.dispose?.();
       const mats=Array.isArray(o.material)?o.material:[o.material];
       if(!o.userData?.sharedSpecialVisual) mats?.forEach(m=>m?.dispose?.());
@@ -4792,64 +4807,48 @@ function spawnWaterPour(targetPlant){
   const endX=targetPlant.position.x;
   const endY=targetPlant.position.y+targetPlant.scale.y*1.25;
   const endZ=targetPlant.position.z;
-  // A proper water pour now has two layers:
-  //   1. STREAM: dense stream of ~500 droplets along a gravity arc
-  //      from the hand to the plant top. Staggered birth times so the
-  //      stream "flows" continuously instead of appearing as a cloud.
-  //   2. SPLASH: 90 droplets that burst outward + downward from the
-  //      plant at impact time (after the stream reaches the plant).
-  const streamCount=IS_MOBILE_LAYOUT?340:520;
-  const splashCount=IS_MOBILE_LAYOUT?60:90;
+  const streamCount=IS_MOBILE_LAYOUT?72:112;
+  const splashCount=IS_MOBILE_LAYOUT?18:30;
   const total=streamCount+splashCount;
-  const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(total*3);
-  const col=new Float32Array(total*3);
-  const jitter=new Float32Array(total*3);  // per-particle random offsets
-  // Water palette: white-blue at the mouth deepening to cobalt.
-  const streamColors=[
-    new THREE.Color('#f6ffff'),
-    new THREE.Color('#cdf5ff'),
-    new THREE.Color('#7ed8ff'),
-    new THREE.Color('#3aa8e8'),
-  ];
-  const splashColors=[
-    new THREE.Color('#e0f6ff'),
-    new THREE.Color('#9fe2ff'),
-  ];
-  for(let i=0;i<streamCount;i++){
-    const c=streamColors[i%streamColors.length];
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    jitter[i*3]=(Math.random()-0.5)*0.18;
-    jitter[i*3+1]=Math.random()*0.3;
-    jitter[i*3+2]=(Math.random()-0.5)*0.18;
-    // Hide until first update.
-    pos[i*3+1]=-9999;
+  const group=new THREE.Group();
+  const droplets=[];
+  for(let i=0;i<total;i++){
+    const isSplash=i>=streamCount;
+    const color=isSplash ? (i%2===0?'#dff8ff':'#8fdcff') : (i%4===0?'#ffffff':i%4===1?'#dbf7ff':i%4===2?'#9be3ff':'#51bfff');
+    const mat=new THREE.SpriteMaterial({
+      map:splashTexture,
+      color,
+      transparent:true,
+      opacity:0,
+      depthWrite:false,
+      depthTest:true,
+    });
+    const sprite=new THREE.Sprite(mat);
+    sprite.visible=false;
+    sprite.renderOrder=13;
+    sprite.scale.setScalar(0.001);
+    group.add(sprite);
+    droplets.push({
+      sprite,
+      isSplash,
+      seed:Math.random()*Math.PI*2,
+      spread:0.04+Math.random()*0.18,
+      lift:Math.random()*0.24,
+      splashVX:(Math.random()-0.5)*(0.7+Math.random()*1.6),
+      splashVY:0.55+Math.random()*1.35,
+      splashVZ:(Math.random()-0.5)*(0.7+Math.random()*1.6),
+      baseScale:isSplash ? (0.09+Math.random()*0.08) : (0.045+Math.random()*0.045),
+      startOffset:Math.random(),
+    });
   }
-  for(let i=0;i<splashCount;i++){
-    const idx=streamCount+i;
-    const c=splashColors[i%splashColors.length];
-    col[idx*3]=c.r; col[idx*3+1]=c.g; col[idx*3+2]=c.b;
-    const ang=Math.random()*Math.PI*2;
-    const mag=0.25+Math.random()*0.4;
-    jitter[idx*3]=Math.cos(ang)*mag;
-    jitter[idx*3+1]=Math.random()*0.9+0.1;       // up-and-out
-    jitter[idx*3+2]=Math.sin(ang)*mag;
-    pos[idx*3+1]=-9999;
-  }
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({
-    size:0.07,transparent:true,opacity:0.95,depthWrite:false,
-    vertexColors:true,sizeAttenuation:true,
-  }));
-  points.frustumCulled=false;
-  scene.add(points);
+  group.frustumCulled=false;
+  scene.add(group);
   activeWaterStreams.push({
-    mesh:points,
+    mesh:group,
     fromX:handX,fromY:handY,fromZ:handZ,
     toX:endX,toY:endY,toZ:endZ,
     life:0,maxLife:1.15,
-    streamCount,splashCount,total,jitter,
+    streamCount,splashCount,total,droplets,
   });
   return true;
 }
@@ -5125,52 +5124,53 @@ function updateSpecialWeapons(dt,nowS){
     const fx=activeWaterStreams[i];
     fx.life+=dt;
     const t=clamp(fx.life/fx.maxLife,0,1);
-    const pos=fx.mesh.geometry.attributes.position.array;
-    const jit=fx.jitter;
     const sc=fx.streamCount;
     const sp=fx.splashCount;
-    // ---- STREAM: tight gravity-arc flow from hand to plant ----
-    // Phase 0..0.55 of the effect. Each droplet has its own birth
-    // offset (u), so they form a CONTINUOUS moving stream rather
-    // than a single expanding cloud. Gravity pulls the Y down
-    // in the second half (quadratic), giving the pour its "falling
-    // water" look.
+    const droplets=fx.droplets;
     const streamWindow=0.55;
     for(let p=0;p<sc;p++){
-      const u=p/(sc-1);
-      const local=(t - u*streamWindow);  // 0 when this droplet is at the tap
+      const d=droplets[p];
+      const u=p/Math.max(1,sc-1);
+      const local=t-(u*streamWindow);
       if(local<0 || local>streamWindow){
-        pos[p*3+1]=-9999;
+        d.sprite.visible=false;
+        d.sprite.material.opacity=0;
         continue;
       }
       const prog=clamp(local/streamWindow,0,1);
-      // Lerp forward, then bend: small upward lift at start
-      // (momentum out of the spout) then heavier gravity fall.
-      const lift=0.18*prog*(1-prog);                 // small arc peak
-      const drop=prog*prog*0.28;                     // accelerating drop
-      const drift=Math.sin(p*0.9+nowS*18+u*6)*0.04;  // micro wobble
-      pos[p*3]=lerp(fx.fromX,fx.toX,prog)+jit[p*3]*(1-prog)*0.4+drift;
-      pos[p*3+1]=lerp(fx.fromY,fx.toY,prog)+lift-drop+jit[p*3+1]*0.08*(1-prog);
-      pos[p*3+2]=lerp(fx.fromZ,fx.toZ,prog)+jit[p*3+2]*(1-prog)*0.4+drift*0.7;
+      const drift=Math.sin(d.seed+nowS*17+u*5.5)*0.028;
+      const side=Math.cos(d.seed+nowS*11.5)*d.spread*(1-prog);
+      const up=0.16*Math.sin(prog*Math.PI)-prog*prog*0.34+d.lift*(1-prog)*0.35;
+      d.sprite.visible=true;
+      d.sprite.position.set(
+        lerp(fx.fromX,fx.toX,prog)+side+drift,
+        lerp(fx.fromY,fx.toY,prog)+up,
+        lerp(fx.fromZ,fx.toZ,prog)+side*0.55-drift*0.35
+      );
+      d.sprite.material.opacity=0.88*(1-Math.max(0,prog-0.75)/0.25);
+      d.sprite.material.rotation+=dt*2.2;
+      d.sprite.scale.setScalar(d.baseScale*(1+prog*0.28));
     }
-    // ---- SPLASH: droplets burst from the target once the stream
-    //     has reached it (t≈0.45). Short-lived, pulled down by gravity.
     const splashStart=0.42;
     for(let s=0;s<sp;s++){
-      const p=sc+s;
+      const d=droplets[sc+s];
       const local=t-splashStart;
       if(local<0){
-        pos[p*3+1]=-9999;
+        d.sprite.visible=false;
+        d.sprite.material.opacity=0;
         continue;
       }
       const st=clamp(local/(1-splashStart),0,1);
-      const speed=1.4;
-      pos[p*3]=fx.toX+jit[p*3]*st*speed;
-      pos[p*3+1]=fx.toY+jit[p*3+1]*st*0.6-1.8*st*st;
-      pos[p*3+2]=fx.toZ+jit[p*3+2]*st*speed;
+      d.sprite.visible=true;
+      d.sprite.position.set(
+        fx.toX+d.splashVX*st,
+        fx.toY+0.02+d.splashVY*st-1.55*st*st,
+        fx.toZ+d.splashVZ*st
+      );
+      d.sprite.material.opacity=Math.max(0,0.76*(1-st));
+      d.sprite.material.rotation+=dt*3.8;
+      d.sprite.scale.setScalar(d.baseScale*(1+st*0.42));
     }
-    fx.mesh.geometry.attributes.position.needsUpdate=true;
-    fx.mesh.material.opacity=t<0.9 ? 0.95 : 0.95*(1-(t-0.9)/0.1);
     if(t>=1){
       disposeSpecialVisual(fx.mesh);
       activeWaterStreams.splice(i,1);
