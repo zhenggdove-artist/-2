@@ -2141,7 +2141,30 @@ function buildPlayableFootprint(samples,step){
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
-const RIVER_REGION_DEFAULTS=[];
+const RIVER_REGION_DEFAULTS=[
+  {
+    "minX": -13.948147487323128,
+    "maxX": 13.996902766597493,
+    "minZ": -10.596595012849738,
+    "maxZ": -4.949822663182326,
+    "floorY": 0.38663748837973166,
+    "surfaceY": 1.0066374883797318,
+    "centerX": 0.024377639637182646,
+    "centerZ": -7.773208838016032,
+    "axis": "x"
+  },
+  {
+    "minX": -13.950899823313655,
+    "maxX": 14.00631596234188,
+    "minZ": 2.5184180219589543,
+    "maxZ": 7.8410802894377865,
+    "floorY": 0.3864486036728416,
+    "surfaceY": 1.0064486036728417,
+    "centerX": 0.02770806951411231,
+    "centerZ": 5.179749155698371,
+    "axis": "x"
+  }
+];
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
