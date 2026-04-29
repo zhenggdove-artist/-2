@@ -1957,6 +1957,42 @@ const loader=new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 const fbxLoader=new FBXLoader();
 const textureLoader=new THREE.TextureLoader();
+const ASSET_CACHE_NAME='ul-assets-v3';
+const DATA_CACHE_NAME='ul-data-v1';
+const PLAYABLE_LAYER_BAKED_URL='field/playable_layer_baked_v1.json';
+const RIVER_BOUNDS_BAKED_URL='field/river_bounds_baked_v1.json';
+let bakedPlayableLayerPromise=null;
+let bakedRiverBoundsPromise=null;
+
+async function fetchCachedResponse(cacheName,url){
+  if(!('caches' in window)) return fetch(url,{cache:'force-cache'});
+  const cache=await caches.open(cacheName);
+  let resp=await cache.match(url);
+  if(!resp){
+    resp=await fetch(url,{cache:'force-cache'});
+    if(resp&&resp.ok) cache.put(url,resp.clone());
+  }
+  return resp;
+}
+
+async function loadCachedGLTFAsset(url,cacheName=ASSET_CACHE_NAME){
+  try{
+    const resp=await fetchCachedResponse(cacheName,url);
+    if(resp&&resp.ok){
+      const buf=await resp.arrayBuffer();
+      return await new Promise((res,rej)=>loader.parse(buf,'',res,rej));
+    }
+  }catch{}
+  return loader.loadAsync(url);
+}
+
+async function loadCachedJSONAsset(url,cacheName=DATA_CACHE_NAME){
+  try{
+    const resp=await fetchCachedResponse(cacheName,url);
+    if(resp&&resp.ok) return resp.json();
+  }catch{}
+  return null;
+}
 
 // ===== Ground: playground.glb =====
 const pillars=[]; // { pos:Vector3, topY:number, mesh:Mesh, graffiti:null|Mesh, paintProgress:0..1, claimedBy:null|Artist }
@@ -2208,6 +2244,20 @@ function loadCachedJSON(key){
   }
 }
 
+function loadBakedPlayableLayer(){
+  if(!bakedPlayableLayerPromise){
+    bakedPlayableLayerPromise=loadCachedJSONAsset(PLAYABLE_LAYER_BAKED_URL).then(raw=>hydratePlayableLayer(raw)).catch(()=>null);
+  }
+  return bakedPlayableLayerPromise;
+}
+
+function loadBakedRiverBounds(){
+  if(!bakedRiverBoundsPromise){
+    bakedRiverBoundsPromise=loadCachedJSONAsset(RIVER_BOUNDS_BAKED_URL).then(raw=>Array.isArray(raw)&&raw.length?raw:null).catch(()=>null);
+  }
+  return bakedRiverBoundsPromise;
+}
+
 function schedulePlaygroundBVHBuild(root){
   if(!bvhReady||!root||playgroundBVHBuildActive) return Promise.resolve();
   playgroundBVHQueuedMeshes.length=0;
@@ -2311,6 +2361,14 @@ async function detectPlayableLayer(progressFn,forceWorldScan=false){
   if(cached){
     if(progressFn) progressFn(1);
     return cached;
+  }
+  if(!forceWorldScan){
+    const baked=await loadBakedPlayableLayer();
+    if(baked){
+      saveCachedJSON(PLAYABLE_LAYER_CACHE_KEY,serializePlayableLayer(baked));
+      if(progressFn) progressFn(1);
+      return baked;
+    }
   }
   if(!playgroundRoot) return null;
   const scan=getPlayableLayerScanConfig(forceWorldScan);
@@ -2454,6 +2512,12 @@ async function detectRiverBounds(progressFn){
   if(Array.isArray(cached) && cached.length){
     if(progressFn) progressFn(1);
     return cached;
+  }
+  const baked=await loadBakedRiverBounds();
+  if(Array.isArray(baked) && baked.length){
+    saveCachedJSON(cacheKey,baked);
+    if(progressFn) progressFn(1);
+    return baked;
   }
   const samples=playableLayer?playableLayer.samples:[];
   if(progressFn) progressFn(1);
@@ -2770,14 +2834,14 @@ function liftCeilingGeometry(root,anchorY,factor=5){
   });
 }
 
-async function loadPlayground(){
+async function loadPlayground(bvhSetupPromise=null){
   try{
     let gltf=null;
     try{
-      gltf=await loader.loadAsync('field/playground_optimized.glb?v=2026-04-24a');
+      gltf=await loadCachedGLTFAsset('field/playground_optimized.glb?v=2026-04-24a');
     }catch(optErr){
       console.warn('[playground] optimized load failed, falling back to original:',optErr);
-      gltf=await loader.loadAsync('field/playground.glb');
+      gltf=await loadCachedGLTFAsset('field/playground.glb');
     }
     const root=gltf.scene;
     // Auto-scale+center: compute bbox, target a reasonable size
@@ -2836,21 +2900,25 @@ async function loadPlayground(){
     // Skip meshes that are too small to matter (< 30 triangles) â€” the
     // overhead of building a tree for them outweighs the raycast savings,
     // and the playground has many small decorative pieces.
+    if(bvhSetupPromise) await bvhSetupPromise;
     if(bvhReady){
       const t0=performance.now();
       let total=0, skipped=0;
-      root.traverse(o=>{
-        if(!o.isMesh||!o.geometry||!o.geometry.attributes?.position) return;
-        const tri=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;
-        if(tri<30){ skipped++; return; }
+      const seen=new Set();
+      for(const mesh of groundMeshes){
+        const geo=mesh?.geometry;
+        if(!geo||!geo.attributes?.position||seen.has(geo)) continue;
+        seen.add(geo);
+        const tri=(geo.index?geo.index.count:geo.attributes.position.count)/3;
+        if(tri<30){ skipped++; continue; }
         try{
-          if(!o.geometry.boundsTree){
-            o.geometry.computeBoundsTree(BVH_OPTS);
+          if(!geo.boundsTree){
+            geo.computeBoundsTree(BVH_OPTS);
             total++;
           }
         }catch(e){/* skip bad geo */}
-      });
-      console.log('[bvh] built for',total,'meshes (skipped',skipped,'tiny) in',
+      }
+      console.log('[bvh] built initial ground trees for',total,'meshes (skipped',skipped,'tiny) in',
         ((performance.now()-t0)/1000).toFixed(2),'s');
     }
 
@@ -3638,7 +3706,7 @@ async function loadGLBClip(path,name){
   console.log('[glb-clip] loading',name,'<-',path);
   let gltf;
   try{
-    gltf=await loader.loadAsync(path);
+    gltf=await loadCachedGLTFAsset(path);
   }catch(e){
     console.warn('[glb-clip] load FAILED',name,e&&e.message);
     return null;
@@ -3661,16 +3729,7 @@ async function loadAnimationClip(name,glbPath,fbxPath){
 
 async function loadCharacterTemplate(){
   try{
-    let gltf=null;
-    if('caches' in window){
-      try{
-        const cache=await caches.open('ul-assets-v1');
-        let resp=await cache.match('character.glb');
-        if(!resp){resp=await fetch('character.glb',{cache:'force-cache'});if(resp&&resp.ok)cache.put('character.glb',resp.clone())}
-        if(resp&&resp.ok){const buf=await resp.arrayBuffer();gltf=await new Promise((res,rej)=>loader.parse(buf,'',res,rej))}
-      }catch{}
-    }
-    if(!gltf) gltf=await loader.loadAsync('character.glb');
+    const gltf=await loadCachedGLTFAsset('character.glb');
     charGLTF=gltf;
     // Build the bone-name Set BEFORE sanitising any clip â€” both the
     // GLB's own clips and the FBX clips will use it to pick the
@@ -3701,30 +3760,15 @@ async function loadPlayerAssets(){
   try{
     const loadTex=path=>new Promise(res=>textureLoader.load(path,tex=>res(tex),undefined,()=>res(null)));
     const PLAYER_ANIM_REV='2026-04-24e';
-    let baseGLTF=null;
-    if('caches' in window){
-      try{
-        const cache=await caches.open('ul-assets-v2');
-        let resp=await cache.match('mainplayermodel/player_main.glb');
-        if(!resp){
-          resp=await fetch('mainplayermodel/player_main.glb',{cache:'force-cache'});
-          if(resp&&resp.ok) cache.put('mainplayermodel/player_main.glb',resp.clone());
-        }
-        if(resp&&resp.ok){
-          const buf=await resp.arrayBuffer();
-          baseGLTF=await new Promise((res,rej)=>loader.parse(buf,'',res,rej));
-        }
-      }catch{}
-    }
-    const [idleGLTF,runGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
-      loader.loadAsync(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
-      loader.loadAsync(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
+    const [baseGLTF,idleGLTF,runGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
+      loadCachedGLTFAsset('mainplayermodel/player_main.glb'),
+      loadCachedGLTFAsset(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
+      loadCachedGLTFAsset(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
       loadTex('mainplayermodel/tripo_model_basecolor.JPEG'),
       loadTex('mainplayermodel/tripo_model_normal.JPEG'),
       loadTex('mainplayermodel/tripo_model_roughness.JPEG'),
       loadTex('mainplayermodel/tripo_model_metallic.JPEG'),
     ]);
-    if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
     if(baseTex){
       baseTex.flipY=false;
       baseTex.colorSpace=THREE.SRGBColorSpace;
@@ -3749,13 +3793,13 @@ async function loadPlayerAssets(){
 async function loadDeferredPlayerSkillClips(){
   try{
     const [jumpGLTF,punchGLTF,kickGLTF,punchComboGLTF,fireGLTF,throwGLTF,cleanGLTF]=await Promise.all([
-      loader.loadAsync('mainplayermodel/player_jump.glb?v=2026-04-24e'),
-      loader.loadAsync('mainplayermodel/player_punch.glb?v=2026-04-24e'),
-      loader.loadAsync('mainplayermodel/player_kick.glb?v=2026-04-24e'),
-      loader.loadAsync('mainplayermodel/player_punchcombo.glb?v=2026-04-24e'),
-      loader.loadAsync('mainplayermodel/player_fire.glb?v=2026-04-24a'),
-      loader.loadAsync('mainplayermodel/player_throwbomb.glb?v=2026-04-24a'),
-      loader.loadAsync('mainplayermodel/player_clean.glb?v=2026-04-24a'),
+      loadCachedGLTFAsset('mainplayermodel/player_jump.glb?v=2026-04-24e'),
+      loadCachedGLTFAsset('mainplayermodel/player_punch.glb?v=2026-04-24e'),
+      loadCachedGLTFAsset('mainplayermodel/player_kick.glb?v=2026-04-24e'),
+      loadCachedGLTFAsset('mainplayermodel/player_punchcombo.glb?v=2026-04-24e'),
+      loadCachedGLTFAsset('mainplayermodel/player_fire.glb?v=2026-04-24a'),
+      loadCachedGLTFAsset('mainplayermodel/player_throwbomb.glb?v=2026-04-24a'),
+      loadCachedGLTFAsset('mainplayermodel/player_clean.glb?v=2026-04-24a'),
     ]);
     playerClipJump=sanitizePlayerClip(jumpGLTF.animations[0]||playerClipJump,'player-jump')||playerClipJump;
     const rawPunchClip=punchGLTF.animations[0]||null;
@@ -5831,7 +5875,7 @@ const COIN_VANISH_DUR=0.7; // seconds â€” rise + spin + fade
 
 async function loadCoin(){
   try{
-    const gltf=await loader.loadAsync('coin.glb');
+    const gltf=await loadCachedGLTFAsset('coin.glb');
     coinModel=gltf.scene;
     coinModel.scale.setScalar(COIN_SCALE);
     // Replace the baked copper/bronze material with a shiny gold tone.
@@ -6187,7 +6231,7 @@ const UI_LAYOUT_DEFAULTS={
     },
     "loadout-toggle-frame": {
       "x": 5.925,
-      "y": 84.807,
+      "y": 84.607,
       "w": 76.0000057220459,
       "h": 74.54544067382812,
       "z": 2100,
@@ -6195,7 +6239,7 @@ const UI_LAYOUT_DEFAULTS={
     },
     "loadout-toggle": {
       "x": 5.846,
-      "y": 84.42,
+      "y": 84.22,
       "w": 46.73,
       "h": 46.73,
       "z": 2700,
@@ -6498,7 +6542,7 @@ const UI_LAYOUT_DEFAULTS={
     },
     "loadout-toggle-frame": {
       "x": 20.369999999999905,
-      "y": 68.3910000000001,
+      "y": 68.1910000000001,
       "w": 56,
       "h": 56,
       "z": 2300,
@@ -6506,7 +6550,7 @@ const UI_LAYOUT_DEFAULTS={
     },
     "loadout-toggle": {
       "x": 20.428999999999913,
-      "y": 68.40400000000007,
+      "y": 68.20400000000006,
       "w": 37.44,
       "h": 37.96,
       "z": 2800,
@@ -10048,16 +10092,28 @@ async function init(){
   startIntroProgressSmoother();
   setIntroProgress(2,'BOOT');
 
-  // Enable BVH raycast acceleration BEFORE loading the playground, so
-  // computeBoundsTree runs on its geometry right after load.
   const bvhPromise=setupBVH();
+  const bakedPlayablePromise=loadBakedPlayableLayer();
+  const bakedRiverPromise=loadBakedRiverBounds();
   const playerAssetsPromise=loadPlayerAssets();
+  const playgroundPromise=loadPlayground(bvhPromise);
+  const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
+  const characterTemplatePromise=loadCharacterTemplate();
+  const extraCharacterClipsReadyPromise=characterTemplatePromise.then(async()=>{
+    setIntroProgress(62,'ARTISTS');
+    return loadExtraCharacterClips();
+  });
+  const coinPromise=loadCoin();
+  const iceAssetsPromise=Promise.resolve().then(()=>ensureIceSpecialVisualAssets());
+  const sfxPrimePromise=Promise.resolve().then(()=>primeSFX());
   await bvhPromise;
   setIntroProgress(8,'BOOT');
   await playerAssetsPromise;
   setIntroProgress(18,'PLAYER');
-  await loadPlayground();
+  await playgroundPromise;
   setIntroProgress(30,'WORLD');
+  await bakedPlayablePromise.catch(()=>null);
+  await bakedRiverPromise.catch(()=>null);
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
@@ -10088,21 +10144,12 @@ async function init(){
   placePlayerOnPlayableLayer();
   setIntroProgress(40,'WORLD');
   const playgroundBVHPromise=schedulePlaygroundBVHBuild(playgroundRoot);
-  const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
-  const characterTemplatePromise=loadCharacterTemplate();
-  const extraCharacterClipsReadyPromise=characterTemplatePromise.then(async()=>{
-    setIntroProgress(62,'ARTISTS');
-    return loadExtraCharacterClips();
-  });
-  const coinPromise=loadCoin();
   await deferredPlayerClipsPromise;
   setIntroProgress(52,'PLAYER');
-  await Promise.all([playgroundBVHPromise,characterTemplatePromise,coinPromise]);
+  await Promise.all([playgroundBVHPromise,characterTemplatePromise,coinPromise,iceAssetsPromise,sfxPrimePromise]);
   setIntroProgress(76,'ARTISTS');
   await extraCharacterClipsReadyPromise;
   setIntroProgress(84,'ITEMS');
-  ensureIceSpecialVisualAssets();
-  primeSFX();
   if(false&&bvhReady){
     Promise.resolve().then(async()=>{
       try{
