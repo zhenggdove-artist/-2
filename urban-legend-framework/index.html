@@ -5587,6 +5587,7 @@ function useSpecialWeapon(charge=0){
     // disappear. Firing inline captures the current yaw/position
     // and shows the pour on the frame of input.
     playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:2});
+    playSFX('waterPour');
     waterPlant(targetPlant);
   }else if(equippedWeapon==='ice'){
     const throwData=(currentSpecialAimTarget?.weapon==='ice'
@@ -6533,6 +6534,7 @@ const activeIceFields=[];
 const activeWaterStreams=[];
 const activeThrownProjectiles=[];
 let specialAimMarker=null;
+const tempInstanceObject=new THREE.Object3D();
 let currentSpecialAimTarget=null;
 const cleanBtn=document.getElementById('clean-btn');
 const cleanBtnBadge=document.getElementById('clean-btn-badge');
@@ -9770,6 +9772,7 @@ const SFX_DEFS={
   paintWhisperD:{src:'sound/Cute Goblin Wisper.mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   throwIce:{src:'sound/throw ice.mp3',volume:0.84,maxDuration:0.7,pool:3},
   throwBomb:{src:'sound/throw bomb.mp3',volume:0.84,maxDuration:0.7,pool:3},
+  waterPour:{src:'sound/liecio-water-bubbles-257594.mp3',volume:0.8,maxDuration:1.7,pool:2},
   flame:{src:'sound/Fire Flame.mp3',volume:1.2,maxDuration:0.58,pool:3},
   coinPickup:{src:'sound/Got A Mario Gold Coin2.mp3',volume:0.68,maxDuration:0.54,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
@@ -9786,6 +9789,7 @@ const MOBILE_SFX_OVERRIDES={
   riverWalk:{pool:2,minGap:0.06},
   throwIce:{pool:2},
   throwBomb:{pool:2},
+  waterPour:{pool:1},
   coinPickup:{pool:2},
   jump:{pool:2},
   paintWhisperA:{pool:1,maxDuration:1.5},
@@ -9793,7 +9797,7 @@ const MOBILE_SFX_OVERRIDES={
   paintWhisperC:{pool:1,maxDuration:1.5},
   paintWhisperD:{pool:1,maxDuration:1.5},
 };
-const MOBILE_PRIME_SFX_IDS=new Set(['punch','punchCombo','kick','playerWalk','riverEnter','riverWalk','throwIce','throwBomb','coinPickup','jump','flame','bombExplode']);
+const MOBILE_PRIME_SFX_IDS=new Set(['punch','punchCombo','kick','playerWalk','riverEnter','riverWalk','throwIce','throwBomb','waterPour','coinPickup','jump','flame','bombExplode']);
 const sfxPools=new Map();
 const sfxLastPlayAt=new Map();
 const mobileSFXBuffers=new Map();
