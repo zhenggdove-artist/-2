@@ -1957,40 +1957,6 @@ const loader=new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
 const fbxLoader=new FBXLoader();
 const textureLoader=new THREE.TextureLoader();
-const ASSET_CACHE_NAME='ul-assets-v3';
-const DATA_CACHE_NAME='ul-data-v1';
-const PLAYABLE_LAYER_BAKED_URL='field/playable_layer_baked_v1.json';
-let bakedPlayableLayerPromise=null;
-
-async function fetchCachedResponse(cacheName,url){
-  if(!('caches' in window)) return fetch(url,{cache:'force-cache'});
-  const cache=await caches.open(cacheName);
-  let resp=await cache.match(url);
-  if(!resp){
-    resp=await fetch(url,{cache:'force-cache'});
-    if(resp&&resp.ok) cache.put(url,resp.clone());
-  }
-  return resp;
-}
-
-async function loadCachedGLTFAsset(url,cacheName=ASSET_CACHE_NAME){
-  try{
-    const resp=await fetchCachedResponse(cacheName,url);
-    if(resp&&resp.ok){
-      const buf=await resp.arrayBuffer();
-      return await new Promise((res,rej)=>loader.parse(buf,'',res,rej));
-    }
-  }catch{}
-  return loader.loadAsync(url);
-}
-
-async function loadCachedJSONAsset(url,cacheName=DATA_CACHE_NAME){
-  try{
-    const resp=await fetchCachedResponse(cacheName,url);
-    if(resp&&resp.ok) return resp.json();
-  }catch{}
-  return null;
-}
 
 // ===== Ground: playground.glb =====
 const pillars=[]; // { pos:Vector3, topY:number, mesh:Mesh, graffiti:null|Mesh, paintProgress:0..1, claimedBy:null|Artist }
@@ -2242,13 +2208,6 @@ function loadCachedJSON(key){
   }
 }
 
-function loadBakedPlayableLayer(){
-  if(!bakedPlayableLayerPromise){
-    bakedPlayableLayerPromise=loadCachedJSONAsset(PLAYABLE_LAYER_BAKED_URL).then(raw=>hydratePlayableLayer(raw)).catch(()=>null);
-  }
-  return bakedPlayableLayerPromise;
-}
-
 function schedulePlaygroundBVHBuild(root){
   if(!bvhReady||!root||playgroundBVHBuildActive) return Promise.resolve();
   playgroundBVHQueuedMeshes.length=0;
@@ -2352,14 +2311,6 @@ async function detectPlayableLayer(progressFn,forceWorldScan=false){
   if(cached){
     if(progressFn) progressFn(1);
     return cached;
-  }
-  if(!forceWorldScan){
-    const baked=await loadBakedPlayableLayer();
-    if(baked){
-      saveCachedJSON(PLAYABLE_LAYER_CACHE_KEY,serializePlayableLayer(baked));
-      if(progressFn) progressFn(1);
-      return baked;
-    }
   }
   if(!playgroundRoot) return null;
   const scan=getPlayableLayerScanConfig(forceWorldScan);
@@ -10078,7 +10029,6 @@ async function init(){
   setIntroProgress(2,'BOOT');
 
   const bvhPromise=setupBVH();
-  const bakedPlayablePromise=loadBakedPlayableLayer();
   const playerAssetsPromise=loadPlayerAssets();
   const playgroundPromise=loadPlayground(bvhPromise);
   const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
@@ -10096,7 +10046,6 @@ async function init(){
   setIntroProgress(18,'PLAYER');
   await playgroundPromise;
   setIntroProgress(30,'WORLD');
-  await bakedPlayablePromise.catch(()=>null);
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
