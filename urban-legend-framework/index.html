@@ -3100,11 +3100,12 @@ function getPlayableBounds(){
 
 function getRiverWorldBounds(){
   if(playgroundBounds){
+    const margin=Math.max(0.85,playableLayer?.step||0.9);
     return {
-      minX:playgroundBounds.min.x,
-      maxX:playgroundBounds.max.x,
-      minZ:playgroundBounds.min.z,
-      maxZ:playgroundBounds.max.z,
+      minX:playgroundBounds.min.x-margin,
+      maxX:playgroundBounds.max.x+margin,
+      minZ:playgroundBounds.min.z-margin,
+      maxZ:playgroundBounds.max.z+margin,
       centerX:(playgroundBounds.min.x+playgroundBounds.max.x)*0.5,
       centerZ:(playgroundBounds.min.z+playgroundBounds.max.z)*0.5,
     };
