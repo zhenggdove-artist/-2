@@ -1384,9 +1384,9 @@
     <p>Short-range jet. Flame origin is lifted to head level. Cooldown 1 second.</p>
     <button class="shop-buy" id="buy-weapon-flame-btn">BUY FLAME</button>
   </div>
-  <div class="shop-card skill-card">
+  <div class="shop-card skill-card" hidden>
     <h4>WATERING CAN - 1 COIN</h4>
-    <p>5 uses. Equip it from E, then pour water onto plants to make them grow larger.</p>
+    <p>Equip it from E, then pour water onto plants to make them grow larger.</p>
     <button class="shop-buy" id="buy-weapon-water-btn">BUY WATER</button>
   </div>
   <div class="shop-card skill-card">
@@ -1960,9 +1960,7 @@ const textureLoader=new THREE.TextureLoader();
 const ASSET_CACHE_NAME='ul-assets-v3';
 const DATA_CACHE_NAME='ul-data-v1';
 const PLAYABLE_LAYER_BAKED_URL='field/playable_layer_baked_v1.json';
-const RIVER_BOUNDS_BAKED_URL='field/river_bounds_baked_v1.json';
 let bakedPlayableLayerPromise=null;
-let bakedRiverBoundsPromise=null;
 
 async function fetchCachedResponse(cacheName,url){
   if(!('caches' in window)) return fetch(url,{cache:'force-cache'});
@@ -2211,7 +2209,7 @@ function buildPlayableFootprint(samples,step){
 }
 
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
-const RIVER_CACHE_KEY='ul-river-bounds-v1';
+const RIVER_CACHE_KEY='ul-river-bounds-v2';
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
@@ -2249,13 +2247,6 @@ function loadBakedPlayableLayer(){
     bakedPlayableLayerPromise=loadCachedJSONAsset(PLAYABLE_LAYER_BAKED_URL).then(raw=>hydratePlayableLayer(raw)).catch(()=>null);
   }
   return bakedPlayableLayerPromise;
-}
-
-function loadBakedRiverBounds(){
-  if(!bakedRiverBoundsPromise){
-    bakedRiverBoundsPromise=loadCachedJSONAsset(RIVER_BOUNDS_BAKED_URL).then(raw=>Array.isArray(raw)&&raw.length?raw:null).catch(()=>null);
-  }
-  return bakedRiverBoundsPromise;
 }
 
 function schedulePlaygroundBVHBuild(root){
@@ -2512,12 +2503,6 @@ async function detectRiverBounds(progressFn){
   if(Array.isArray(cached) && cached.length){
     if(progressFn) progressFn(1);
     return cached;
-  }
-  const baked=await loadBakedRiverBounds();
-  if(Array.isArray(baked) && baked.length){
-    saveCachedJSON(cacheKey,baked);
-    if(progressFn) progressFn(1);
-    return baked;
   }
   const samples=playableLayer?playableLayer.samples:[];
   if(progressFn) progressFn(1);
@@ -2838,10 +2823,10 @@ async function loadPlayground(bvhSetupPromise=null){
   try{
     let gltf=null;
     try{
-      gltf=await loadCachedGLTFAsset('field/playground_optimized.glb?v=2026-04-24a');
+      gltf=await loader.loadAsync('field/playground_optimized.glb?v=2026-04-24a');
     }catch(optErr){
       console.warn('[playground] optimized load failed, falling back to original:',optErr);
-      gltf=await loadCachedGLTFAsset('field/playground.glb');
+      gltf=await loader.loadAsync('field/playground.glb');
     }
     const root=gltf.scene;
     // Auto-scale+center: compute bbox, target a reasonable size
@@ -3706,7 +3691,7 @@ async function loadGLBClip(path,name){
   console.log('[glb-clip] loading',name,'<-',path);
   let gltf;
   try{
-    gltf=await loadCachedGLTFAsset(path);
+    gltf=await loader.loadAsync(path);
   }catch(e){
     console.warn('[glb-clip] load FAILED',name,e&&e.message);
     return null;
@@ -3729,7 +3714,16 @@ async function loadAnimationClip(name,glbPath,fbxPath){
 
 async function loadCharacterTemplate(){
   try{
-    const gltf=await loadCachedGLTFAsset('character.glb');
+    let gltf=null;
+    if('caches' in window){
+      try{
+        const cache=await caches.open('ul-assets-v1');
+        let resp=await cache.match('character.glb');
+        if(!resp){resp=await fetch('character.glb',{cache:'force-cache'});if(resp&&resp.ok)cache.put('character.glb',resp.clone())}
+        if(resp&&resp.ok){const buf=await resp.arrayBuffer();gltf=await new Promise((res,rej)=>loader.parse(buf,'',res,rej))}
+      }catch{}
+    }
+    if(!gltf) gltf=await loader.loadAsync('character.glb');
     charGLTF=gltf;
     // Build the bone-name Set BEFORE sanitising any clip â€” both the
     // GLB's own clips and the FBX clips will use it to pick the
@@ -3760,15 +3754,30 @@ async function loadPlayerAssets(){
   try{
     const loadTex=path=>new Promise(res=>textureLoader.load(path,tex=>res(tex),undefined,()=>res(null)));
     const PLAYER_ANIM_REV='2026-04-24e';
-    const [baseGLTF,idleGLTF,runGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
-      loadCachedGLTFAsset('mainplayermodel/player_main.glb'),
-      loadCachedGLTFAsset(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
-      loadCachedGLTFAsset(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
+    let baseGLTF=null;
+    if('caches' in window){
+      try{
+        const cache=await caches.open('ul-assets-v2');
+        let resp=await cache.match('mainplayermodel/player_main.glb');
+        if(!resp){
+          resp=await fetch('mainplayermodel/player_main.glb',{cache:'force-cache'});
+          if(resp&&resp.ok) cache.put('mainplayermodel/player_main.glb',resp.clone());
+        }
+        if(resp&&resp.ok){
+          const buf=await resp.arrayBuffer();
+          baseGLTF=await new Promise((res,rej)=>loader.parse(buf,'',res,rej));
+        }
+      }catch{}
+    }
+    const [idleGLTF,runGLTF,baseTex,normalTex,roughTex,metalTex]=await Promise.all([
+      loader.loadAsync(`mainplayermodel/player_idle.glb?v=${PLAYER_ANIM_REV}`),
+      loader.loadAsync(`mainplayermodel/player_run.glb?v=${PLAYER_ANIM_REV}`),
       loadTex('mainplayermodel/tripo_model_basecolor.JPEG'),
       loadTex('mainplayermodel/tripo_model_normal.JPEG'),
       loadTex('mainplayermodel/tripo_model_roughness.JPEG'),
       loadTex('mainplayermodel/tripo_model_metallic.JPEG'),
     ]);
+    if(!baseGLTF) baseGLTF=await loader.loadAsync('mainplayermodel/player_main.glb');
     if(baseTex){
       baseTex.flipY=false;
       baseTex.colorSpace=THREE.SRGBColorSpace;
@@ -3793,13 +3802,13 @@ async function loadPlayerAssets(){
 async function loadDeferredPlayerSkillClips(){
   try{
     const [jumpGLTF,punchGLTF,kickGLTF,punchComboGLTF,fireGLTF,throwGLTF,cleanGLTF]=await Promise.all([
-      loadCachedGLTFAsset('mainplayermodel/player_jump.glb?v=2026-04-24e'),
-      loadCachedGLTFAsset('mainplayermodel/player_punch.glb?v=2026-04-24e'),
-      loadCachedGLTFAsset('mainplayermodel/player_kick.glb?v=2026-04-24e'),
-      loadCachedGLTFAsset('mainplayermodel/player_punchcombo.glb?v=2026-04-24e'),
-      loadCachedGLTFAsset('mainplayermodel/player_fire.glb?v=2026-04-24a'),
-      loadCachedGLTFAsset('mainplayermodel/player_throwbomb.glb?v=2026-04-24a'),
-      loadCachedGLTFAsset('mainplayermodel/player_clean.glb?v=2026-04-24a'),
+      loader.loadAsync('mainplayermodel/player_jump.glb?v=2026-04-24e'),
+      loader.loadAsync('mainplayermodel/player_punch.glb?v=2026-04-24e'),
+      loader.loadAsync('mainplayermodel/player_kick.glb?v=2026-04-24e'),
+      loader.loadAsync('mainplayermodel/player_punchcombo.glb?v=2026-04-24e'),
+      loader.loadAsync('mainplayermodel/player_fire.glb?v=2026-04-24a'),
+      loader.loadAsync('mainplayermodel/player_throwbomb.glb?v=2026-04-24a'),
+      loader.loadAsync('mainplayermodel/player_clean.glb?v=2026-04-24a'),
     ]);
     playerClipJump=sanitizePlayerClip(jumpGLTF.animations[0]||playerClipJump,'player-jump')||playerClipJump;
     const rawPunchClip=punchGLTF.animations[0]||null;
@@ -5042,7 +5051,6 @@ function updateSpecialWeapons(dt,nowS){
 
 function useSpecialWeapon(charge=0){
   if(gameState!=='playing' || !equippedWeapon || !purchasedWeapons.has(equippedWeapon)&&!debugCheatMode) return false;
-  if(equippedWeapon==='water' && !debugCheatMode && wateringUses<=0) return false;
   if(player.pendingSpecialAction||player.attackT>=0||player.specialAnimT>0) return false;
   if(!debugCheatMode && specialCooldownRemaining(equippedWeapon)>0) return false;
   if(debugCheatMode) applyCheatInventory();
@@ -5062,10 +5070,6 @@ function useSpecialWeapon(charge=0){
     // and shows the pour on the frame of input.
     playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:2});
     waterPlant(targetPlant);
-    if(!debugCheatMode){
-      wateringUses=Math.max(0,wateringUses-1);
-      if(wateringUses===0 && equippedWeapon==='water') equippedWeapon=null;
-    }
   }else if(equippedWeapon==='ice'){
     const throwData=(currentSpecialAimTarget?.weapon==='ice'
       ? cloneSpecialThrowTarget(currentSpecialAimTarget)
@@ -5875,7 +5879,7 @@ const COIN_VANISH_DUR=0.7; // seconds â€” rise + spin + fade
 
 async function loadCoin(){
   try{
-    const gltf=await loadCachedGLTFAsset('coin.glb');
+    const gltf=await loader.loadAsync('coin.glb');
     coinModel=gltf.scene;
     coinModel.scale.setScalar(COIN_SCALE);
     // Replace the baked copper/bronze material with a shiny gold tone.
@@ -5981,9 +5985,9 @@ const WEAPON_SHOP_ITEMS=[
   {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:5,icon:'\u{1F9CA}'},
   {id:'bomb',name:'BOMB',label:'trap x5',cost:5,icon:'\u{1F4A3}'},
 ];
+const ALWAYS_OWNED_WEAPON_IDS=new Set(['water']);
 const SPECIAL_COOLDOWNS={flame:1,water:0.35,ice:3,bomb:3};
 let cleanerUses=0;
-let wateringUses=0;
 let purchasedBurstEffects=new Set(['amber']);
 let equippedBurstEffect='amber';
 let purchasedWeapons=new Set();
@@ -8192,7 +8196,6 @@ function applyCheatInventory(){
   purchasedWeapons=new Set(WEAPON_SHOP_ITEMS.map(item=>item.id));
   if(!equippedWeapon) equippedWeapon='flame';
   cleanerUses=Math.max(cleanerUses,999);
-  wateringUses=Math.max(wateringUses,999);
   coinCount=Math.max(coinCount,999);
 }
 
@@ -8219,15 +8222,12 @@ function refreshSpecialButton(){
   }
   const cd=specialCooldownRemaining(equippedWeapon);
   let sub='';
-  if(equippedWeapon==='water'){
-    sub=debugCheatMode ? '∞' : String(wateringUses);
-  }else if(cd>0 && !debugCheatMode){
+  if(cd>0 && !debugCheatMode){
     sub=cd.toFixed(1)+'s';
   }
   const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
   specialBtn.innerHTML=`${skillIcon}${subHtml}`;
-  const noUses=(equippedWeapon==='water' && !debugCheatMode && wateringUses<=0);
-  specialBtn.classList.toggle('cooling',noUses || (cd>0 && !debugCheatMode));
+  specialBtn.classList.toggle('cooling',cd>0 && !debugCheatMode);
 }
 function getCleanIconSVG(){
   return `<img class="clean-ico-img" src="game icon/clean.png" alt="" aria-hidden="true">`;
@@ -8335,15 +8335,13 @@ function renderShopState(){
   for(const item of WEAPON_SHOP_ITEMS){
     const btn=weaponBuyButtons[item.id];
     if(!btn) continue;
-    const owned=purchasedWeapons.has(item.id);
-    // Water is consumable: always re-buyable to top up charges.
     if(item.id==='water'){
-      btn.disabled=!debugCheatMode&&coinCount<item.cost;
-      btn.textContent=`BUY WATER +5 (${debugCheatMode?'∞':wateringUses})`;
-    }else{
-      btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-      btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+      btn.closest('.shop-card')?.setAttribute('hidden','hidden');
+      continue;
     }
+    const owned=purchasedWeapons.has(item.id);
+    btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
+    btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
   }
   refreshSpecialButton();
   refreshCleanButton();
@@ -8354,8 +8352,8 @@ function resetShopState(){
   cleanerUses=0;
   purchasedBurstEffects=new Set(['amber']);
   equippedBurstEffect='amber';
-  purchasedWeapons=new Set();
-  equippedWeapon=null;
+  purchasedWeapons=new Set(ALWAYS_OWNED_WEAPON_IDS);
+  equippedWeapon='water';
   debugCheatMode=false;
   for(const jet of activeFlameJets) scene.remove(jet.mesh);
   activeFlameJets.length=0;
@@ -8465,24 +8463,11 @@ for(const item of BURST_UNLOCK_ITEMS){
 }
 for(const item of WEAPON_SHOP_ITEMS){
   weaponBuyButtons[item.id]?.addEventListener('click',()=>{
+    if(item.id==='water') return;
     if(purchasedWeapons.has(item.id)) return;
     if(!spendCoins(item.cost)) return;
     purchasedWeapons.add(item.id);
     equippedWeapon=item.id;
-    renderShopState();
-  });
-}
-if(weaponBuyButtons.water){
-  const freshWaterBtn=weaponBuyButtons.water.cloneNode(true);
-  weaponBuyButtons.water.replaceWith(freshWaterBtn);
-  weaponBuyButtons.water=freshWaterBtn;
-  weaponBuyButtons.water.addEventListener('click',()=>{
-    if(!purchasedWeapons.has('water')){
-      if(!spendCoins(1)) return;
-      purchasedWeapons.add('water');
-    }else if(!spendCoins(1)) return;
-    wateringUses+=5;
-    equippedWeapon='water';
     renderShopState();
   });
 }
@@ -10094,7 +10079,6 @@ async function init(){
 
   const bvhPromise=setupBVH();
   const bakedPlayablePromise=loadBakedPlayableLayer();
-  const bakedRiverPromise=loadBakedRiverBounds();
   const playerAssetsPromise=loadPlayerAssets();
   const playgroundPromise=loadPlayground(bvhPromise);
   const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
@@ -10113,7 +10097,6 @@ async function init(){
   await playgroundPromise;
   setIntroProgress(30,'WORLD');
   await bakedPlayablePromise.catch(()=>null);
-  await bakedRiverPromise.catch(()=>null);
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
