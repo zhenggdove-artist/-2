@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>RunArtistRun</title>
-<meta name="title" content="RunArtistRun"/>
-<meta name="description" content="RunArtistRun"/>
+<title>Run Artist Run</title>
+<meta name="title" content="Run Artist Run"/>
+<meta name="description" content="Run Artist Run"/>
 <meta property="og:type" content="website"/>
-<meta property="og:title" content="RunArtistRun"/>
-<meta property="og:description" content="RunArtistRun"/>
+<meta property="og:title" content="Run Artist Run"/>
+<meta property="og:description" content="Run Artist Run"/>
 <meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="RunArtistRun"/>
-<meta name="twitter:description" content="RunArtistRun"/>
+<meta name="twitter:title" content="Run Artist Run"/>
+<meta name="twitter:description" content="Run Artist Run"/>
 <link rel="preload" as="font" type="font/ttf" href="FONTS/hyperion.ttf" crossorigin>
 <link rel="preload" as="fetch" href="mainplayermodel/player_main.glb" crossorigin>
 <link rel="preload" as="fetch" href="field/playground_optimized.glb?v=2026-04-24a" crossorigin>
@@ -382,7 +382,7 @@
     z-index:12;pointer-events:none;color:var(--ink);white-space:nowrap;
     text-shadow:0 1px 0 rgba(255,255,255,0.55),0 2px 4px rgba(180,150,30,0.35);
     transition:opacity 1s ease;
-    --ornate-size:34px;--ornate-bleed:8px;display:none!important}
+    --ornate-size:34px;--ornate-bleed:8px;display:block!important}
   #title::before{content:'';position:absolute;inset:calc(var(--ornate-bleed) * -1);
     background-image:var(--ornate-tl),var(--ornate-tr),var(--ornate-bl),var(--ornate-br);
     background-position:top left,top right,bottom left,bottom right;
@@ -542,6 +542,36 @@
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     font-weight:700;color:#9E9A91;letter-spacing:0.04em;
     font-size:calc(20px * var(--ui-scale,1));line-height:1;white-space:nowrap}
+  @keyframes rainbowGlow{
+    0%{filter:drop-shadow(0 0 2px rgba(255,110,180,0.7)) drop-shadow(0 0 8px rgba(255,110,180,0.45));}
+    20%{filter:drop-shadow(0 0 2px rgba(255,214,92,0.7)) drop-shadow(0 0 8px rgba(255,214,92,0.45));}
+    40%{filter:drop-shadow(0 0 2px rgba(128,255,170,0.7)) drop-shadow(0 0 8px rgba(128,255,170,0.45));}
+    60%{filter:drop-shadow(0 0 2px rgba(110,210,255,0.7)) drop-shadow(0 0 8px rgba(110,210,255,0.45));}
+    80%{filter:drop-shadow(0 0 2px rgba(180,145,255,0.72)) drop-shadow(0 0 8px rgba(180,145,255,0.48));}
+    100%{filter:drop-shadow(0 0 2px rgba(255,110,180,0.7)) drop-shadow(0 0 8px rgba(255,110,180,0.45));}
+  }
+  #coin-count{
+    animation:rainbowGlow 3.8s linear infinite;
+    text-shadow:
+      0 0 2px rgba(255,255,255,0.72),
+      0 0 5px rgba(255,174,220,0.45),
+      0 0 10px rgba(164,222,255,0.42);
+  }
+  #shop-btn,#shop-icon{
+    animation:rainbowGlow 3.4s linear infinite;
+  }
+  #checkout-btn{
+    border:none;background:transparent;color:#9E9A91;
+    font:inherit;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
+    letter-spacing:0.08em;white-space:nowrap;cursor:pointer;
+    padding:0;margin:0;text-shadow:
+      0 0 2px rgba(255,255,255,0.72),
+      0 0 7px rgba(255,176,228,0.42),
+      0 0 12px rgba(126,214,255,0.34);
+    animation:rainbowGlow 3.8s linear infinite;
+  }
+  #checkout-btn:hover{transform:scale(1.02)}
+  #checkout-btn:active{transform:scale(0.985)}
   #kill-icon{left:8.6%;top:13.86%;height:34px;width:auto}
   #kill-count{left:13.4%;top:13.86%;width:48px;height:30px}
   #coin-glyph{left:75.4%;top:15%;width:24px;height:24px}
@@ -1081,7 +1111,9 @@
   #end-box.minimized #end-score,
   #end-box.minimized #name-row,
   #end-box.minimized #leaderboard-list,
-  #end-box.minimized #replay-btn{display:none}
+  #end-box.minimized #replay-btn,
+  #end-box.minimized #continue-btn,
+  #end-box.minimized #end-actions{display:none}
   /* GAME OVER heading: BriefingFont (FFCommaTrial) reads cleanly
      even at big sizes and contrasts the GoldenGirdle game UI, so
      "GAME OVER" is unmistakable rather than reading as a wreath of
@@ -1118,7 +1150,8 @@
   #leaderboard-list .name{flex:1;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #leaderboard-list .score{color:#b3173a;font-weight:bold}
   #leaderboard-list li.me{background:rgba(244,238,92,0.35)}
-  #replay-btn{width:100%;margin-top:14px;padding:10px;border-radius:999px;border:none;
+  #end-actions{display:flex;gap:10px;margin-top:14px}
+  #continue-btn,#replay-btn{flex:1;padding:10px;border-radius:999px;border:none;
     background:linear-gradient(180deg,#fff7d3 0%,#f4e85c 100%);
     color:var(--ink);font-size:15px;letter-spacing:2px;cursor:pointer;
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
@@ -1279,11 +1312,11 @@
     </defs>
   </svg>
 </div>
-<div id="title">RunArtistRun</div>
+<div id="title">Run Artist Run</div>
 
 <div id="hud">
   <div class="hud-box" id="kill-box"></div>
-  <div class="hud-box" id="timer-box"><span id="timer-text">3:00</span></div>
+  <div class="hud-box" id="timer-box"><button id="checkout-btn" type="button">Check Out Sweet Home</button></div>
   <div class="hud-box" id="coin-box"></div>
   <img id="kill-icon" class="hud-icon hud-icon-skull hud-detached" src="game icon/artistcount icon.png" alt="" aria-hidden="true">
   <span id="kill-count" class="hud-detached hud-detached-count">0</span>
@@ -1379,7 +1412,7 @@
 
 <div id="intro">
   <div class="intro-card">
-    <h1>RunArtistRun</h1>
+    <h1>Run Artist Run</h1>
     <div class="tag">- loading briefing -</div>
     <div class="intro-copy">
       <p>
@@ -1413,7 +1446,10 @@
       <button id="submit-btn">SUBMIT</button>
     </div>
     <ol id="leaderboard-list"></ol>
-    <button id="replay-btn">PLAY AGAIN</button>
+    <div id="end-actions">
+      <button id="continue-btn">CONTINUE</button>
+      <button id="replay-btn">PLAY AGAIN</button>
+    </div>
   </div>
 </div>
 
@@ -9800,7 +9836,7 @@ function killArtist(a,cause='generic'){
 }
 
 // ===== HUD / Timer / Game state =====
-const GAME_DURATION=180; // 3 min
+const GAME_DURATION=180; // legacy only; timed game over disabled
 let gameState='intro'; // intro|playing|ended|artWins
 document.body.classList.add('intro-active');
 let gameTime=0;
@@ -9808,7 +9844,7 @@ let killCount=0;
 let paintFillCount=0;
 const PAINT_FILL_GOAL=20;
 const killEl=document.getElementById('kill-count');
-const timerEl=document.getElementById('timer-text');
+const checkoutBtn=document.getElementById('checkout-btn');
 const timerBox=document.getElementById('timer-box');
 const paintBarFill=document.getElementById('paint-bar-fill');
 const paintBarLabel=document.getElementById('paint-bar-label');
@@ -9823,16 +9859,8 @@ if(paintBarGrid&&!paintBarGrid.children.length){
 
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
-  if(debugCheatMode){
-    timerEl.textContent='∞:∞∞';
-    timerBox.classList.remove('warn');
-    return;
-  }
-  const r=Math.max(0,GAME_DURATION-gameTime);
-  const m=Math.floor(r/60);
-  const s=Math.floor(r%60);
-  timerEl.textContent=m+':'+(s<10?'0':'')+s;
-  if(r<30)timerBox.classList.add('warn');else timerBox.classList.remove('warn');
+  if(checkoutBtn) checkoutBtn.textContent='Check Out Sweet Home';
+  timerBox.classList.remove('warn');
 }
 
 function updatePaintBar(){
@@ -9961,10 +9989,10 @@ const SFX_DEFS={
   paintWhisperB:{src:'sound/Cute Goblin Wisper (2).mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   paintWhisperC:{src:'sound/Cute Goblin Wisper (1).mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   paintWhisperD:{src:'sound/Cute Goblin Wisper.mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
-  throwIce:{src:'sound/throw ice.mp3',volume:0.84,maxDuration:0.7,pool:3},
-  throwBomb:{src:'sound/throw bomb.mp3',volume:0.84,maxDuration:0.7,pool:3},
+  throwIce:{src:'sound/throw ice.mp3',volume:0.588,maxDuration:0.7,pool:3},
+  throwBomb:{src:'sound/throw bomb.mp3',volume:0.588,maxDuration:0.7,pool:3},
   waterPour:{src:'sound/liecio-water-bubbles-257594.mp3',volume:0.8,maxDuration:1.7,pool:2},
-  flame:{src:'sound/Fire Flame.mp3',volume:1.2,maxDuration:0.58,pool:3},
+  flame:{src:'sound/Fire Flame.mp3',volume:1.44,maxDuration:0.58,pool:3},
   coinPickup:{src:'sound/Got A Mario Gold Coin2.mp3',volume:0.68,maxDuration:0.54,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
   cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
@@ -10249,6 +10277,7 @@ const endScore=document.getElementById('end-score');
 const leaderboardList=document.getElementById('leaderboard-list');
 const nameInput=document.getElementById('name-input');
 const submitBtn=document.getElementById('submit-btn');
+const continueBtn=document.getElementById('continue-btn');
 const replayBtn=document.getElementById('replay-btn');
 const endBox=document.getElementById('end-box');
 const endToggle=document.getElementById('end-toggle');
@@ -10484,6 +10513,9 @@ startBtn.addEventListener('click',()=>{
   document.body.classList.remove('intro-active');
   startGame();
 });
+checkoutBtn?.addEventListener('click',()=>{
+  if(gameState==='playing') endGame();
+});
 
 function startGame(){
   unlockSFX();
@@ -10628,6 +10660,18 @@ replayBtn.addEventListener('click',()=>{
   vhsPass.enabled=true;
   resetWorld();
   startGame();
+});
+continueBtn?.addEventListener('click',()=>{
+  if(gameState!=='ended') return;
+  endOverlay.classList.remove('show');
+  document.body.classList.remove('game-ended');
+  setGameOverUIHidden(false);
+  setEndOverlaySceneView(false);
+  gameState='playing';
+  updateKillUI();
+  updateCoinUI();
+  updateTimerUI();
+  updatePaintBar();
 });
 artWinsRetryBtn?.addEventListener('click',()=>{
   fadeEl.classList.remove('show');
@@ -10774,7 +10818,6 @@ function tick(){
   const nowS=now/1000;
   try{
     if(gameState==='playing'){
-      if(!debugCheatMode) gameTime+=dt;
       updateTimerUI();
       updatePlayer(dt);
       updateSpawns(dt);
@@ -10782,9 +10825,6 @@ function tick(){
       updateCoins(dt,nowS);
       updateSpecialWeapons(dt,nowS);
       updateSketch(dt,nowS);
-      if(!debugCheatMode && gameTime>=GAME_DURATION){
-        endGame();
-      }
       _perfFrames++;
       _perfSince+=dt;
       if(frameMs>_perfMaxMs) _perfMaxMs=frameMs;
