@@ -2690,8 +2690,8 @@ function rewireArtistActions(){
   }
 }
 
-const ARTIST_SKIN_TARGET=new THREE.Color('#FFDCBD');
-const ARTIST_SKIN_EMISSIVE=new THREE.Color('#5a3925');
+const ARTIST_SKIN_TARGET=new THREE.Color('#FFE9DF');
+const ARTIST_SKIN_EMISSIVE=new THREE.Color('#9a6672');
 function isLikelyArtistSkin(mesh,material){
   const hint=`${mesh?.name||''} ${material?.name||''}`.toLowerCase();
   if(/skin|face|head|neck|hand|arm|leg|body/.test(hint)) return true;
@@ -2706,14 +2706,14 @@ function tuneArtistMaterial(mesh,material){
     if(material.color) material.color.copy(ARTIST_SKIN_TARGET);
     if(material.emissive){
       material.emissive.copy(ARTIST_SKIN_EMISSIVE);
-      if('emissiveIntensity' in material) material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.2);
+      if('emissiveIntensity' in material) material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.3);
     }
-    if('roughness' in material) material.roughness=Math.min(material.roughness??0.75,0.58);
+    if('roughness' in material) material.roughness=Math.min(material.roughness??0.75,0.54);
     if('metalness' in material) material.metalness=Math.min(material.metalness??0,0.02);
   }else{
     if(material.color) material.color.multiplyScalar(1.06);
     if(material.emissive && 'emissiveIntensity' in material){
-      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.03);
+      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.32);
     }
   }
 }
@@ -4174,7 +4174,7 @@ function pickSpawnPos(){
 
 function pickExitPos(fromPos){
   const b=getPlayableBounds();
-  const margin=0.6;
+  const margin=2.4;
   const px=fromPos?.x ?? b.centerX;
   const pz=fromPos?.z ?? b.centerZ;
   const dists=[
@@ -4185,10 +4185,10 @@ function pickExitPos(fromPos){
   ].sort((a,b2)=>a.dist-b2.dist);
   let x=px,z=pz;
   switch(dists[0].side){
-    case 'left': x=b.minX+margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
-    case 'right': x=b.maxX-margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
-    case 'top': z=b.minZ+margin; x=clamp(px,b.minX+1,b.maxX-1); break;
-    default: z=b.maxZ-margin; x=clamp(px,b.minX+1,b.maxX-1); break;
+    case 'left': x=b.minX-margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
+    case 'right': x=b.maxX+margin; z=clamp(pz,b.minZ+1,b.maxZ-1); break;
+    case 'top': z=b.minZ-margin; x=clamp(px,b.minX+1,b.maxX-1); break;
+    default: z=b.maxZ+margin; x=clamp(px,b.minX+1,b.maxX-1); break;
   }
   return new THREE.Vector3(x,getPlayableSurfaceY(x,z,0)+GROUND_Y_OFFSET,z);
 }
@@ -4401,13 +4401,13 @@ function artistTransition(a,newState){
   }
 }
 
-function moveArtist(a,dt,nx,nz,baseSpeed){
+function moveArtist(a,dt,nx,nz,baseSpeed,clampToArena=true){
   const p=a.inst.outer.position;
   const speed=baseSpeed*(a.inWater?WATER_SPEED_MULT:1);
   const beforeX=p.x, beforeZ=p.z;
   p.x+=nx*speed*dt;
   p.z+=nz*speed*dt;
-  clampToPlayableArea(p,0.2);
+  if(clampToArena) clampToPlayableArea(p,0.2);
   a.inst.outer.rotation.y=Math.atan2(nx,nz);
   // Stuck detection: if the arena-bounds clamp ate most of the step
   // (artist pushed into an edge/corner), count frames. DECAY slowly
@@ -4649,9 +4649,18 @@ function updateArtists(dt,nowS){
       let hx=toX/d, hz=toZ/d;
       const stuck=a.stuckFrames||0;
       if(stuck>6) ({hx,hz}=steerArtistDirection(a,hx,hz,stuck));
-      moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED)*1.08);
-      if(stuck>80){
-        // Can't reach the spawn point â€” just despawn.
+      moveArtist(a,dt,hx,hz,getArtistCruiseSpeed(a,ARTIST_WALK_SPEED)*1.08,false);
+      const b=getPlayableBounds();
+      const offscreenMargin=1.8;
+      if(
+        p.x<b.minX-offscreenMargin||p.x>b.maxX+offscreenMargin||
+        p.z<b.minZ-offscreenMargin||p.z>b.maxZ+offscreenMargin
+      ){
+        removeArtist(i);
+        continue;
+      }
+      if(stuck>110){
+        // Can't reach the exit after a prolonged run â€” just despawn.
         removeArtist(i);
         continue;
       }
