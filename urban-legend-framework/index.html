@@ -550,30 +550,6 @@
     80%{filter:drop-shadow(0 0 2px rgba(180,145,255,0.72)) drop-shadow(0 0 8px rgba(180,145,255,0.48));}
     100%{filter:drop-shadow(0 0 2px rgba(255,110,180,0.7)) drop-shadow(0 0 8px rgba(255,110,180,0.45));}
   }
-  .rainbow-word{
-    background:linear-gradient(90deg,#ff72bd 0%,#ffd86b 18%,#96ffbe 40%,#91d6ff 62%,#ceb1ff 82%,#ff72bd 100%);
-    background-size:240% 100%;
-    -webkit-background-clip:text;background-clip:text;
-    color:transparent;-webkit-text-fill-color:transparent;
-    animation:rainbowGlow 3.8s linear infinite,awShimmer 4.4s linear infinite;
-    text-shadow:none;
-    filter:drop-shadow(0 0 2px rgba(255,255,255,0.76)) drop-shadow(0 0 7px rgba(255,185,225,0.48));
-  }
-  #coin-label{
-    display:inline-block;
-    font:inherit;
-    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
-    letter-spacing:0.05em;
-    line-height:1;
-  }
-  #shop-label{
-    display:inline-block;
-    font:inherit;
-    font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
-    letter-spacing:0.05em;
-    line-height:1;
-    pointer-events:none;
-  }
   #coin-count{
     animation:rainbowGlow 3.8s linear infinite;
     text-shadow:
@@ -581,7 +557,17 @@
       0 0 5px rgba(255,174,220,0.45),
       0 0 10px rgba(164,222,255,0.42);
   }
-  #shop-icon{animation:none}
+  @keyframes whiteSoftGlow{
+    0%{filter:drop-shadow(0 0 3px rgba(255,255,255,0.75)) drop-shadow(0 0 10px rgba(255,215,244,0.38));}
+    50%{filter:drop-shadow(0 0 4px rgba(255,255,255,0.92)) drop-shadow(0 0 15px rgba(255,215,244,0.58));}
+    100%{filter:drop-shadow(0 0 3px rgba(255,255,255,0.75)) drop-shadow(0 0 10px rgba(255,215,244,0.38));}
+  }
+  #coin-icon,#shop-icon{
+    animation:rainbowGlow 3.4s linear infinite;
+  }
+  #kill-icon{
+    animation:whiteSoftGlow 2.8s ease-in-out infinite;
+  }
   #checkout-btn{
     border:none;background:transparent;color:#9E9A91;
     font:inherit;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
@@ -633,11 +619,13 @@
     pointer-events:none;display:block}
   #scene-soft-glow{position:fixed;inset:0;pointer-events:none;z-index:9;
     background:
-      radial-gradient(70% 22% at 50% -3%, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 38%, transparent 72%),
-      radial-gradient(40% 52% at -4% 50%, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 42%, transparent 74%),
-      radial-gradient(40% 52% at 104% 50%, rgba(255,255,255,0.16), rgba(255,255,255,0.05) 42%, transparent 74%),
-      radial-gradient(74% 24% at 50% 103%, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 36%, transparent 70%);
-    filter:blur(14px)}
+      radial-gradient(88% 30% at 50% -2%, rgba(255,255,255,0.98), rgba(255,255,255,0.48) 28%, rgba(255,255,255,0.12) 48%, transparent 72%),
+      radial-gradient(52% 76% at -5% 50%, rgba(255,255,255,0.92), rgba(255,255,255,0.44) 24%, rgba(255,255,255,0.1) 44%, transparent 72%),
+      radial-gradient(52% 76% at 105% 50%, rgba(255,255,255,0.92), rgba(255,255,255,0.44) 24%, rgba(255,255,255,0.1) 44%, transparent 72%),
+      radial-gradient(88% 32% at 50% 102%, rgba(255,255,255,0.98), rgba(255,255,255,0.5) 28%, rgba(255,255,255,0.12) 48%, transparent 72%);
+    filter:blur(42px);
+    opacity:1;
+    mix-blend-mode:screen}
   #joystick-zone{position:fixed;left:14%;top:78%;width:120px;height:120px;
     transform:translate(-50%,-50%);
     pointer-events:auto;touch-action:none;z-index:18}
@@ -1352,7 +1340,7 @@
 <div id="hud">
   <div class="hud-box" id="kill-box"></div>
   <div class="hud-box" id="timer-box"><button id="checkout-btn" type="button">Check Out Sweet Home</button></div>
-  <div class="hud-box" id="coin-box"><span id="coin-label" class="rainbow-word">Coin</span></div>
+  <div class="hud-box" id="coin-box"></div>
   <img id="kill-icon" class="hud-icon hud-icon-skull hud-detached" src="game icon/artistcount icon.png" alt="" aria-hidden="true">
   <span id="kill-count" class="hud-detached hud-detached-count">0</span>
   <span id="coin-glyph" class="hud-icon-coin-glyph hud-detached" aria-hidden="true"><svg class="hud-coin-svg" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="coin-glyph-grad" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="#fff2b0"/><stop offset="55%" stop-color="#f5cd54"/><stop offset="100%" stop-color="#b8830d"/></radialGradient></defs><circle cx="12" cy="12" r="10" fill="url(#coin-glyph-grad)" stroke="#7a5300" stroke-width="1.2"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#6e4500" font-family="Georgia,serif">$</text></svg></span>
@@ -1407,7 +1395,7 @@
 </div>
 <div id="clean-btn-badge" aria-hidden="true"></div>
 
-<button id="shop-btn" aria-label="Shop"><span id="shop-label" class="rainbow-word">Shop</span></button>
+<button id="shop-btn" aria-label="Shop"></button>
 <img id="shop-icon" class="hud-icon hud-icon-shop hud-detached" src="game icon/shop icon.png" alt="Shop">
 <div id="shop-panel">
   <button id="shop-close" aria-label="Close shop">Ã—</button>
@@ -6845,10 +6833,10 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "timer-box": {
-      "x": 50.221,
+      "x": 50.18300000000001,
       "y": 15.147,
-      "w": 85.818115234375,
-      "h": 39.81818389892578,
+      "w": 38.55,
+      "h": 39.82,
       "z": 300,
       "locked": true
     },
