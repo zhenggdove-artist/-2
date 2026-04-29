@@ -1975,11 +1975,15 @@ const _upPos=new THREE.Vector3();
 const groundYCache=new Map(); // key â†’ y (floats rounded to 0.5m grid)
 let playableLayer=null; // {y,tolerance,minX,maxX,minZ,maxZ,centerX,centerZ,step,samples,footprint}
 
-function rayGroundHits(x,z){
+function rayGroundHits(x,z,opts=null){
   if(!groundMeshes.length&&!playgroundRoot) return [];
-  _upPos.set(x,80,z);
+  const originY=Number.isFinite(opts?.originY) ? opts.originY : 80;
+  const far=Number.isFinite(opts?.far) ? opts.far : 200;
+  const minY=Number.isFinite(opts?.minY) ? opts.minY : -Infinity;
+  const maxY=Number.isFinite(opts?.maxY) ? opts.maxY : Infinity;
+  _upPos.set(x,originY,z);
   groundRaycaster.set(_upPos,_downV);
-  groundRaycaster.far=200;
+  groundRaycaster.far=far;
   // Multi-hit mode only during this call; restore after so per-frame
   // getGroundY keeps the fast "top hit only" path.
   const prev=groundRaycaster.firstHitOnly;
@@ -1993,6 +1997,7 @@ function rayGroundHits(x,z){
   const ys=[];
   for(const hit of hits){
     const y=hit.point.y;
+    if(y<minY || y>maxY) continue;
     if(!ys.length || Math.abs(y-ys[ys.length-1])>0.22) ys.push(y);
   }
   return ys;
@@ -2255,28 +2260,80 @@ function extractPlayableFloorCandidates(x,z,ys){
   return out;
 }
 
-async function detectPlayableLayer(progressFn){
+function getPlayableLayerScanConfig(forceWorld=false){
+  const fallback={
+    minX:-worldBoundR,
+    maxX:worldBoundR,
+    minZ:-worldBoundR,
+    maxZ:worldBoundR,
+    rayOpts:null,
+    source:'world',
+  };
+  if(forceWorld) return fallback;
+  if(!pillars.length) return fallback;
+  const xs=pillars.map(p=>p.pos.x);
+  const zs=pillars.map(p=>p.pos.z);
+  const heights=pillars.map(p=>Math.max(2,Number.isFinite(p.topY)?p.topY:4)).sort((a,b)=>a-b);
+  if(!xs.length||!zs.length||!heights.length) return fallback;
+  const minX=Math.min(...xs);
+  const maxX=Math.max(...xs);
+  const minZ=Math.min(...zs);
+  const maxZ=Math.max(...zs);
+  const spanX=Math.max(1,maxX-minX);
+  const spanZ=Math.max(1,maxZ-minZ);
+  const margin=Math.max(3,Math.min(8,Math.max(spanX,spanZ)*0.12));
+  const roofHeight=heights[Math.min(heights.length-1,Math.floor(heights.length*0.9))];
+  const originY=Math.max(10,roofHeight+4.5);
+  return {
+    minX:minX-margin,
+    maxX:maxX+margin,
+    minZ:minZ-margin,
+    maxZ:maxZ+margin,
+    rayOpts:{
+      originY,
+      far:Math.max(16,originY+8),
+      minY:-6,
+      maxY:originY,
+    },
+    source:'pillars',
+    roofHeight,
+  };
+}
+
+async function detectPlayableLayer(progressFn,forceWorldScan=false){
   const cached=hydratePlayableLayer(loadCachedJSON(PLAYABLE_LAYER_CACHE_KEY));
   if(cached){
     if(progressFn) progressFn(1);
     return cached;
   }
   if(!playgroundRoot) return null;
+  const scan=getPlayableLayerScanConfig(forceWorldScan);
   // Coarser grid â€” each sample does a multi-hit raycast which is the
-  // expensive step. 16 samples across the diameter is plenty for
-  // picking the play layer.
-  const step=Math.max(1.2,worldBoundR/16);
+  // expensive step. 16 samples across the larger scan span is plenty for
+  // picking the play layer, and when pillar bounds are available we avoid
+  // wasting samples on the far outer roof / ceiling area.
+  const spanX=Math.max(1,scan.maxX-scan.minX);
+  const spanZ=Math.max(1,scan.maxZ-scan.minZ);
+  const step=Math.max(1.2,Math.max(spanX,spanZ)/16);
   const xs=[],zs=[];
-  for(let x=-worldBoundR;x<=worldBoundR;x+=step) xs.push(x);
-  for(let z=-worldBoundR;z<=worldBoundR;z+=step) zs.push(z);
+  for(let x=scan.minX;x<=scan.maxX;x+=step) xs.push(x);
+  for(let z=scan.minZ;z<=scan.maxZ;z+=step) zs.push(z);
   const total=xs.length*zs.length;
   let done=0;
   let lastYieldAt=performance.now();
   const sampleColumns=[];
   const candidateHeights=[];
+  console.log('[floor] scan config',scan.source,{
+    minX:+scan.minX.toFixed(2),
+    maxX:+scan.maxX.toFixed(2),
+    minZ:+scan.minZ.toFixed(2),
+    maxZ:+scan.maxZ.toFixed(2),
+    step:+step.toFixed(2),
+    rayOriginY:Number.isFinite(scan.rayOpts?.originY)?+scan.rayOpts.originY.toFixed(2):null,
+  });
   for(const x of xs){
     for(const z of zs){
-      const ys=rayGroundHits(x,z);
+      const ys=rayGroundHits(x,z,scan.rayOpts);
       const floors=extractPlayableFloorCandidates(x,z,ys);
       if(floors.length){
         sampleColumns.push({x,z,floors});
@@ -2293,9 +2350,21 @@ async function detectPlayableLayer(progressFn){
     }
   }
   if(progressFn) progressFn(1);
-  if(sampleColumns.length<20||candidateHeights.length<20) return null;
+  if(sampleColumns.length<20||candidateHeights.length<20){
+    if(!forceWorldScan && scan.source==='pillars'){
+      console.warn('[floor] pillar-bounded scan too sparse, retrying full-world scan');
+      return detectPlayableLayer(progressFn,true);
+    }
+    return null;
+  }
   const clusters=buildHeightClusters(candidateHeights,0.7);
-  if(!clusters.length) return null;
+  if(!clusters.length){
+    if(!forceWorldScan && scan.source==='pillars'){
+      console.warn('[floor] pillar-bounded scan found no clusters, retrying full-world scan');
+      return detectPlayableLayer(progressFn,true);
+    }
+    return null;
+  }
   const ranked=[];
   for(let ci=0;ci<clusters.length;ci++){
     const cluster=clusters[ci];
@@ -2327,7 +2396,13 @@ async function detectPlayableLayer(progressFn){
     return a.cluster.avg-b.cluster.avg;
   });
   const chosen=ranked[0];
-  if(!chosen) return null;
+  if(!chosen){
+    if(!forceWorldScan && scan.source==='pillars'){
+      console.warn('[floor] pillar-bounded scan found no playable layer, retrying full-world scan');
+      return detectPlayableLayer(progressFn,true);
+    }
+    return null;
+  }
   const samples=chosen.samples;
   const minX=Math.min(...samples.map(s=>s.x));
   const maxX=Math.max(...samples.map(s=>s.x));
