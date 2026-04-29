@@ -630,10 +630,11 @@
   #clean-btn:active{transform:scale(0.93)}
   #clean-btn.cooling{opacity:1;filter:saturate(0.28) grayscale(0.34) brightness(0.76) contrast(1.04);
     box-shadow:inset 0 0 0 999px rgba(0,0,0,0.46),inset 0 0 0 2px rgba(255,255,255,0.12),0 6px 14px rgba(0,0,0,0.36)}
-  #clean-btn .btn-sub{position:absolute;top:-10px;right:-10px;min-width:18px;height:18px;
-    padding:0 6px;border-radius:999px;background:#1d1730;color:#9ff7de;
+  #clean-btn-badge{position:fixed;left:0;top:0;display:none;min-width:18px;height:18px;
+    padding:0 6px;border-radius:999px;background:#ff4fa8;color:#fff7fc;
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;font-size:10px;line-height:18px;
-    letter-spacing:0.06em;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(255,255,255,0.25);z-index:4}
+    letter-spacing:0.06em;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(255,255,255,0.25);
+    z-index:24;pointer-events:none;transform:translate(-18%,-36%)}
   .clean-ico-svg,.clean-ico-img{width:var(--clean-icon-size);height:var(--clean-icon-size);display:block;
     transform:translate(var(--clean-icon-offset-x),var(--clean-icon-offset-y));
     filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));pointer-events:none}
@@ -936,7 +937,8 @@
   body.shop-open #paint-bar,
   body.shop-open #paint-bar-frame,
   body.shop-open #clean-btn,
-  body.shop-open #clean-btn-frame{display:none!important}
+  body.shop-open #clean-btn-frame,
+  body.shop-open #clean-btn-badge{display:none!important}
 
   /* Intro overlay */
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
@@ -1025,6 +1027,7 @@
   body.game-ended #attack-btn,
   body.game-ended #special-btn,
   body.game-ended #clean-btn,
+  body.game-ended #clean-btn-badge,
   body.game-ended #title{display:none!important}
   body.intro-active #hud,
   body.intro-active #kill-box,
@@ -1047,6 +1050,7 @@
   body.intro-active #attack-btn,
   body.intro-active #special-btn,
   body.intro-active #clean-btn,
+  body.intro-active #clean-btn-badge,
   body.intro-active #kill-box-frame,
   body.intro-active #coin-box-frame,
   body.intro-active #shop-btn-frame,
@@ -1320,6 +1324,7 @@
 <div id="game-controls">
   <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
   <button id="clean-btn" class="hidden">CLEAN</button>
+  <div id="clean-btn-badge" aria-hidden="true"></div>
   <button id="special-btn" aria-label="Use special skill">
     <img class="btn-ico-img" src="game icon/skill.png" alt="" aria-hidden="true">
   </button>
@@ -1458,9 +1463,10 @@
 // surface. The viewport meta + touch-action:manipulation handle most
 // browsers, but iOS still honours gesturestart and rapid-tap zoom
 // unless we kill them explicitly.
-window.addEventListener('gesturestart',e=>e.preventDefault());
-window.addEventListener('gesturechange',e=>e.preventDefault());
-window.addEventListener('gestureend',e=>e.preventDefault());
+const allowEndOverlayGesture=e=>gameState==='ended' && !!e.target?.closest?.('#end-overlay');
+window.addEventListener('gesturestart',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); });
+window.addEventListener('gesturechange',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); });
+window.addEventListener('gestureend',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); });
 let __lastTouchEnd=0;
 document.addEventListener('touchend',e=>{
   const now=Date.now();
@@ -1473,7 +1479,7 @@ document.addEventListener('touchend',e=>{
   __lastTouchEnd=now;
 },{passive:false});
 document.addEventListener('touchmove',e=>{
-  if(e.touches && e.touches.length>1) e.preventDefault();
+  if(e.touches && e.touches.length>1 && !allowEndOverlayGesture(e)) e.preventDefault();
 },{passive:false});
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -5950,6 +5956,7 @@ const activeThrownProjectiles=[];
 let specialAimMarker=null;
 let currentSpecialAimTarget=null;
 const cleanBtn=document.getElementById('clean-btn');
+const cleanBtnBadge=document.getElementById('clean-btn-badge');
 const specialBtn=document.getElementById('special-btn');
 const shopBtn=document.getElementById('shop-btn');
 const shopPanel=document.getElementById('shop-panel');
@@ -7089,6 +7096,7 @@ function applyUILayoutMetrics(def,metrics){
   if(!el||!metrics) return;
   if(metrics.hidden){
     el.style.setProperty('display','none','important');
+    if(def.id==='clean-btn' && cleanBtnBadge) cleanBtnBadge.style.display='none';
     return;
   }
   el.style.removeProperty('display');
@@ -7108,6 +7116,7 @@ function applyUILayoutMetrics(def,metrics){
   el.style.setProperty('--ui-scale-y',`${scaleY.toFixed(3)}`,'important');
   el.style.setProperty('--ui-scale',`${textScale.toFixed(3)}`,'important');
   el.style.setProperty('z-index',String(getUILayoutLayer(def,metrics)),'important');
+  if(def.id==='clean-btn') updateCleanBadgeLayout();
   if(def.id==='shop-btn'){
     el.style.setProperty('padding','0 6px','important');
     el.style.setProperty('font-size',`${Math.max(8,13*textScale)}px`,'important');
@@ -8179,18 +8188,33 @@ function refreshSpecialButton(){
 function getCleanIconSVG(){
   return `<img class="clean-ico-img" src="game icon/clean.png" alt="" aria-hidden="true">`;
 }
+function updateCleanBadgeLayout(){
+  if(!cleanBtnBadge||!cleanBtn) return;
+  const hidden=cleanBtn.classList.contains('hidden') || getComputedStyle(cleanBtn).display==='none' || !cleanBtnBadge.textContent;
+  if(hidden){
+    cleanBtnBadge.style.display='none';
+    return;
+  }
+  const rect=cleanBtn.getBoundingClientRect();
+  cleanBtnBadge.style.left=`${rect.right-4}px`;
+  cleanBtnBadge.style.top=`${rect.top+4}px`;
+  cleanBtnBadge.style.display='block';
+}
 function refreshCleanButton(){
   if(!cleanBtn) return;
   if(debugCheatMode) applyCheatInventory();
   const hasCleaner=debugCheatMode || cleanerUses>0;
   const canClean=debugCheatMode ? !!currentCleanTarget : (hasCleaner && !!currentCleanTarget);
   const sub=hasCleaner ? (debugCheatMode ? '∞' : String(cleanerUses)) : '';
-  const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
   cleanBtn.classList.remove('hidden');
   cleanBtnFrame?.classList.remove('hidden');
-  cleanBtn.innerHTML=`${getCleanIconSVG()}${subHtml}`;
+  cleanBtn.innerHTML=getCleanIconSVG();
   cleanBtn.classList.toggle('cooling',!canClean);
   cleanBtn.setAttribute('aria-disabled',canClean?'false':'true');
+  if(cleanBtnBadge){
+    cleanBtnBadge.textContent=sub;
+    updateCleanBadgeLayout();
+  }
 }
 
 function spendCoins(cost){
@@ -9451,10 +9475,18 @@ let replaySceneEntryId=null;
 let endCameraOrbitAngle=0;
 let endCameraPitch=0.78;
 let endCameraZoom=1;
+let endPinchActive=false;
+let endPinchStartDist=0;
+let endPinchStartZoom=1;
 // Auto-orbit until the player drags / zooms the end-screen camera —
 // then we freeze the angle wherever they left it.
 let endCameraAutoRotate=true;
 const END_CAMERA_AUTO_RATE=0.08; // radians / second
+function getTouchDistance(t0,t1){
+  const dx=t1.clientX-t0.clientX;
+  const dy=t1.clientY-t0.clientY;
+  return Math.hypot(dx,dy);
+}
 let introProgressValue=0;
 let introProgressTargetValue=0;
 let introProgressLabel='LOADING';
@@ -9782,6 +9814,27 @@ endOverlay?.addEventListener('click',e=>{
     setEndOverlaySceneView(true);
   }
 });
+endOverlay?.addEventListener('touchstart',e=>{
+  if(gameState!=='ended' || e.touches.length!==2) return;
+  endPinchActive=true;
+  endCameraAutoRotate=false;
+  endPinchStartDist=getTouchDistance(e.touches[0],e.touches[1]);
+  endPinchStartZoom=endCameraZoom;
+  e.preventDefault();
+},{passive:false});
+endOverlay?.addEventListener('touchmove',e=>{
+  if(gameState!=='ended' || !endPinchActive || e.touches.length!==2) return;
+  const nextDist=getTouchDistance(e.touches[0],e.touches[1]);
+  if(nextDist<=0 || endPinchStartDist<=0) return;
+  endCameraZoom=clamp(endPinchStartZoom*(endPinchStartDist/nextDist),0.45,1.85);
+  e.preventDefault();
+},{passive:false});
+const endPinchEnd=()=>{
+  endPinchActive=false;
+  endPinchStartDist=0;
+};
+endOverlay?.addEventListener('touchend',endPinchEnd,{passive:false});
+endOverlay?.addEventListener('touchcancel',endPinchEnd,{passive:false});
 replayBtn.addEventListener('click',()=>{
   endOverlay.classList.remove('show');
   document.body.classList.remove('game-ended');
@@ -10129,6 +10182,7 @@ window.addEventListener('resize',()=>{
   camera.aspect=W()/H();
   camera.updateProjectionMatrix();
   vhsPass.uniforms.resolution.value.set(W(),H());
+  updateCleanBadgeLayout();
 });
 
 document.addEventListener('selectstart',e=>{
@@ -10136,9 +10190,9 @@ document.addEventListener('selectstart',e=>{
   e.preventDefault();
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
-document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
-document.addEventListener('gestureend',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gesturestart',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); },{passive:false});
+document.addEventListener('gesturechange',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); },{passive:false});
+document.addEventListener('gestureend',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); },{passive:false});
 let lastTouchEndAt=0;
 document.addEventListener('touchend',e=>{
   const now=performance.now();
