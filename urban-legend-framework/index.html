@@ -698,20 +698,21 @@
   #shop-panel .shop-section.skill-section{color:#5f4200;background:linear-gradient(90deg,rgba(255,225,84,0.96),rgba(255,196,54,0.65));padding:8px 10px;border-radius:999px;box-shadow:0 6px 16px rgba(255,194,46,0.22)}
   #shop-panel .shop-section.burst-section{color:#ffe9f6;background:linear-gradient(90deg,rgba(255,93,157,0.28),rgba(116,199,255,0.2));padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.12)}
   #shop-close{position:absolute;right:12px;top:10px;border:none;background:transparent;color:#fff;font-size:22px;cursor:pointer}
-  .shop-card{padding:12px 12px 10px;border-radius:16px;background:rgba(255,255,255,0.06);margin-top:10px}
-  .shop-card h4{margin:0 0 4px;font-size:13px;letter-spacing:0.14em;color:#fff0bf}
+  .shop-card{padding:11px 12px;border-radius:14px;background:rgba(255,250,232,0.08);margin-top:8px;
+    border:1px solid rgba(255,233,163,0.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04)}
+  .shop-card h4{margin:0 0 4px;font-size:13px;letter-spacing:0.08em;color:#fff2bf}
   .shop-card .shop-ico{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin-right:8px;
     border-radius:999px;background:rgba(255,255,255,0.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.16);font-size:14px;vertical-align:middle}
-  .shop-card p{margin:0 0 8px;font-size:12px;line-height:1.35;opacity:0.78}
-  .shop-card.skill-card{background:linear-gradient(180deg,rgba(255,233,118,0.28),rgba(112,74,0,0.3));border:1px solid rgba(255,223,96,0.34);box-shadow:inset 0 0 0 1px rgba(255,245,173,0.14)}
+  .shop-card p{margin:0 0 8px;font-size:12px;line-height:1.32;opacity:0.88;color:#fff4cf}
+  .shop-card.skill-card{background:linear-gradient(180deg,rgba(255,240,166,0.18),rgba(112,74,0,0.2));border:1px solid rgba(255,223,96,0.26);box-shadow:inset 0 0 0 1px rgba(255,245,173,0.1)}
   .shop-card.skill-card h4{color:#fff2a8}
-  .shop-card.skill-card p{color:#fff4cf;opacity:0.9}
-  .shop-card.burst-card{background:linear-gradient(180deg,rgba(255,112,168,0.16),rgba(121,188,255,0.12));border:1px solid rgba(255,180,216,0.24)}
+  .shop-card.skill-card p{color:#fff4cf;opacity:0.92}
+  .shop-card.utility-card{background:linear-gradient(180deg,rgba(255,220,236,0.16),rgba(117,74,88,0.18));border:1px solid rgba(255,184,212,0.24)}
   .shop-buy{width:100%;padding:10px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);
     background:linear-gradient(90deg,#553c69,#392448);color:#fff;font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
-    font-size:12px;letter-spacing:0.18em;cursor:pointer;text-transform:uppercase}
+    font-size:12px;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase}
   .shop-card.skill-card .shop-buy{background:linear-gradient(90deg,#ffe66d,#ffb91f);color:#503300;border-color:rgba(255,247,197,0.8)}
-  .shop-card.burst-card .shop-buy{background:linear-gradient(90deg,#6d3e7b,#2f4e74)}
+  .shop-card.utility-card .shop-buy{background:linear-gradient(90deg,#ffb9d6,#f06ea8);color:#4b1330;border-color:rgba(255,237,245,0.8)}
   .shop-buy:disabled{opacity:0.45;cursor:not-allowed}
   #loadout-bar{position:fixed;left:16px;bottom:22px;z-index:24;display:flex;gap:10px;align-items:flex-end;
     justify-content:flex-start;max-width:min(78vw,520px);flex-wrap:wrap;
@@ -783,7 +784,7 @@
     #shop-panel h3{font-size:16px;letter-spacing:0.12em}
     #shop-panel .shop-sub{display:none}
     #shop-panel .shop-section{margin-top:10px;font-size:11px;letter-spacing:0.14em}
-    .shop-card{padding:10px 10px 12px;margin-top:8px;border-radius:14px}
+    .shop-card{padding:10px 10px 11px;margin-top:8px;border-radius:14px}
     .shop-card h4{font-size:12px;letter-spacing:0.1em}
     .shop-card p{font-size:11px;line-height:1.28;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .shop-buy{padding:11px 10px;font-size:11px;letter-spacing:0.12em}
@@ -1341,47 +1342,17 @@
 <div id="shop-panel">
   <button id="shop-close" aria-label="Close shop">Ã—</button>
   <h3>SHOP</h3>
-  <div class="shop-sub">Buy skill gear here. FX bursts unlock from KO milestones and are equipped from the loadout bar.</div>
+  <div class="shop-sub">Buy detergent and battle tools.</div>
   <div class="shop-section">UTILITY</div>
-  <div class="shop-card burst-card">
-    <h4>CLEANER Â· 1 COIN</h4>
-    <p>Buy 1 cleaner canister. Each canister gives 3 clean uses.</p>
+  <div class="shop-card utility-card">
+    <h4>DETERGENT · 1 COIN</h4>
+    <p>Buy 1 detergent canister. Each canister gives 3 clean uses.</p>
     <button class="shop-buy" id="buy-cleaner-btn">BUY CLEANER</button>
-  </div>
-  <div class="shop-card burst-card">
-    <h4>PRISM BURST Â· 5 COINS</h4>
-    <p>Multicolor confetti burst when an artist is knocked down.</p>
-    <button class="shop-buy" id="buy-burst-prism-btn" hidden>BUY PRISM</button>
-  </div>
-  <div class="shop-card">
-    <h4>PETAL BURST Â· 5 COINS</h4>
-    <p>Heart-shaped pink petal cloud that blooms outward.</p>
-    <button class="shop-buy" id="buy-burst-petal-btn" hidden>BUY PETAL</button>
-  </div>
-  <div class="shop-card burst-card">
-    <h4>STAR BURST Â· 5 COINS</h4>
-    <p>Golden five-point star cloud with glitter spokes.</p>
-    <button class="shop-buy" id="buy-burst-star-btn" hidden>BUY STAR</button>
-  </div>
-  <div class="shop-card burst-card">
-    <h4>FIRE BURST - 5 COINS</h4>
-    <p>Orange flame tongues and hot cinders when an artist is knocked down.</p>
-    <button class="shop-buy" id="buy-burst-fire-btn" hidden>BUY FIRE</button>
-  </div>
-  <div class="shop-card burst-card">
-    <h4>ICE BURST - 5 COINS</h4>
-    <p>Blue-white six-arm snowflake cloud with cold sparkles.</p>
-    <button class="shop-buy" id="buy-burst-ice-btn" hidden>BUY ICE</button>
-  </div>
-  <div class="shop-card burst-card">
-    <h4>TORNADO BURST - 5 COINS</h4>
-    <p>Spiral gusts that corkscrew upward before fading.</p>
-    <button class="shop-buy" id="buy-burst-tornado-btn" hidden>BUY TORNADO</button>
   </div>
   <div class="shop-section skill-section">SKILL GEAR</div>
   <div class="shop-card skill-card">
     <h4>FLAMETHROWER - 5 COINS</h4>
-    <p>Short-range jet. Flame origin is lifted to head level. Cooldown 1 second.</p>
+    <p>Short-range flame jet. Cooldown 1 second.</p>
     <button class="shop-buy" id="buy-weapon-flame-btn">BUY FLAME</button>
   </div>
   <div class="shop-card skill-card" hidden>
@@ -1391,12 +1362,12 @@
   </div>
   <div class="shop-card skill-card">
     <h4>ICE BLOCK - 5 COINS</h4>
-    <p>Throw an ice block. The front 3x3 freeze zone locks artists in place for 15 seconds.</p>
+    <p>Throw an ice block. Freezes nearby artists for 15 seconds.</p>
     <button class="shop-buy" id="buy-weapon-ice-btn">BUY ICE BLOCK</button>
   </div>
   <div class="shop-card skill-card">
     <h4>BOMB - 5 COINS</h4>
-    <p>Drop traps. Artists that step on one explode and burn for 5 seconds. Cooldown 3 seconds, max 5 active.</p>
+    <p>Throw a bomb trap. Burns nearby artists for 5 seconds.</p>
     <button class="shop-buy" id="buy-weapon-bomb-btn">BUY BOMB</button>
   </div>
 </div>
@@ -1423,7 +1394,7 @@
       <div id="intro-progress-track"><div id="intro-progress-fill"></div></div>
     </div>
     <div class="tag" style="margin-top:8px;opacity:0.6;font-size:11px;line-height:1.5">
-      Defeat artists to earn coins. Spend them on cleaner to remove graffiti, and use the watering can to grow cute plants.
+      Defeat the artist to earn coins. You can buy detergent at the shop to remove the artist's graffiti. If there are more than 20 pieces of graffiti, your home will be destroyed. The shop also sells more items to help you deal with the artist. Remember to water the plants; these lovely plants will grow taller and stronger.
     </div>
   </div>
 </div>
@@ -2170,6 +2141,7 @@ function buildPlayableFootprint(samples,step){
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
+const RIVER_REGION_DEFAULTS=[];
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
@@ -2388,11 +2360,17 @@ function sanitizeRiverRegions(regions){
     .filter(r=>Number.isFinite(r.minX)&&Number.isFinite(r.maxX)&&Number.isFinite(r.minZ)&&Number.isFinite(r.maxZ)&&((r.maxX-r.minX)>=0.45)&&((r.maxZ-r.minZ)>=0.45));
 }
 
+function getDefaultRiverRegions(){
+  return sanitizeRiverRegions(RIVER_REGION_DEFAULTS);
+}
+
 function loadManualRiverRegions(){
   try{
-    return sanitizeRiverRegions(JSON.parse(localStorage.getItem(RIVER_MANUAL_STORAGE_KEY)||'[]'));
+    const raw=localStorage.getItem(RIVER_MANUAL_STORAGE_KEY);
+    if(!raw) return getDefaultRiverRegions();
+    return sanitizeRiverRegions(JSON.parse(raw));
   }catch{
-    return [];
+    return getDefaultRiverRegions();
   }
 }
 
@@ -3406,24 +3384,15 @@ async function autoDetectRiverEditorRegions(){
 }
 
 function clampRiverRegionToBounds(region){
-  const bounds=getRiverWorldBounds();
-  const width=Math.max(0.45,region.maxX-region.minX);
-  const height=Math.max(0.45,region.maxZ-region.minZ);
-  let minX=clamp(region.minX,bounds.minX,bounds.maxX-0.45);
-  let maxX=clamp(region.maxX,bounds.minX+0.45,bounds.maxX);
-  let minZ=clamp(region.minZ,bounds.minZ,bounds.maxZ-0.45);
-  let maxZ=clamp(region.maxZ,bounds.minZ+0.45,bounds.maxZ);
-  if(maxX-minX<0.45){
-    const cx=(minX+maxX)*0.5;
-    minX=clamp(cx-0.225,bounds.minX,bounds.maxX-0.45);
-    maxX=minX+0.45;
-  }
-  if(maxZ-minZ<0.45){
-    const cz=(minZ+maxZ)*0.5;
-    minZ=clamp(cz-0.225,bounds.minZ,bounds.maxZ-0.45);
-    maxZ=minZ+0.45;
-  }
-  return normalizeRiverRegion({...region,minX,maxX,minZ,maxZ,width,height});
+  let minX=Number.isFinite(region?.minX)?region.minX:0;
+  let maxX=Number.isFinite(region?.maxX)?region.maxX:minX+0.45;
+  let minZ=Number.isFinite(region?.minZ)?region.minZ:0;
+  let maxZ=Number.isFinite(region?.maxZ)?region.maxZ:minZ+0.45;
+  if(maxX<minX) [minX,maxX]=[maxX,minX];
+  if(maxZ<minZ) [minZ,maxZ]=[maxZ,minZ];
+  if(maxX-minX<0.45) maxX=minX+0.45;
+  if(maxZ-minZ<0.45) maxZ=minZ+0.45;
+  return normalizeRiverRegion({...region,minX,maxX,minZ,maxZ});
 }
 
 function handleRiverEditorCanvasPointerDown(e){
@@ -4124,6 +4093,34 @@ function rewireArtistActions(){
   }
 }
 
+const ARTIST_SKIN_TARGET=new THREE.Color('#FFDCBD');
+const ARTIST_SKIN_EMISSIVE=new THREE.Color('#5a3925');
+function isLikelyArtistSkin(mesh,material){
+  const hint=`${mesh?.name||''} ${material?.name||''}`.toLowerCase();
+  if(/skin|face|head|neck|hand|arm|leg|body/.test(hint)) return true;
+  const c=material?.color;
+  if(!c) return false;
+  const {r,g,b}=c;
+  return r>0.34 && g>0.2 && b>0.14 && r>=g*1.03 && g>=b*1.02 && (r-b)>0.05;
+}
+function tuneArtistMaterial(mesh,material){
+  if(!material) return;
+  if(isLikelyArtistSkin(mesh,material)){
+    if(material.color) material.color.copy(ARTIST_SKIN_TARGET);
+    if(material.emissive){
+      material.emissive.copy(ARTIST_SKIN_EMISSIVE);
+      if('emissiveIntensity' in material) material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.2);
+    }
+    if('roughness' in material) material.roughness=Math.min(material.roughness??0.75,0.58);
+    if('metalness' in material) material.metalness=Math.min(material.metalness??0,0.02);
+  }else{
+    if(material.color) material.color.multiplyScalar(1.06);
+    if(material.emissive && 'emissiveIntensity' in material){
+      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.03);
+    }
+  }
+}
+
 function buildCharacterInstance(tint,isArtist){
   if(!charGLTF) return null;
   const root=SkeletonUtils.clone(charGLTF.scene);
@@ -4141,6 +4138,7 @@ function buildCharacterInstance(tint,isArtist){
             cm.color.multiply(tint);
           }
           if('envMapIntensity' in cm) cm.envMapIntensity=0.5;
+          if(isArtist) tuneArtistMaterial(o,cm);
           materialEntries.push({
             material:cm,
             color:cm.color?.clone?.()||null,
@@ -5547,7 +5545,7 @@ function attachPlayer(){
 // ===== Artists =====
 const artists=[]; // {inst, state:'walk'|'paint'|'leave'|'idle'|'flee'|'dying', target pillar, paintT, deathT, id}
 let artistIdCounter=0;
-const ARTIST_TINT=new THREE.Color('#ffc8c8'); // subtle reddish tint
+const ARTIST_TINT=new THREE.Color('#fff8f6');
 const ARTIST_WALK_SPEED=1.96;
 const ARTIST_FAR_WALK_MUL=0.5;      // beyond 10m from player, artists move at half walk speed
 const ARTIST_PAINT_TIME=10;         // sec to fully paint a pillar
@@ -7200,7 +7198,10 @@ function setUILayoutMode(mode){
   syncJoystickVisibility();
 }
 function formatUILayoutExport(){
-  return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
+  const uiBlock=`const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
+  const riverSource=riverEditorState.regions?.length ? riverEditorState.regions : (loadManualRiverRegions().length ? loadManualRiverRegions() : RIVERS);
+  const riverBlock=`const RIVER_REGION_DEFAULTS=${JSON.stringify(sanitizeRiverRegions(riverSource),null,2)};`;
+  return `${uiBlock}\n\n${riverBlock}`;
 }
 function showUILayoutToast(msg){
   let el=document.querySelector('.ui-layout-toast');
@@ -7482,9 +7483,9 @@ function showUILayoutExportModal(){
   modal.className='ui-layout-modal';
   const code=formatUILayoutExport();
   modal.innerHTML=`<div class="ui-layout-modal-card">
-    <h3>Export UI Layout</h3>
-    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code> block in <code>urban-legend-framework/index.html</code>.</p>
-    <p>After replacing it, save the file and refresh the game. Desktop and mobile adjustments are both included in this export.</p>
+    <h3>Export UI + Rivers</h3>
+    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code> and <code>const RIVER_REGION_DEFAULTS=...</code> blocks in <code>urban-legend-framework/index.html</code>.</p>
+    <p>After replacing them, save the file and refresh the game. Desktop/mobile UI and river regions are both included in this export.</p>
     <textarea spellcheck="false"></textarea>
     <div class="ui-layout-modal-actions">
       <button type="button" data-action="copy">Copy Code</button>
@@ -8610,7 +8611,7 @@ function renderShopState(){
   syncBurstShopVisibility();
   if(buyCleanerBtn){
     buyCleanerBtn.disabled=!debugCheatMode&&coinCount<1;
-    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
+    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES · 1 COIN':'BUY DETERGENT · 1 COIN';
   }
   for(const item of BURST_UNLOCK_ITEMS){
     if(item.id==='amber') continue;
@@ -8629,7 +8630,7 @@ function renderShopState(){
     }
     const owned=purchasedWeapons.has(item.id);
     btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-    btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+    btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name} · ${item.cost} COINS`;
   }
   refreshSpecialButton();
   refreshCleanButton();

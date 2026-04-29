@@ -1,4 +1,26 @@
 
+// Block iOS Safari pinch-to-zoom + double-tap-to-zoom on the game
+// surface. The viewport meta + touch-action:manipulation handle most
+// browsers, but iOS still honours gesturestart and rapid-tap zoom
+// unless we kill them explicitly.
+const allowEndOverlayGesture=e=>gameState==='ended' && !!e.target?.closest?.('#end-overlay');
+window.addEventListener('gesturestart',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); });
+window.addEventListener('gesturechange',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); });
+window.addEventListener('gestureend',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); });
+let __lastTouchEnd=0;
+document.addEventListener('touchend',e=>{
+  const now=Date.now();
+  if(now-__lastTouchEnd<320){
+    // Only swallow gestures aimed at the canvas — leaderboard inputs
+    // etc. should still get their default tap behavior.
+    if(e.target?.closest?.('input,textarea,select,button[type="submit"]')) return;
+    e.preventDefault();
+  }
+  __lastTouchEnd=now;
+},{passive:false});
+document.addEventListener('touchmove',e=>{
+  if(e.touches && e.touches.length>1 && !allowEndOverlayGesture(e)) e.preventDefault();
+},{passive:false});
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from 'three/addons/loaders/DRACOLoader.js';
@@ -384,6 +406,7 @@ renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
 
 const scene=new THREE.Scene();
+const FLAME_VISUAL_SCALE=2;
 
 // Sky gradient
 const skyCV=document.createElement('canvas');skyCV.width=2;skyCV.height=512;
@@ -392,7 +415,7 @@ const skyTex=new THREE.CanvasTexture(skyCV);
 scene.background=skyTex;
 {
   const g=skyCtx.createLinearGradient(0,0,0,512);
-  g.addColorStop(0,'#ffaed4');g.addColorStop(0.35,'#ffc6e1');g.addColorStop(0.7,'#ffe5f0');g.addColorStop(1,'#fffaf4');
+  g.addColorStop(0,'#f088c0');g.addColorStop(0.35,'#f3a8cf');g.addColorStop(0.7,'#f7cfe2');g.addColorStop(1,'#fff2f7');
   skyCtx.fillStyle=g;skyCtx.fillRect(0,0,2,512);
   skyTex.needsUpdate=true;
 }
@@ -409,7 +432,7 @@ const envTex=new THREE.CanvasTexture(envCV);
 envTex.mapping=THREE.EquirectangularReflectionMapping;
 scene.environment=envTex;
 
-scene.fog=new THREE.FogExp2('#f0d5e0',0.012);
+scene.fog=new THREE.FogExp2('#e2a3bf',0.0135);
 
 // Lights
 scene.add(new THREE.HemisphereLight('#ffe4f2','#6a5a8a',0.85));
@@ -503,8 +526,6 @@ function rayGroundHits(x,z){
   _upPos.set(x,80,z);
   groundRaycaster.set(_upPos,_downV);
   groundRaycaster.far=200;
-  // Multi-hit mode only during this call; restore after so per-frame
-  // getGroundY keeps the fast "top hit only" path.
   const prev=groundRaycaster.firstHitOnly;
   groundRaycaster.firstHitOnly=false;
   const target=groundMeshes.length?groundMeshes:[playgroundRoot];
@@ -687,7 +708,9 @@ function buildPlayableFootprint(samples,step){
 }
 
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
-const RIVER_CACHE_KEY='ul-river-bounds-v1';
+const RIVER_CACHE_KEY='ul-river-bounds-v3';
+const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
+const RIVER_REGION_DEFAULTS=[];
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
@@ -785,15 +808,13 @@ async function detectPlayableLayer(progressFn){
     return cached;
   }
   if(!playgroundRoot) return null;
-  // Coarser grid â€” each sample does a multi-hit raycast which is the
-  // expensive step. 16 samples across the diameter is plenty for
-  // picking the play layer.
   const step=Math.max(1.2,worldBoundR/16);
   const xs=[],zs=[];
   for(let x=-worldBoundR;x<=worldBoundR;x+=step) xs.push(x);
   for(let z=-worldBoundR;z<=worldBoundR;z+=step) zs.push(z);
   const total=xs.length*zs.length;
   let done=0;
+  let lastYieldAt=performance.now();
   const sampleColumns=[];
   const candidateHeights=[];
   for(const x of xs){
@@ -805,9 +826,12 @@ async function detectPlayableLayer(progressFn){
         candidateHeights.push(...floors.map(f=>f.y));
       }
       done++;
-      if(done%60===0){
+      if(done%12===0){
         if(progressFn) progressFn(done/total);
-        await new Promise(r=>setTimeout(r,0));
+      }
+      if(performance.now()-lastYieldAt>20){
+        lastYieldAt=performance.now();
+        await yieldToMainThread();
       }
     }
   }
@@ -815,28 +839,36 @@ async function detectPlayableLayer(progressFn){
   if(sampleColumns.length<20||candidateHeights.length<20) return null;
   const clusters=buildHeightClusters(candidateHeights,0.7);
   if(!clusters.length) return null;
-  const ranked=clusters
-    .map(cluster=>{
-      const samples=[];
-      for(const col of sampleColumns){
-        let best=null;
-        let bestDist=Infinity;
-        for(const floor of col.floors){
-          const dist=Math.abs(floor.y-cluster.avg);
-          if(dist<bestDist){
-            best=floor;
-            bestDist=dist;
-          }
+  const ranked=[];
+  for(let ci=0;ci<clusters.length;ci++){
+    const cluster=clusters[ci];
+    const samples=[];
+    for(let i=0;i<sampleColumns.length;i++){
+      const col=sampleColumns[i];
+      let best=null;
+      let bestDist=Infinity;
+      for(let j=0;j<col.floors.length;j++){
+        const floor=col.floors[j];
+        const dist=Math.abs(floor.y-cluster.avg);
+        if(dist<bestDist){
+          best=floor;
+          bestDist=dist;
         }
-        if(best&&bestDist<=0.9) samples.push(best);
       }
-      return {cluster,samples};
-    })
-    .filter(v=>v.samples.length>=12)
-    .sort((a,b)=>{
-      if(b.samples.length!==a.samples.length) return b.samples.length-a.samples.length;
-      return a.cluster.avg-b.cluster.avg;
-    });
+      if(best&&bestDist<=0.9) samples.push(best);
+      if(i%24===0 && performance.now()-lastYieldAt>20){
+        const rankProgress=0.78+((ci+(i/Math.max(1,sampleColumns.length)))/Math.max(1,clusters.length))*0.22;
+        if(progressFn) progressFn(Math.min(0.999,rankProgress));
+        lastYieldAt=performance.now();
+        await yieldToMainThread();
+      }
+    }
+    if(samples.length>=12) ranked.push({cluster,samples});
+  }
+  ranked.sort((a,b)=>{
+    if(b.samples.length!==a.samples.length) return b.samples.length-a.samples.length;
+    return a.cluster.avg-b.cluster.avg;
+  });
   const chosen=ranked[0];
   if(!chosen) return null;
   const samples=chosen.samples;
@@ -868,6 +900,95 @@ async function detectPlayableLayer(progressFn){
 let RIVER=null; // primary river region for legacy callers
 let RIVERS=[]; // [{minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis:'x'|'z'}]
 const waterMeshes=[];
+const riverEditorState={active:false,regions:[],selectedIndex:-1,drag:null,dirty:false,group:null};
+const riverEditorRaycaster=new THREE.Raycaster();
+const riverEditorPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+const riverEditorPointerNDC=new THREE.Vector2();
+const riverEditorHitPoint=new THREE.Vector3();
+
+function normalizeRiverRegion(region){
+  const minX=Math.min(region?.minX??0,region?.maxX??0);
+  const maxX=Math.max(region?.minX??0,region?.maxX??0);
+  const minZ=Math.min(region?.minZ??0,region?.maxZ??0);
+  const maxZ=Math.max(region?.minZ??0,region?.maxZ??0);
+  const floorY=Number.isFinite(region?.floorY) ? region.floorY : ((playableLayer?.y??0)-1.8);
+  const surfaceY=Number.isFinite(region?.surfaceY) ? region.surfaceY : (floorY+0.62);
+  return {
+    minX,maxX,minZ,maxZ,
+    floorY,surfaceY,
+    centerX:(minX+maxX)*0.5,
+    centerZ:(minZ+maxZ)*0.5,
+    axis:(maxX-minX>=maxZ-minZ)?'x':'z',
+  };
+}
+
+function sanitizeRiverRegions(regions){
+  if(!Array.isArray(regions)) return [];
+  return regions
+    .map(normalizeRiverRegion)
+    .filter(r=>Number.isFinite(r.minX)&&Number.isFinite(r.maxX)&&Number.isFinite(r.minZ)&&Number.isFinite(r.maxZ)&&((r.maxX-r.minX)>=0.45)&&((r.maxZ-r.minZ)>=0.45));
+}
+
+function getDefaultRiverRegions(){
+  return sanitizeRiverRegions(RIVER_REGION_DEFAULTS);
+}
+
+function loadManualRiverRegions(){
+  try{
+    const raw=localStorage.getItem(RIVER_MANUAL_STORAGE_KEY);
+    if(!raw) return getDefaultRiverRegions();
+    return sanitizeRiverRegions(JSON.parse(raw));
+  }catch{
+    return getDefaultRiverRegions();
+  }
+}
+
+function saveManualRiverRegions(regions){
+  const clean=sanitizeRiverRegions(regions);
+  if(!clean.length){
+    localStorage.removeItem(RIVER_MANUAL_STORAGE_KEY);
+    return [];
+  }
+  localStorage.setItem(RIVER_MANUAL_STORAGE_KEY,JSON.stringify(clean));
+  return clean;
+}
+
+function disposeRiverVisual(obj){
+  obj?.traverse?.(child=>{
+    child.geometry?.dispose?.();
+    if(Array.isArray(child.material)) child.material.forEach(m=>m?.dispose?.());
+    else child.material?.dispose?.();
+  });
+}
+
+function clearWaterMeshes(){
+  while(waterMeshes.length){
+    const mesh=waterMeshes.pop();
+    scene.remove(mesh);
+    disposeRiverVisual(mesh);
+  }
+}
+
+function applyRiverRegions(regions){
+  const clean=sanitizeRiverRegions(regions);
+  clearWaterMeshes();
+  RIVERS=clean;
+  RIVER=clean[0]||null;
+  if(clean.length){
+    waterMeshes.splice(0,0,...clean.map(r=>createWaterMesh(r)));
+  }
+  return clean;
+}
+
+function ensureRiverEditorGroup(){
+  if(riverEditorState.group) return riverEditorState.group;
+  const group=new THREE.Group();
+  group.visible=false;
+  group.renderOrder=15;
+  scene.add(group);
+  riverEditorState.group=group;
+  return group;
+}
 
 function isInRiver(x,z,groundY){
   if(!RIVERS.length) return false;
@@ -889,35 +1010,31 @@ async function detectRiverBounds(progressFn){
   if(progressFn) progressFn(1);
   if(samples.length<20) return null;
   const ys=samples.map(s=>s.y).sort((a,b)=>a-b);
+  await yieldToMainThread();
+  if(progressFn) progressFn(0.28);
   // Take bottom ~20% as low cells
   const lowCount=Math.max(6,Math.floor(samples.length*0.18));
   const threshold=ys[Math.min(ys.length-1,lowCount)];
   const low=samples.filter(s=>s.y<=threshold);
+  await yieldToMainThread();
+  if(progressFn) progressFn(0.56);
   if(low.length<5) return null;
   const sideGap=(playableLayer?.step||1)*0.6;
+  const worldBounds=getRiverWorldBounds();
   const pick=(arr,p)=>{
     const sorted=[...arr].sort((a,b)=>a-b);
     return sorted[Math.max(0,Math.min(sorted.length-1,Math.floor((sorted.length-1)*p)))];
   };
-  // Build exactly 2 river channels: one along the BACK (âˆ’Z) side and
-  // one along the FRONT (+Z) side. Each stretches the FULL X range so
-  // the water reads as a single continuous channel, not chopped puddles.
-  const sides=[
+  const trenches=[
     low.filter(s=>s.z<playableLayer.centerZ-sideGap),
     low.filter(s=>s.z>playableLayer.centerZ+sideGap),
-  ].filter(side=>side.length>=4);
-  const bandStep=(playableLayer.step||1);
-  const arenaMinX=playableLayer.minX-bandStep*0.5;
-  const arenaMaxX=playableLayer.maxX+bandStep*0.5;
-  const trenches=sides.map(side=>{
+  ].filter(side=>side.length>=4).map(side=>{
     const floorY=Math.min(...side.map(s=>s.y));
     const surfaceY=floorY+0.62;
+    const minX=worldBounds.minX;
+    const maxX=worldBounds.maxX;
     const minZ=pick(side.map(s=>s.z),0.08)-0.45;
     const maxZ=pick(side.map(s=>s.z),0.92)+0.45;
-    // Extend each channel end-to-end across the arena X axis so any
-    // sampling gap inside it gets bridged into one continuous river.
-    const minX=arenaMinX;
-    const maxX=arenaMaxX;
     return {
       minX,maxX,minZ,maxZ,
       floorY,surfaceY,
@@ -926,6 +1043,8 @@ async function detectRiverBounds(progressFn){
       axis:'x'
     };
   }).sort((a,b)=>a.centerZ-b.centerZ);
+  if(progressFn) progressFn(0.86);
+  await yieldToMainThread();
   if(trenches.length) saveCachedJSON(cacheKey,trenches);
   return trenches.length?trenches:null;
 }
@@ -1196,13 +1315,7 @@ function liftCeilingGeometry(root,anchorY,factor=5){
 
 async function loadPlayground(){
   try{
-    let gltf=null;
-    try{
-      gltf=await loader.loadAsync('field/playground_optimized.glb?v=2026-04-24a');
-    }catch(optErr){
-      console.warn('[playground] optimized load failed, falling back to original:',optErr);
-      gltf=await loader.loadAsync('field/playground.glb');
-    }
+    const gltf=await loader.loadAsync('field/playground.glb');
     const root=gltf.scene;
     // Auto-scale+center: compute bbox, target a reasonable size
     const bbox=new THREE.Box3().setFromObject(root);
@@ -1223,8 +1336,6 @@ async function loadPlayground(){
     root.position.z-=cz;
     root.position.y-=bbox2.min.y;
     root.updateMatrixWorld(true);
-    playgroundBounds=new THREE.Box3().setFromObject(root);
-
     root.traverse(o=>{
       if(o.isMesh){
         o.frustumCulled=false;
@@ -1237,7 +1348,6 @@ async function loadPlayground(){
         }
       }
     });
-    freezeStaticObject(root);
     scene.add(root);
     playgroundRoot=root;
 
@@ -1535,6 +1645,21 @@ function getPlayableBounds(){
   };
 }
 
+function getRiverWorldBounds(){
+  if(playgroundBounds){
+    const margin=Math.max(0.85,playableLayer?.step||0.9);
+    return {
+      minX:playgroundBounds.min.x-margin,
+      maxX:playgroundBounds.max.x+margin,
+      minZ:playgroundBounds.min.z-margin,
+      maxZ:playgroundBounds.max.z+margin,
+      centerX:(playgroundBounds.min.x+playgroundBounds.max.x)*0.5,
+      centerZ:(playgroundBounds.min.z+playgroundBounds.max.z)*0.5,
+    };
+  }
+  return getPlayableBounds();
+}
+
 // Build a cell grid over playableLayer.samples so findNearestPlayableSample
 // can run in O(1) instead of O(N). Called once after detectPlayableLayer,
 // and after any change to the sample set. Empty cells mean we fall back to
@@ -1633,6 +1758,274 @@ function getRiverSurfaceY(x,z,groundY){
     }
   }
   return best ? best.surfaceY : y;
+}
+
+function getRiverEditorPointerWorld(clientX,clientY,out=new THREE.Vector3()){
+  const rect=canvas.getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return null;
+  riverEditorPointerNDC.set(
+    ((clientX-rect.left)/rect.width)*2-1,
+    -(((clientY-rect.top)/rect.height)*2-1)
+  );
+  riverEditorRaycaster.setFromCamera(riverEditorPointerNDC,camera);
+  riverEditorPlane.constant=-(playableLayer?.y??0);
+  return riverEditorRaycaster.ray.intersectPlane(riverEditorPlane,out) ? out : null;
+}
+
+function pickRiverEditorObject(clientX,clientY){
+  if(!riverEditorState.group||!riverEditorState.active) return null;
+  const rect=canvas.getBoundingClientRect();
+  riverEditorPointerNDC.set(
+    ((clientX-rect.left)/rect.width)*2-1,
+    -(((clientY-rect.top)/rect.height)*2-1)
+  );
+  riverEditorRaycaster.setFromCamera(riverEditorPointerNDC,camera);
+  const picks=[];
+  riverEditorState.group.traverse(obj=>{ if(obj.visible&&obj.userData?.riverEditPick) picks.push(obj); });
+  const hit=riverEditorRaycaster.intersectObjects(picks,false)[0];
+  return hit?.object||null;
+}
+
+function clearRiverEditorVisuals(){
+  const group=riverEditorState.group;
+  if(!group) return;
+  while(group.children.length){
+    const child=group.children[group.children.length-1];
+    group.remove(child);
+    disposeRiverVisual(child);
+  }
+}
+
+function refreshRiverEditorVisuals(){
+  const group=ensureRiverEditorGroup();
+  clearRiverEditorVisuals();
+  group.visible=riverEditorState.active;
+  if(!riverEditorState.active) return;
+  riverEditorState.regions=sanitizeRiverRegions(riverEditorState.regions);
+  riverEditorState.regions.forEach((region,index)=>{
+    const selected=index===riverEditorState.selectedIndex;
+    const wrap=new THREE.Group();
+    const w=Math.max(0.45,region.maxX-region.minX);
+    const h=Math.max(0.45,region.maxZ-region.minZ);
+    const depth=Math.max(0.18,region.surfaceY-region.floorY);
+    const body=new THREE.Mesh(
+      new THREE.BoxGeometry(w,depth,h),
+      new THREE.MeshBasicMaterial({
+        color:selected?'#6cf5ff':'#33a6ff',
+        transparent:true,
+        opacity:selected?0.28:0.18,
+        depthWrite:false,
+      })
+    );
+    body.position.set(region.centerX,region.floorY+depth*0.5+0.02,region.centerZ);
+    body.renderOrder=15;
+    body.userData={riverEditPick:true,riverEditType:'body',regionIndex:index};
+    wrap.add(body);
+    const edge=new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(w,depth,h)),
+      new THREE.LineBasicMaterial({color:selected?'#f6fdff':'#aeefff',transparent:true,opacity:0.92})
+    );
+    edge.position.copy(body.position);
+    edge.renderOrder=16;
+    wrap.add(edge);
+    const handleSize=Math.max(0.24,Math.min(w,h)*0.08);
+    const handleY=region.surfaceY+0.16;
+    const handles=[
+      ['nw',region.minX,region.minZ],
+      ['ne',region.maxX,region.minZ],
+      ['sw',region.minX,region.maxZ],
+      ['se',region.maxX,region.maxZ],
+    ];
+    for(const [corner,x,z] of handles){
+      const handle=new THREE.Mesh(
+        new THREE.BoxGeometry(handleSize,handleSize,handleSize),
+        new THREE.MeshBasicMaterial({
+          color:selected?'#fff4fd':'#d7f6ff',
+          transparent:true,
+          opacity:selected?0.95:0.8,
+          depthWrite:false,
+        })
+      );
+      handle.position.set(x,handleY,z);
+      handle.renderOrder=17;
+      handle.userData={riverEditPick:true,riverEditType:'handle',regionIndex:index,corner};
+      wrap.add(handle);
+    }
+    group.add(wrap);
+  });
+}
+
+function seedDefaultRiverRegion(){
+  const bounds=getRiverWorldBounds();
+  const w=Math.max(1.6,(bounds.maxX-bounds.minX)*0.18);
+  const h=Math.max(3.6,(bounds.maxZ-bounds.minZ)*0.22);
+  const floorY=(playableLayer?.y??0)-1.7;
+  const centerX=bounds.centerX;
+  const centerZ=bounds.centerZ;
+  return normalizeRiverRegion({
+    minX:centerX-w*0.5,maxX:centerX+w*0.5,
+    minZ:centerZ-h*0.5,maxZ:centerZ+h*0.5,
+    floorY,surfaceY:floorY+0.62,
+  });
+}
+
+function refreshRiverEditorButtonState(){
+  const toolbar=uiLayoutState.editor?.querySelector('.ui-layout-toolbar');
+  if(!toolbar) return;
+  const riverBtn=toolbar.querySelector('[data-action="river-edit"]');
+  const addBtn=toolbar.querySelector('[data-action="river-add"]');
+  const delBtn=toolbar.querySelector('[data-action="river-del"]');
+  const saveBtn=toolbar.querySelector('[data-action="river-save"]');
+  riverBtn?.classList.toggle('is-active',riverEditorState.active);
+  if(addBtn) addBtn.disabled=!uiLayoutState.active;
+  if(delBtn) delBtn.disabled=!uiLayoutState.active||riverEditorState.selectedIndex<0;
+  if(saveBtn) saveBtn.disabled=!uiLayoutState.active||!riverEditorState.regions.length;
+}
+
+function toggleRiverEditor(force){
+  const next=force===undefined ? !riverEditorState.active : !!force;
+  if(next){
+    const manual=loadManualRiverRegions();
+    riverEditorState.regions=sanitizeRiverRegions(manual.length?manual:RIVERS);
+    if(!riverEditorState.regions.length) riverEditorState.regions=[seedDefaultRiverRegion()];
+    riverEditorState.selectedIndex=Math.min(Math.max(0,riverEditorState.selectedIndex),riverEditorState.regions.length-1);
+    riverEditorState.active=true;
+    riverEditorState.dirty=false;
+    applyRiverRegions(riverEditorState.regions);
+    refreshRiverEditorVisuals();
+    showUILayoutToast('River edit enabled');
+  }else{
+    riverEditorState.active=false;
+    riverEditorState.drag=null;
+    refreshRiverEditorVisuals();
+    showUILayoutToast('River edit disabled');
+  }
+  refreshRiverEditorButtonState();
+}
+
+function addRiverEditorRegion(){
+  if(!riverEditorState.active) toggleRiverEditor(true);
+  const base=riverEditorState.regions[riverEditorState.selectedIndex]||seedDefaultRiverRegion();
+  const copy=normalizeRiverRegion({
+    minX:base.minX+0.8,maxX:base.maxX+0.8,
+    minZ:base.minZ+0.8,maxZ:base.maxZ+0.8,
+    floorY:base.floorY,surfaceY:base.surfaceY,
+  });
+  riverEditorState.regions.push(copy);
+  riverEditorState.selectedIndex=riverEditorState.regions.length-1;
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+}
+
+function deleteRiverEditorRegion(){
+  if(riverEditorState.selectedIndex<0) return false;
+  riverEditorState.regions.splice(riverEditorState.selectedIndex,1);
+  riverEditorState.selectedIndex=Math.min(riverEditorState.selectedIndex,riverEditorState.regions.length-1);
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  return true;
+}
+
+function saveRiverEditorRegions(){
+  const clean=saveManualRiverRegions(riverEditorState.regions);
+  riverEditorState.regions=clean;
+  riverEditorState.dirty=false;
+  applyRiverRegions(clean);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  showUILayoutToast('River regions saved');
+}
+
+async function autoDetectRiverEditorRegions(){
+  const detected=await detectRiverBounds();
+  riverEditorState.regions=sanitizeRiverRegions(detected||[]);
+  if(!riverEditorState.regions.length) riverEditorState.regions=[seedDefaultRiverRegion()];
+  riverEditorState.selectedIndex=0;
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  showUILayoutToast('Loaded auto river regions');
+}
+
+function clampRiverRegionToBounds(region){
+  let minX=Number.isFinite(region?.minX)?region.minX:0;
+  let maxX=Number.isFinite(region?.maxX)?region.maxX:minX+0.45;
+  let minZ=Number.isFinite(region?.minZ)?region.minZ:0;
+  let maxZ=Number.isFinite(region?.maxZ)?region.maxZ:minZ+0.45;
+  if(maxX<minX) [minX,maxX]=[maxX,minX];
+  if(maxZ<minZ) [minZ,maxZ]=[maxZ,minZ];
+  if(maxX-minX<0.45) maxX=minX+0.45;
+  if(maxZ-minZ<0.45) maxZ=minZ+0.45;
+  return normalizeRiverRegion({...region,minX,maxX,minZ,maxZ});
+}
+
+function handleRiverEditorCanvasPointerDown(e){
+  if(!riverEditorState.active||e.target!==canvas) return false;
+  const picked=pickRiverEditorObject(e.clientX,e.clientY);
+  if(!picked){
+    riverEditorState.selectedIndex=-1;
+    refreshRiverEditorVisuals();
+    refreshRiverEditorButtonState();
+    return true;
+  }
+  const point=getRiverEditorPointerWorld(e.clientX,e.clientY,riverEditorHitPoint);
+  if(!point) return true;
+  const {riverEditType,regionIndex,corner=''}=picked.userData;
+  riverEditorState.selectedIndex=regionIndex;
+  riverEditorState.drag={
+    pointerId:e.pointerId,
+    mode:riverEditType==='handle'?'resize':'move',
+    corner,
+    startPoint:point.clone(),
+    startRegion:{...riverEditorState.regions[regionIndex]},
+    regionIndex,
+  };
+  canvas.setPointerCapture?.(e.pointerId);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  return true;
+}
+
+function handleRiverEditorCanvasPointerMove(e){
+  const drag=riverEditorState.drag;
+  if(!riverEditorState.active||!drag||drag.pointerId!==e.pointerId) return false;
+  const point=getRiverEditorPointerWorld(e.clientX,e.clientY,riverEditorHitPoint);
+  if(!point) return true;
+  const start=drag.startRegion;
+  let next={...start};
+  if(drag.mode==='move'){
+    const dx=point.x-drag.startPoint.x;
+    const dz=point.z-drag.startPoint.z;
+    next.minX=start.minX+dx;
+    next.maxX=start.maxX+dx;
+    next.minZ=start.minZ+dz;
+    next.maxZ=start.maxZ+dz;
+  }else{
+    if(drag.corner.includes('w')) next.minX=point.x;
+    if(drag.corner.includes('e')) next.maxX=point.x;
+    if(drag.corner.includes('n')) next.minZ=point.z;
+    if(drag.corner.includes('s')) next.maxZ=point.z;
+  }
+  next=clampRiverRegionToBounds(next);
+  riverEditorState.regions[drag.regionIndex]=next;
+  riverEditorState.dirty=true;
+  applyRiverRegions(riverEditorState.regions);
+  refreshRiverEditorVisuals();
+  refreshRiverEditorButtonState();
+  return true;
+}
+
+function handleRiverEditorCanvasPointerUp(e){
+  if(!riverEditorState.drag||riverEditorState.drag.pointerId!==e.pointerId) return false;
+  riverEditorState.drag=null;
+  canvas.releasePointerCapture?.(e.pointerId);
+  refreshRiverEditorButtonState();
+  return true;
 }
 
 function clampToPlayableArea(pos,margin=0.35){
@@ -2269,6 +2662,34 @@ function rewireArtistActions(){
   }
 }
 
+const ARTIST_SKIN_TARGET=new THREE.Color('#FFDCBD');
+const ARTIST_SKIN_EMISSIVE=new THREE.Color('#5a3925');
+function isLikelyArtistSkin(mesh,material){
+  const hint=`${mesh?.name||''} ${material?.name||''}`.toLowerCase();
+  if(/skin|face|head|neck|hand|arm|leg|body/.test(hint)) return true;
+  const c=material?.color;
+  if(!c) return false;
+  const {r,g,b}=c;
+  return r>0.34 && g>0.2 && b>0.14 && r>=g*1.03 && g>=b*1.02 && (r-b)>0.05;
+}
+function tuneArtistMaterial(mesh,material){
+  if(!material) return;
+  if(isLikelyArtistSkin(mesh,material)){
+    if(material.color) material.color.copy(ARTIST_SKIN_TARGET);
+    if(material.emissive){
+      material.emissive.copy(ARTIST_SKIN_EMISSIVE);
+      if('emissiveIntensity' in material) material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.2);
+    }
+    if('roughness' in material) material.roughness=Math.min(material.roughness??0.75,0.58);
+    if('metalness' in material) material.metalness=Math.min(material.metalness??0,0.02);
+  }else{
+    if(material.color) material.color.multiplyScalar(1.06);
+    if(material.emissive && 'emissiveIntensity' in material){
+      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.03);
+    }
+  }
+}
+
 function buildCharacterInstance(tint,isArtist){
   if(!charGLTF) return null;
   const root=SkeletonUtils.clone(charGLTF.scene);
@@ -2286,6 +2707,7 @@ function buildCharacterInstance(tint,isArtist){
             cm.color.multiply(tint);
           }
           if('envMapIntensity' in cm) cm.envMapIntensity=0.5;
+          if(isArtist) tuneArtistMaterial(o,cm);
           materialEntries.push({
             material:cm,
             color:cm.color?.clone?.()||null,
@@ -2473,52 +2895,100 @@ function findBone(root,rx){
 }
 
 // ===== Splash particles =====
-const SPLASH_MAX=400;
-const splashGeo=new THREE.BufferGeometry();
-const splashPos=new Float32Array(SPLASH_MAX*3);
-const splashVel=new Float32Array(SPLASH_MAX*3);
-const splashLife=new Float32Array(SPLASH_MAX);
-const splashAge=new Float32Array(SPLASH_MAX);
-// Init all particle positions off-screen
-for(let i=0;i<SPLASH_MAX;i++){splashPos[i*3+1]=-9999;splashLife[i]=0;splashAge[i]=1}
-splashGeo.setAttribute('position',new THREE.BufferAttribute(splashPos,3));
-const splashMat=new THREE.PointsMaterial({color:'#cce8ff',size:0.18,transparent:true,opacity:0.9,depthWrite:false,sizeAttenuation:true});
-const splashPoints=new THREE.Points(splashGeo,splashMat);
-splashPoints.frustumCulled=false;
-scene.add(splashPoints);
+const SPLASH_MAX=160;
+function createSplashTexture(){
+  const size=96;
+  const canvas=document.createElement('canvas');
+  canvas.width=size;
+  canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  if(!ctx) return null;
+  const grad=ctx.createRadialGradient(size*0.5,size*0.38,size*0.04,size*0.5,size*0.5,size*0.48);
+  grad.addColorStop(0,'rgba(255,255,255,0.98)');
+  grad.addColorStop(0.32,'rgba(214,242,255,0.92)');
+  grad.addColorStop(0.72,'rgba(116,205,255,0.35)');
+  grad.addColorStop(1,'rgba(116,205,255,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(size*0.5,size*0.5,size*0.44,0,Math.PI*2);
+  ctx.fill();
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.needsUpdate=true;
+  return tex;
+}
+const splashTexture=createSplashTexture();
+const splashRoot=new THREE.Group();
+splashRoot.renderOrder=12;
+scene.add(splashRoot);
+const splashPool=Array.from({length:SPLASH_MAX},()=>{
+  const spriteMat=new THREE.SpriteMaterial({
+    map:splashTexture,
+    color:'#e4f7ff',
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    depthTest:true,
+  });
+  const sprite=new THREE.Sprite(spriteMat);
+  sprite.visible=false;
+  sprite.scale.setScalar(0.001);
+  sprite.renderOrder=12;
+  splashRoot.add(sprite);
+  return {sprite,age:1,life:0,vx:0,vy:0,vz:0,baseY:0,baseScale:0.1,spin:0,spinVel:0,active:false};
+});
 let splashCursor=0;
 function spawnSplash(x,y,z,strength){
-  const n=Math.min(60,Math.floor(20+strength*30));
+  const n=Math.min(34,Math.floor(10+strength*18));
   for(let i=0;i<n;i++){
-    const idx=splashCursor;splashCursor=(splashCursor+1)%SPLASH_MAX;
-    splashPos[idx*3]=x+(Math.random()-0.5)*0.2;
-    splashPos[idx*3+1]=y+0.05;
-    splashPos[idx*3+2]=z+(Math.random()-0.5)*0.2;
+    const p=splashPool[splashCursor];
+    splashCursor=(splashCursor+1)%SPLASH_MAX;
     const ang=Math.random()*Math.PI*2;
-    const speed=1+Math.random()*2.5*strength;
-    splashVel[idx*3]=Math.cos(ang)*speed*0.5;
-    splashVel[idx*3+1]=2+Math.random()*3*strength;
-    splashVel[idx*3+2]=Math.sin(ang)*speed*0.5;
-    splashLife[idx]=0.45+Math.random()*0.4;
-    splashAge[idx]=0;
+    const speed=(0.55+Math.random()*1.6)*Math.max(0.45,strength);
+    const rise=1.1+Math.random()*1.9*strength;
+    const startY=y+0.06+Math.random()*0.06;
+    p.sprite.visible=true;
+    p.sprite.position.set(
+      x+Math.cos(ang)*(0.06+Math.random()*0.18),
+      startY,
+      z+Math.sin(ang)*(0.06+Math.random()*0.18)
+    );
+    const scale=0.12+Math.random()*0.14*strength;
+    p.baseScale=scale;
+    p.sprite.scale.set(scale,scale,scale);
+    p.sprite.material.opacity=0.82;
+    p.sprite.material.rotation=Math.random()*Math.PI*2;
+    p.vx=Math.cos(ang)*speed;
+    p.vy=rise;
+    p.vz=Math.sin(ang)*speed;
+    p.baseY=y+0.035;
+    p.life=0.36+Math.random()*0.22;
+    p.age=0;
+    p.spin=(Math.random()-0.5)*0.02;
+    p.spinVel=(Math.random()-0.5)*2.2;
+    p.active=true;
   }
 }
 function updateSplash(dt){
-  let anyActive=false;
-  for(let i=0;i<SPLASH_MAX;i++){
-    if(splashAge[i]>=splashLife[i]) continue;
-    anyActive=true;
-    splashAge[i]+=dt;
-    splashVel[i*3+1]-=14*dt; // gravity
-    splashPos[i*3]+=splashVel[i*3]*dt;
-    splashPos[i*3+1]+=splashVel[i*3+1]*dt;
-    splashPos[i*3+2]+=splashVel[i*3+2]*dt;
-    if(splashAge[i]>=splashLife[i]){
-      // Hide by moving far below
-      splashPos[i*3+1]=-9999;
+  for(const p of splashPool){
+    if(!p.active) continue;
+    p.age+=dt;
+    p.vy-=9.8*dt;
+    p.sprite.position.x+=p.vx*dt;
+    p.sprite.position.y+=p.vy*dt;
+    p.sprite.position.z+=p.vz*dt;
+    p.sprite.material.rotation+=p.spinVel*dt;
+    const t=clamp(p.age/Math.max(0.001,p.life),0,1);
+    const fade=t<0.22 ? t/0.22 : 1-((t-0.22)/0.78);
+    p.sprite.material.opacity=Math.max(0,fade*0.88);
+    const scaleMul=1+(t*0.55);
+    p.sprite.scale.setScalar(p.baseScale*scaleMul);
+    if(p.sprite.position.y<=p.baseY || p.age>=p.life){
+      p.active=false;
+      p.sprite.visible=false;
+      p.sprite.material.opacity=0;
+      p.sprite.position.y=-9999;
     }
   }
-  if(anyActive){splashGeo.attributes.position.needsUpdate=true}
 }
 
 // ===== Knockout burst particles =====
@@ -2713,10 +3183,10 @@ function disposeSpecialVisual(obj){
   if(!obj) return;
   scene.remove(obj);
   obj.traverse?.(o=>{
-    if(o.isMesh){
-      o.geometry?.dispose?.();
+    if(o.isMesh||o.isPoints||o.isLine||o.isSprite){
+      if(!o.userData?.sharedSpecialVisual) o.geometry?.dispose?.();
       const mats=Array.isArray(o.material)?o.material:[o.material];
-      mats?.forEach(m=>m?.dispose?.());
+      if(!o.userData?.sharedSpecialVisual) mats?.forEach(m=>m?.dispose?.());
     }
   });
 }
@@ -2738,26 +3208,75 @@ function spawnFlameJet(){
   for(let i=0;i<count;i++){
     const c=colors[i%colors.length];
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    const depth=Math.random()*1.55;
+    const depth=Math.random()*1.55*FLAME_VISUAL_SCALE;
     const ring=Math.sqrt(Math.random())*(0.02+depth*0.16);
     const ang=Math.random()*Math.PI*2 + depth*9.5;
     pos[i*3]=fx*(0.02+depth) + rightX*Math.cos(ang)*ring;
-    pos[i*3+1]=(Math.random()-0.5)*(0.03+depth*0.025);
+    pos[i*3+1]=(Math.random()-0.5)*(0.03+depth*0.025)*FLAME_VISUAL_SCALE;
     pos[i*3+2]=fz*(0.02+depth) + rightZ*Math.cos(ang)*ring;
-    const forwardSpeed=4.4+Math.random()*2.6+depth*0.95;
+    const forwardSpeed=(4.4+Math.random()*2.6+depth*0.95)*1.08;
     const swirl=Math.sin(ang)*(0.18+depth*0.14);
     vel[i*3]=fx*forwardSpeed + rightX*swirl;
-    vel[i*3+1]=(Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03;
+    vel[i*3+1]=((Math.random()-0.5)*0.12 + Math.sin(depth*7+i)*0.03)*FLAME_VISUAL_SCALE;
     vel[i*3+2]=fz*forwardSpeed + rightZ*swirl;
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.16,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
+  const points=new THREE.Points(geo,new THREE.PointsMaterial({size:0.32,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
   points.position.set(mouthX,mouthY,mouthZ);
   points.frustumCulled=false;
   scene.add(points);
   activeFlameJets.push({mesh:points,life:0.34,maxLife:0.34,dirX:fx,dirZ:fz,hitTick:0,vel,count,tail:true,originX:mouthX,originZ:mouthZ});
   forEachArtistInCone(mouthX,mouthZ,fx,fz,5.8,Math.PI*0.42,a=>killArtist(a,'flame'));
+}
+
+function spawnCleanMagicBurst(origin,target){
+  if(!origin) return;
+  const colors=['#fff6a6','#87fff6','#ff8fd3','#9be08c','#8cc9ff','#ffd16c'].map(c=>new THREE.Color(c));
+  const count=52;
+  const group=new THREE.Group();
+  const droplets=[];
+  for(let i=0;i<count;i++){
+    const c=colors[i%colors.length];
+    const ang=Math.random()*Math.PI*2;
+    const drift=0.45+Math.random()*1.2;
+    const rise=0.4+Math.random()*1.0;
+    const mat=new THREE.SpriteMaterial({
+      map:splashTexture,
+      color:c,
+      transparent:true,
+      opacity:0,
+      depthWrite:false,
+      depthTest:true,
+    });
+    const sprite=new THREE.Sprite(mat);
+    sprite.visible=true;
+    const baseScale=0.12+Math.random()*0.12;
+    sprite.scale.setScalar(baseScale);
+    sprite.position.set(
+      origin.x+(Math.random()-0.5)*0.06,
+      origin.y+(Math.random()-0.5)*0.04,
+      origin.z+(Math.random()-0.5)*0.06
+    );
+    sprite.renderOrder=13;
+    group.add(sprite);
+    droplets.push({
+      sprite,
+      vx:Math.cos(ang)*drift,
+      vy:rise,
+      vz:Math.sin(ang)*drift,
+      baseScale,
+      seed:Math.random()*Math.PI*2,
+    });
+  }
+  group.frustumCulled=false;
+  scene.add(group);
+  activeCleanMagicBursts.push({
+    mesh:group,droplets,count,life:0,maxLife:0.9,
+    driftX:target?.x ?? origin.x,
+    driftY:target?.y ?? origin.y,
+    driftZ:target?.z ?? origin.z,
+  });
 }
 
 function ensureSpecialAimMarker(){
@@ -2788,18 +3307,47 @@ function ensureSpecialAimMarker(){
 }
 
 function setSpecialAimMarkerVisible(visible){
+  if(!visible) currentSpecialAimTarget=null;
   if(!specialAimMarker) return;
   specialAimMarker.visible=visible;
 }
 
-function getSpecialThrowTarget(charge=0){
-  if(equippedWeapon!=='ice' && equippedWeapon!=='bomb') return null;
-  const {x:fx,z:fz}=getForwardXZ(player.yaw);
-  const throwDist=equippedWeapon==='ice' ? (3.2+charge*3.8) : (1.1+charge*2.6);
+function getSpecialThrowTarget(charge=0,weapon=equippedWeapon,yaw=player.yaw){
+  if(weapon!=='ice' && weapon!=='bomb') return null;
+  const {x:fx,z:fz}=getForwardXZ(yaw);
+  const bounds=getPlayableBounds();
+  const edgeMargin=0.75;
+  const ts=[];
+  if(Math.abs(fx)>1e-5){
+    ts.push(((fx>0 ? bounds.maxX-edgeMargin : bounds.minX+edgeMargin)-player.root.position.x)/fx);
+  }
+  if(Math.abs(fz)>1e-5){
+    ts.push(((fz>0 ? bounds.maxZ-edgeMargin : bounds.minZ+edgeMargin)-player.root.position.z)/fz);
+  }
+  const maxForwardDist=ts
+    .filter(t=>Number.isFinite(t) && t>0)
+    .reduce((best,t)=>Math.min(best,t),Infinity);
+  const minThrowDist=weapon==='ice' ? 3.2 : 1.1;
+  const boundedMaxDist=Number.isFinite(maxForwardDist) ? Math.max(minThrowDist,maxForwardDist) : Math.max(minThrowDist,worldBoundR*2);
+  const throwDist=minThrowDist + clamp(charge,0,1)*(boundedMaxDist-minThrowDist);
   const targetX=player.root.position.x+fx*throwDist;
   const targetZ=player.root.position.z+fz*throwDist;
   const groundY=getStandY(targetX,targetZ,player.root.position.y)+GROUND_Y_OFFSET;
-  return {x:targetX,y:groundY,z:targetZ,dist:throwDist};
+  return {x:targetX,y:groundY,z:targetZ,dist:throwDist,dirX:fx,dirZ:fz,yaw};
+}
+
+function cloneSpecialThrowTarget(target){
+  return target ? {
+    x:target.x,
+    y:target.y,
+    z:target.z,
+    dist:target.dist,
+    dirX:target.dirX,
+    dirZ:target.dirZ,
+    yaw:target.yaw,
+    weapon:target.weapon,
+    charge:target.charge,
+  } : null;
 }
 
 function findWaterPlantTarget(){
@@ -2834,64 +3382,48 @@ function spawnWaterPour(targetPlant){
   const endX=targetPlant.position.x;
   const endY=targetPlant.position.y+targetPlant.scale.y*1.25;
   const endZ=targetPlant.position.z;
-  // A proper water pour now has two layers:
-  //   1. STREAM: dense stream of ~500 droplets along a gravity arc
-  //      from the hand to the plant top. Staggered birth times so the
-  //      stream "flows" continuously instead of appearing as a cloud.
-  //   2. SPLASH: 90 droplets that burst outward + downward from the
-  //      plant at impact time (after the stream reaches the plant).
-  const streamCount=IS_MOBILE_LAYOUT?340:520;
-  const splashCount=IS_MOBILE_LAYOUT?60:90;
+  const streamCount=IS_MOBILE_LAYOUT?72:112;
+  const splashCount=IS_MOBILE_LAYOUT?18:30;
   const total=streamCount+splashCount;
-  const geo=new THREE.BufferGeometry();
-  const pos=new Float32Array(total*3);
-  const col=new Float32Array(total*3);
-  const jitter=new Float32Array(total*3);  // per-particle random offsets
-  // Water palette: white-blue at the mouth deepening to cobalt.
-  const streamColors=[
-    new THREE.Color('#f6ffff'),
-    new THREE.Color('#cdf5ff'),
-    new THREE.Color('#7ed8ff'),
-    new THREE.Color('#3aa8e8'),
-  ];
-  const splashColors=[
-    new THREE.Color('#e0f6ff'),
-    new THREE.Color('#9fe2ff'),
-  ];
-  for(let i=0;i<streamCount;i++){
-    const c=streamColors[i%streamColors.length];
-    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
-    jitter[i*3]=(Math.random()-0.5)*0.18;
-    jitter[i*3+1]=Math.random()*0.3;
-    jitter[i*3+2]=(Math.random()-0.5)*0.18;
-    // Hide until first update.
-    pos[i*3+1]=-9999;
+  const group=new THREE.Group();
+  const droplets=[];
+  for(let i=0;i<total;i++){
+    const isSplash=i>=streamCount;
+    const color=isSplash ? (i%2===0?'#dff8ff':'#8fdcff') : (i%4===0?'#ffffff':i%4===1?'#dbf7ff':i%4===2?'#9be3ff':'#51bfff');
+    const mat=new THREE.SpriteMaterial({
+      map:splashTexture,
+      color,
+      transparent:true,
+      opacity:0,
+      depthWrite:false,
+      depthTest:true,
+    });
+    const sprite=new THREE.Sprite(mat);
+    sprite.visible=false;
+    sprite.renderOrder=13;
+    sprite.scale.setScalar(0.001);
+    group.add(sprite);
+    droplets.push({
+      sprite,
+      isSplash,
+      seed:Math.random()*Math.PI*2,
+      spread:0.04+Math.random()*0.18,
+      lift:Math.random()*0.24,
+      splashVX:(Math.random()-0.5)*(0.7+Math.random()*1.6),
+      splashVY:0.55+Math.random()*1.35,
+      splashVZ:(Math.random()-0.5)*(0.7+Math.random()*1.6),
+      baseScale:isSplash ? (0.09+Math.random()*0.08) : (0.045+Math.random()*0.045),
+      startOffset:Math.random(),
+    });
   }
-  for(let i=0;i<splashCount;i++){
-    const idx=streamCount+i;
-    const c=splashColors[i%splashColors.length];
-    col[idx*3]=c.r; col[idx*3+1]=c.g; col[idx*3+2]=c.b;
-    const ang=Math.random()*Math.PI*2;
-    const mag=0.25+Math.random()*0.4;
-    jitter[idx*3]=Math.cos(ang)*mag;
-    jitter[idx*3+1]=Math.random()*0.9+0.1;       // up-and-out
-    jitter[idx*3+2]=Math.sin(ang)*mag;
-    pos[idx*3+1]=-9999;
-  }
-  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const points=new THREE.Points(geo,new THREE.PointsMaterial({
-    size:0.07,transparent:true,opacity:0.95,depthWrite:false,
-    vertexColors:true,sizeAttenuation:true,
-  }));
-  points.frustumCulled=false;
-  scene.add(points);
+  group.frustumCulled=false;
+  scene.add(group);
   activeWaterStreams.push({
-    mesh:points,
+    mesh:group,
     fromX:handX,fromY:handY,fromZ:handZ,
     toX:endX,toY:endY,toZ:endZ,
     life:0,maxLife:1.15,
-    streamCount,splashCount,total,jitter,
+    streamCount,splashCount,total,droplets,
   });
   return true;
 }
@@ -2911,6 +3443,35 @@ function waterPlant(targetPlant){
   // Immediate visual bump so the first drop of water shows SOME growth
   // (the lerp in updateFlowers catches up within a second or two).
   targetPlant.scale.setScalar(Math.max(targetPlant.scale.x,current+base*(WATER_GROW_STEP*0.35)));
+  // Structural bifurcation: each watering also sprouts 1-2 child plants
+  // off the host. Pure scale-up made the bloom look like a single stalk
+  // ballooning; adding new geometry per pour gives the watered patch a
+  // genuinely branching, layered shape over time.
+  const branches=targetPlant.userData.waterBranches||(targetPlant.userData.waterBranches=[]);
+  const cap=IS_MOBILE_LAYOUT?5:9;
+  if(branches.length<cap){
+    const sprouts=branches.length<2?2:1;
+    for(let i=0;i<sprouts;i++){
+      const seed='waterbranch_'+(targetPlant.userData?.seedText||'plant')+'_'+branches.length+'_'+Math.random().toString(36).slice(2,8);
+      const child=makePlant(seed);
+      // Place the child relative to the parent group so it inherits
+      // the host's transform. Offsets stay small in local units —
+      // the parent's own scale multiplies them at render time.
+      const angle=Math.random()*Math.PI*2;
+      const radius=0.35+Math.random()*0.55;
+      child.position.set(Math.cos(angle)*radius,0,Math.sin(angle)*radius);
+      // Start a touch smaller than its own baseScale so the new branch
+      // visibly emerges instead of popping in at full size.
+      const childBase=child.userData?.baseScale||child.scale.x||1;
+      const startScale=childBase*0.42;
+      child.userData.baseScale=childBase;
+      child.userData.targetScale=childBase;
+      child.scale.setScalar(startScale);
+      targetPlant.add(child);
+      registerGrowingFlower(child);
+      branches.push(child);
+    }
+  }
   targetPlant.updateMatrix();
   targetPlant.updateMatrixWorld(true);
   return true;
@@ -2921,25 +3482,42 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
     setSpecialAimMarkerVisible(false);
     return;
   }
-  const target=getSpecialThrowTarget(getSpecialCharge());
+  const charge=getSpecialCharge();
+  const target=getSpecialThrowTarget(charge,equippedWeapon,player.yaw);
   if(!target){
     setSpecialAimMarkerVisible(false);
     return;
   }
+  currentSpecialAimTarget={...target,weapon:equippedWeapon,charge};
   const marker=ensureSpecialAimMarker();
   const pulse=1+Math.sin(nowS*8)*0.08;
-  marker.position.set(target.x,target.y+1.06,target.z);
+  marker.position.set(target.x,target.y+0.52,target.z);
   marker.scale.setScalar((equippedWeapon==='ice'?1.08:0.92)*pulse);
   marker.visible=true;
 }
 
-function throwIceBlock(charge=0){
-  const target=getSpecialThrowTarget(charge);
-  if(!target) return false;
-  playSFX('throwIce');
-  const group=new THREE.Group();
-  const block=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false),new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35}));
-  block.rotation.y=Math.PI/6;
+let iceProjectileGeometry=null;
+let iceProjectileMaterial=null;
+let iceProjectileTrailGeometry=null;
+let iceProjectileTrailMaterial=null;
+let iceFieldBlockGeometry=null;
+let iceFieldBlockMaterial=null;
+let iceFieldPointsGeometry=null;
+let iceFieldPointsMaterial=null;
+let iceFieldRingGeometry=null;
+let iceFieldRingMaterial=null;
+function ensureIceSpecialVisualAssets(){
+  if(iceProjectileGeometry) return;
+  iceProjectileGeometry=new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false);
+  iceProjectileMaterial=new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35});
+  iceProjectileTrailGeometry=new THREE.TorusGeometry(0.55,0.05,10,30);
+  iceProjectileTrailMaterial=new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.72,depthWrite:false});
+
+  iceFieldBlockGeometry=iceProjectileGeometry;
+  iceFieldBlockMaterial=iceProjectileMaterial;
+  iceFieldRingGeometry=new THREE.TorusGeometry(1.55,0.06,10,48);
+  iceFieldRingMaterial=new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.7,depthWrite:false});
+
   const count=180;
   const geo=new THREE.BufferGeometry();
   const pos=new Float32Array(count*3);
@@ -2958,14 +3536,73 @@ function throwIceBlock(charge=0){
   }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const crystalPoints=new THREE.Points(geo,new THREE.PointsMaterial({size:0.09,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true}));
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(1.55,0.06,10,48),new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.7,depthWrite:false}));
+  iceFieldPointsGeometry=geo;
+  iceFieldPointsMaterial=new THREE.PointsMaterial({size:0.09,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true});
+}
+
+function createSpecialProjectileGroup(kind){
+  if(kind==='ice'){
+    ensureIceSpecialVisualAssets();
+    const group=new THREE.Group();
+    const block=new THREE.Mesh(iceProjectileGeometry,iceProjectileMaterial);
+    block.userData.sharedSpecialVisual=true;
+    block.rotation.y=Math.PI/6;
+    const trail=new THREE.Mesh(iceProjectileTrailGeometry,iceProjectileTrailMaterial);
+    trail.userData.sharedSpecialVisual=true;
+    trail.rotation.x=Math.PI*0.5;
+    trail.position.y=-0.02;
+    group.add(block,trail);
+    return group;
+  }
+  const group=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),new THREE.MeshStandardMaterial({color:'#1f1f2e',metalness:0.35,roughness:0.6,emissive:'#6a2020',emissiveIntensity:0.4}));
+  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.18,8),new THREE.MeshBasicMaterial({color:'#ffd36b'}));
+  fuse.position.y=0.22;
+  const aura=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.03,10,32),new THREE.MeshBasicMaterial({color:'#ffb35c',transparent:true,opacity:0.45,depthWrite:false}));
+  aura.rotation.x=Math.PI*0.5;
+  aura.position.y=0.04;
+  group.add(body,fuse,aura);
+  return group;
+}
+function launchThrownProjectile(kind,throwData){
+  if(!throwData) return false;
+  const {dirX,dirZ,target}=throwData;
+  const group=createSpecialProjectileGroup(kind);
+  const startX=Number.isFinite(throwData.startX) ? throwData.startX : player.root.position.x+dirX*0.55;
+  const startY=Number.isFinite(throwData.startY) ? throwData.startY : player.root.position.y+1.1;
+  const startZ=Number.isFinite(throwData.startZ) ? throwData.startZ : player.root.position.z+dirZ*0.55;
+  group.position.set(startX,startY,startZ);
+  group.rotation.y=Math.atan2(dirX,dirZ);
+  scene.add(group);
+  const dx=target.x-startX;
+  const dz=target.z-startZ;
+  const dist=Math.max(0.001,Math.hypot(dx,dz));
+  const duration=kind==='ice' ? 0.34 : 0.4;
+  activeThrownProjectiles.push({
+    kind,group,target,
+    startX,startY,startZ,
+    dirX,dirZ,
+    dist,duration,elapsed:0,
+  });
+  playSFX(kind==='ice'?'throwIce':'throwBomb');
+  return true;
+}
+function spawnIceField(target){
+  ensureIceSpecialVisualAssets();
+  const group=new THREE.Group();
+  const block=new THREE.Mesh(iceFieldBlockGeometry,iceFieldBlockMaterial);
+  block.userData.sharedSpecialVisual=true;
+  block.rotation.y=Math.PI/6;
+  const crystalPoints=new THREE.Points(iceFieldPointsGeometry,iceFieldPointsMaterial);
+  crystalPoints.userData.sharedSpecialVisual=true;
+  const ring=new THREE.Mesh(iceFieldRingGeometry,iceFieldRingMaterial);
+  ring.userData.sharedSpecialVisual=true;
   ring.rotation.x=Math.PI*0.5;
   ring.position.y=0.06;
   group.add(block,crystalPoints,ring);
   group.position.set(target.x,target.y+0.45,target.z);
   scene.add(group);
-  activeIceFields.push({group,expiresAt:performance.now()/1000+15,radius:1.5});
+  activeIceFields.push({group,expiresAt:performance.now()/1000+15,radius:ICE_FIELD_RADIUS});
   return true;
 }
 
@@ -3010,26 +3647,12 @@ function triggerBombExplosion(bomb){
   spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.15,bomb.group.position.z);
 }
 
-function dropBombTrap(charge=0){
+function spawnBombTrap(target){
   if(activeBombs.length>=5 && !debugCheatMode) return false;
-  const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:BOMB_THROW_SPEED});
-  player.pendingSpecialAction='bomb';
-  player.pendingSpecialTimer=getActionClipDuration(act,0.62,BOMB_THROW_SPEED);
-  player.pendingSpecialCharge=charge;
-  const target=getSpecialThrowTarget(charge);
-  if(!target) return false;
-  const group=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),new THREE.MeshStandardMaterial({color:'#1f1f2e',metalness:0.35,roughness:0.6,emissive:'#6a2020',emissiveIntensity:0.4}));
-  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.18,8),new THREE.MeshBasicMaterial({color:'#ffd36b'}));
-  fuse.position.y=0.22;
-  const aura=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.03,10,32),new THREE.MeshBasicMaterial({color:'#ffb35c',transparent:true,opacity:0.45,depthWrite:false}));
-  aura.rotation.x=Math.PI*0.5;
-  aura.position.y=0.04;
-  group.add(body,fuse,aura);
+  const group=createSpecialProjectileGroup('bomb');
   group.position.set(target.x,target.y+0.24,target.z);
-  group.visible=false;
   scene.add(group);
-  activeBombs.push({group,armed:0,burning:0,burnRadius:BOMB_BLAST_RADIUS,triggered:false,hit:new Set(),spawned:false,autoExplodeAt:BOMB_FUSE_TIME});
+  activeBombs.push({group,armed:0,burning:0,burnRadius:BOMB_BLAST_RADIUS,triggered:false,hit:new Set(),spawned:true,autoExplodeAt:BOMB_FUSE_TIME});
   return true;
 }
 
@@ -3039,74 +3662,90 @@ function updateSpecialWeapons(dt,nowS){
     player.pendingSpecialTimer=Math.max(0,player.pendingSpecialTimer-dt);
     if(player.pendingSpecialTimer===0){
       if(player.pendingSpecialAction==='bomb'){
-        const pendingBomb=[...activeBombs].reverse().find(b=>!b.spawned);
-        if(pendingBomb){
-          pendingBomb.spawned=true;
-          pendingBomb.group.visible=true;
-          pendingBomb.armed=0;
-          playSFX('throwBomb');
-        }
+        launchThrownProjectile('bomb',player.pendingSpecialThrow);
       }else if(player.pendingSpecialAction==='ice'){
-        throwIceBlock(player.pendingSpecialCharge||0);
+        launchThrownProjectile('ice',player.pendingSpecialThrow);
       }else if(player.pendingSpecialAction==='clean' && player.pendingCleanTarget){
         cleanPillar(player.pendingCleanTarget);
       }
       player.pendingSpecialAction=null;
       player.pendingSpecialCharge=0;
+      player.pendingSpecialThrow=null;
       player.pendingCleanTarget=null;
       player.pendingWaterTarget=null;
+    }
+  }
+  for(let i=activeThrownProjectiles.length-1;i>=0;i--){
+    const proj=activeThrownProjectiles[i];
+    proj.elapsed+=dt;
+    const t=clamp(proj.elapsed/proj.duration,0,1);
+    const arc=Math.sin(t*Math.PI)*(proj.kind==='ice'?1.05:0.9);
+    proj.group.position.set(
+      lerp(proj.startX,proj.target.x,t),
+      lerp(proj.startY,proj.target.y+0.38,t)+arc,
+      lerp(proj.startZ,proj.target.z,t)
+    );
+    proj.group.rotation.y+=dt*(proj.kind==='ice'?8:10);
+    if(proj.kind==='bomb' && proj.group.children[2]) proj.group.children[2].rotation.z+=dt*7;
+    if(t>=1){
+      const landed={x:proj.target.x,y:proj.target.y,z:proj.target.z};
+      disposeSpecialVisual(proj.group);
+      activeThrownProjectiles.splice(i,1);
+      if(proj.kind==='ice') spawnIceField(landed);
+      else spawnBombTrap(landed);
     }
   }
   for(let i=activeWaterStreams.length-1;i>=0;i--){
     const fx=activeWaterStreams[i];
     fx.life+=dt;
     const t=clamp(fx.life/fx.maxLife,0,1);
-    const pos=fx.mesh.geometry.attributes.position.array;
-    const jit=fx.jitter;
     const sc=fx.streamCount;
     const sp=fx.splashCount;
-    // ---- STREAM: tight gravity-arc flow from hand to plant ----
-    // Phase 0..0.55 of the effect. Each droplet has its own birth
-    // offset (u), so they form a CONTINUOUS moving stream rather
-    // than a single expanding cloud. Gravity pulls the Y down
-    // in the second half (quadratic), giving the pour its "falling
-    // water" look.
+    const droplets=fx.droplets;
     const streamWindow=0.55;
     for(let p=0;p<sc;p++){
-      const u=p/(sc-1);
-      const local=(t - u*streamWindow);  // 0 when this droplet is at the tap
+      const d=droplets[p];
+      const u=p/Math.max(1,sc-1);
+      const local=t-(u*streamWindow);
       if(local<0 || local>streamWindow){
-        pos[p*3+1]=-9999;
+        d.sprite.visible=false;
+        d.sprite.material.opacity=0;
         continue;
       }
       const prog=clamp(local/streamWindow,0,1);
-      // Lerp forward, then bend: small upward lift at start
-      // (momentum out of the spout) then heavier gravity fall.
-      const lift=0.18*prog*(1-prog);                 // small arc peak
-      const drop=prog*prog*0.28;                     // accelerating drop
-      const drift=Math.sin(p*0.9+nowS*18+u*6)*0.04;  // micro wobble
-      pos[p*3]=lerp(fx.fromX,fx.toX,prog)+jit[p*3]*(1-prog)*0.4+drift;
-      pos[p*3+1]=lerp(fx.fromY,fx.toY,prog)+lift-drop+jit[p*3+1]*0.08*(1-prog);
-      pos[p*3+2]=lerp(fx.fromZ,fx.toZ,prog)+jit[p*3+2]*(1-prog)*0.4+drift*0.7;
+      const drift=Math.sin(d.seed+nowS*17+u*5.5)*0.028;
+      const side=Math.cos(d.seed+nowS*11.5)*d.spread*(1-prog);
+      const up=0.16*Math.sin(prog*Math.PI)-prog*prog*0.34+d.lift*(1-prog)*0.35;
+      d.sprite.visible=true;
+      d.sprite.position.set(
+        lerp(fx.fromX,fx.toX,prog)+side+drift,
+        lerp(fx.fromY,fx.toY,prog)+up,
+        lerp(fx.fromZ,fx.toZ,prog)+side*0.55-drift*0.35
+      );
+      d.sprite.material.opacity=0.88*(1-Math.max(0,prog-0.75)/0.25);
+      d.sprite.material.rotation+=dt*2.2;
+      d.sprite.scale.setScalar(d.baseScale*(1+prog*0.28));
     }
-    // ---- SPLASH: droplets burst from the target once the stream
-    //     has reached it (t≈0.45). Short-lived, pulled down by gravity.
     const splashStart=0.42;
     for(let s=0;s<sp;s++){
-      const p=sc+s;
+      const d=droplets[sc+s];
       const local=t-splashStart;
       if(local<0){
-        pos[p*3+1]=-9999;
+        d.sprite.visible=false;
+        d.sprite.material.opacity=0;
         continue;
       }
       const st=clamp(local/(1-splashStart),0,1);
-      const speed=1.4;
-      pos[p*3]=fx.toX+jit[p*3]*st*speed;
-      pos[p*3+1]=fx.toY+jit[p*3+1]*st*0.6-1.8*st*st;
-      pos[p*3+2]=fx.toZ+jit[p*3+2]*st*speed;
+      d.sprite.visible=true;
+      d.sprite.position.set(
+        fx.toX+d.splashVX*st,
+        fx.toY+0.02+d.splashVY*st-1.55*st*st,
+        fx.toZ+d.splashVZ*st
+      );
+      d.sprite.material.opacity=Math.max(0,0.76*(1-st));
+      d.sprite.material.rotation+=dt*3.8;
+      d.sprite.scale.setScalar(d.baseScale*(1+st*0.42));
     }
-    fx.mesh.geometry.attributes.position.needsUpdate=true;
-    fx.mesh.material.opacity=t<0.9 ? 0.95 : 0.95*(1-(t-0.9)/0.1);
     if(t>=1){
       disposeSpecialVisual(fx.mesh);
       activeWaterStreams.splice(i,1);
@@ -3144,6 +3783,30 @@ function updateSpecialWeapons(dt,nowS){
       activeFlameJets.splice(i,1);
     }
   }
+  for(let i=activeCleanMagicBursts.length-1;i>=0;i--){
+    const burst=activeCleanMagicBursts[i];
+    burst.life+=dt;
+    const t=clamp(burst.life/burst.maxLife,0,1);
+    const driftPull=Math.min(1,t*1.6);
+    for(const d of burst.droplets){
+      d.vx*=0.972;
+      d.vy=d.vy*0.95-dt*1.5;
+      d.vz*=0.972;
+      d.sprite.position.x+=d.vx*dt;
+      d.sprite.position.y+=d.vy*dt;
+      d.sprite.position.z+=d.vz*dt;
+      d.sprite.position.x=lerp(d.sprite.position.x,burst.driftX,driftPull*0.022);
+      d.sprite.position.y=lerp(d.sprite.position.y,burst.driftY+0.18,driftPull*0.015);
+      d.sprite.position.z=lerp(d.sprite.position.z,burst.driftZ,driftPull*0.022);
+      d.sprite.material.rotation+=dt*(1.4+Math.sin(d.seed+nowS*4.2)*0.9);
+      d.sprite.material.opacity=Math.max(0,0.94*(1-t));
+      d.sprite.scale.setScalar(d.baseScale*(1+t*0.45));
+    }
+    if(t>=1){
+      disposeSpecialVisual(burst.mesh);
+      activeCleanMagicBursts.splice(i,1);
+    }
+  }
   for(let i=activeIceFields.length-1;i>=0;i--){
     const field=activeIceFields[i];
     const remain=field.expiresAt-nowS;
@@ -3168,7 +3831,6 @@ function updateSpecialWeapons(dt,nowS){
   }
   for(let i=activeBombs.length-1;i>=0;i--){
     const bomb=activeBombs[i];
-    if(!bomb.spawned) continue;
     bomb.armed+=dt;
     bomb.group.rotation.y+=dt*2.5;
       if(!bomb.triggered){
@@ -3183,7 +3845,7 @@ function updateSpecialWeapons(dt,nowS){
           if(a.state==='dying'||a.state==='dead') continue;
           const dx=a.inst.outer.position.x-bomb.group.position.x;
           const dz=a.inst.outer.position.z-bomb.group.position.z;
-          if(dx*dx+dz*dz<1.1*1.1){
+          if(Math.abs(dx)<=BOMB_BLAST_RADIUS && Math.abs(dz)<=BOMB_BLAST_RADIUS){
             triggerBombExplosion(bomb);
             killArtist(a);
             break;
@@ -3202,7 +3864,7 @@ function updateSpecialWeapons(dt,nowS){
         if(a.state==='dying'||a.state==='dead'||bomb.hit.has(a.id)) continue;
         const dx=a.inst.outer.position.x-bomb.group.position.x;
         const dz=a.inst.outer.position.z-bomb.group.position.z;
-        if(dx*dx+dz*dz<bomb.burnRadius*bomb.burnRadius){
+        if(Math.abs(dx)<=bomb.burnRadius && Math.abs(dz)<=bomb.burnRadius){
           bomb.hit.add(a.id);
           killArtist(a);
         }
@@ -3221,7 +3883,6 @@ function updateSpecialWeapons(dt,nowS){
 
 function useSpecialWeapon(charge=0){
   if(gameState!=='playing' || !equippedWeapon || !purchasedWeapons.has(equippedWeapon)&&!debugCheatMode) return false;
-  if(equippedWeapon==='water' && !debugCheatMode && wateringUses<=0) return false;
   if(player.pendingSpecialAction||player.attackT>=0||player.specialAnimT>0) return false;
   if(!debugCheatMode && specialCooldownRemaining(equippedWeapon)>0) return false;
   if(debugCheatMode) applyCheatInventory();
@@ -3241,17 +3902,33 @@ function useSpecialWeapon(charge=0){
     // and shows the pour on the frame of input.
     playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:2});
     waterPlant(targetPlant);
-    if(!debugCheatMode){
-      wateringUses=Math.max(0,wateringUses-1);
-      if(wateringUses===0 && equippedWeapon==='water') equippedWeapon=null;
-    }
   }else if(equippedWeapon==='ice'){
-    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:BOMB_THROW_SPEED});
+    const throwData=(currentSpecialAimTarget?.weapon==='ice'
+      ? cloneSpecialThrowTarget(currentSpecialAimTarget)
+      : getSpecialThrowTarget(charge,'ice',player.yaw));
+    if(!throwData) return false;
+    const releaseOriginX=player.root.position.x+throwData.dirX*0.55;
+    const releaseOriginY=player.root.position.y+1.1;
+    const releaseOriginZ=player.root.position.z+throwData.dirZ*0.55;
+    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:THROW_SPECIAL_TIME_SCALE});
     player.pendingSpecialAction='ice';
-    player.pendingSpecialTimer=getActionClipDuration(act,0.62,BOMB_THROW_SPEED);
+    player.pendingSpecialTimer=getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE);
     player.pendingSpecialCharge=charge;
+    player.pendingSpecialThrow={weapon:'ice',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else if(equippedWeapon==='bomb'){
-    if(!dropBombTrap(charge)) return false;
+    if(activeBombs.length+(activeThrownProjectiles.filter(p=>p.kind==='bomb').length)>=5 && !debugCheatMode) return false;
+    const throwData=(currentSpecialAimTarget?.weapon==='bomb'
+      ? cloneSpecialThrowTarget(currentSpecialAimTarget)
+      : getSpecialThrowTarget(charge,'bomb',player.yaw));
+    if(!throwData) return false;
+    const releaseOriginX=player.root.position.x+throwData.dirX*0.55;
+    const releaseOriginY=player.root.position.y+1.1;
+    const releaseOriginZ=player.root.position.z+throwData.dirZ*0.55;
+    const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:THROW_SPECIAL_TIME_SCALE});
+    player.pendingSpecialAction='bomb';
+    player.pendingSpecialTimer=getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE);
+    player.pendingSpecialCharge=charge;
+    player.pendingSpecialThrow={weapon:'bomb',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else{
     return false;
   }
@@ -3283,6 +3960,7 @@ const player={
   pendingSpecialCharge:0,
   pendingWaterTarget:null,
   pendingCleanTarget:null,
+  pendingSpecialThrow:null,
   vy:0,            // vertical velocity (jumping)
   isAir:false,     // true while jumping/falling
   groundY:0,       // last sampled ground height
@@ -3297,8 +3975,10 @@ const PLAYER_MAX_SPEED=7.5;
 const PLAYER_ACCEL=22;
 const PLAYER_DECEL=26;
 const BOMB_THROW_SPEED=2.0;
+const THROW_SPECIAL_TIME_SCALE=BOMB_THROW_SPEED*1.5;
 const BOMB_FUSE_TIME=10;
 const BOMB_BLAST_RADIUS=2.5;
+const ICE_FIELD_RADIUS=2.5;
 const PLAYER_ATTACK_TIME_SCALE=3;
 const PLAYER_MODEL_Y_OFFSET=0.0; // keep feet on the ground after bbox normalization
 const ATTACK_DUR=0.38;
@@ -3434,7 +4114,7 @@ function attachPlayer(){
 // ===== Artists =====
 const artists=[]; // {inst, state:'walk'|'paint'|'leave'|'idle'|'flee'|'dying', target pillar, paintT, deathT, id}
 let artistIdCounter=0;
-const ARTIST_TINT=new THREE.Color('#ffc8c8'); // subtle reddish tint
+const ARTIST_TINT=new THREE.Color('#fff8f6');
 const ARTIST_WALK_SPEED=1.96;
 const ARTIST_FAR_WALK_MUL=0.5;      // beyond 10m from player, artists move at half walk speed
 const ARTIST_PAINT_TIME=10;         // sec to fully paint a pillar
@@ -4044,16 +4724,13 @@ async function loadCoin(){
           const mats=Array.isArray(o.material)?o.material:[o.material];
           for(const m of mats){
             m.side=THREE.DoubleSide;
-            if(m.color) m.color.setHex(0xffd24a);       // warm gold
-            if('metalness' in m) m.metalness=0.92;
-            if('roughness' in m) m.roughness=0.22;
-            if(m.emissive) m.emissive.setHex(0x563000); // gentle amber glow
-            if('emissiveIntensity' in m) m.emissiveIntensity=0.25;
-            if(m.map){
-              // Tint the existing texture so any surface detail stays,
-              // but the overall hue is gold.
-              m.color.setHex(0xffe388);
-            }
+            if(m.map) m.map=null;
+            if(m.color) m.color.setHex(0xffdf57);
+            if('metalness' in m) m.metalness=1;
+            if('roughness' in m) m.roughness=0.12;
+            if(m.emissive) m.emissive.setHex(0x8a6500);
+            if('emissiveIntensity' in m) m.emissiveIntensity=0.42;
+            m.needsUpdate=true;
           }
         }
       }
@@ -4119,7 +4796,10 @@ function disposeCoin(grp){
 
 let coinCount=0;
 const coinCountEl=document.getElementById('coin-count');
-function updateCoinUI(){coinCountEl.textContent=coinCount;renderShopState()}
+function updateCoinUI(){
+  coinCountEl.textContent=coinCount;
+  if(shopPanel?.classList.contains('show')) renderShopState();
+}
 
 const CLEAN_RANGE=2.25;
 const BURST_SHOP_ITEMS=[
@@ -4133,13 +4813,13 @@ const BURST_SHOP_ITEMS=[
 ];
 const WEAPON_SHOP_ITEMS=[
   {id:'water',name:'WATER',label:'grow plants',cost:1,icon:'\u{1F4A7}'},
-  {id:'flame',name:'FLAME',label:'1s cd',cost:10,icon:'\u{1F525}'},
-  {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:10,icon:'\u{1F9CA}'},
-  {id:'bomb',name:'BOMB',label:'trap x5',cost:10,icon:'\u{1F4A3}'},
+  {id:'flame',name:'FLAME',label:'1s cd',cost:5,icon:'\u{1F525}'},
+  {id:'ice',name:'ICE BLOCK',label:'freeze 15s',cost:5,icon:'\u{1F9CA}'},
+  {id:'bomb',name:'BOMB',label:'trap x5',cost:5,icon:'\u{1F4A3}'},
 ];
+const ALWAYS_OWNED_WEAPON_IDS=new Set(['water']);
 const SPECIAL_COOLDOWNS={flame:1,water:0.35,ice:3,bomb:3};
 let cleanerUses=0;
-let wateringUses=0;
 let purchasedBurstEffects=new Set(['amber']);
 let equippedBurstEffect='amber';
 let purchasedWeapons=new Set();
@@ -4149,15 +4829,20 @@ let currentCleanTarget=null;
 let cleanPromptCooldown=0;
 const activeBombs=[];
 const activeFlameJets=[];
+const activeCleanMagicBursts=[];
 const activeIceFields=[];
 const activeWaterStreams=[];
+const activeThrownProjectiles=[];
 let specialAimMarker=null;
+let currentSpecialAimTarget=null;
 const cleanBtn=document.getElementById('clean-btn');
+const cleanBtnBadge=document.getElementById('clean-btn-badge');
 const specialBtn=document.getElementById('special-btn');
 const shopBtn=document.getElementById('shop-btn');
 const shopPanel=document.getElementById('shop-panel');
 const shopClose=document.getElementById('shop-close');
 const artWinsRetryBtn=document.getElementById('art-wins-retry');
+const cleanBtnFrame=document.getElementById('clean-btn-frame');
 const loadoutBar=document.getElementById('loadout-bar');
 const loadoutToggle=document.getElementById('loadout-toggle');
 const buyCleanerBtn=document.getElementById('buy-cleaner-btn');
@@ -4177,321 +4862,613 @@ const weaponBuyButtons={
 };
 const layoutQuery=new URLSearchParams(window.location.search);
 const isLayoutPreviewWindow=layoutQuery.get('layoutPreview')==='1';
-const UI_LAYOUT_STORAGE_KEY='urbanLegendUILayoutV1';
+const UI_LAYOUT_STORAGE_KEY='urbanLegendUILayoutV2';
 const UI_LAYOUT_DEFAULTS={
   "desktop": {
     "kill-box-frame": {
       "x": 10.637,
       "y": 14.088,
-      "w": 156.36363220214844,
-      "h": 84.36366271972656
+      "w": 131.6363525390625,
+      "h": 72.72730255126953,
+      "z": 1000,
+      "locked": true
     },
     "kill-box": {
       "x": 11.108,
       "y": 13.858,
-      "w": 95.45454406738281,
-      "h": 32.545448303222656
+      "w": 70,
+      "h": 26.727279663085938,
+      "z": 200,
+      "locked": true
     },
     "timer-box": {
-      "x": 49.908,
-      "y": 15.206,
-      "w": 40,
-      "h": 18
+      "x": 50.221,
+      "y": 15.147,
+      "w": 85.818115234375,
+      "h": 39.81818389892578,
+      "z": 300,
+      "locked": true
     },
     "coin-box-frame": {
       "x": 77.897,
       "y": 15.124,
-      "w": 152.0001220703125,
-      "h": 74.18180847167969
+      "w": 142.5455322265625,
+      "h": 63.999977111816406,
+      "z": 1100,
+      "locked": true
     },
     "coin-box": {
-      "x": 78.626,
-      "y": 15.008,
-      "w": 84.54541015625,
-      "h": 29.63634490966797
+      "x": 78.261,
+      "y": 14.778,
+      "w": 93.272705078125,
+      "h": 25.272705078125,
+      "z": 2200,
+      "locked": true
     },
     "shop-btn-frame": {
       "x": 90.189,
       "y": 15.032,
-      "w": 154,
-      "h": 84
+      "w": 129.9998779296875,
+      "h": 68.72724914550781,
+      "z": 1200,
+      "locked": true
     },
     "shop-btn": {
-      "x": 90.763,
+      "x": 90.507,
       "y": 14.802,
-      "w": 85.0909423828125,
-      "h": 31.81818389892578
+      "w": 83.6363525390625,
+      "h": 26,
+      "z": 2300,
+      "locked": true
     },
     "paint-bar-frame": {
-      "x": 5.497,
-      "y": 45.973,
-      "w": 108.9090805053711,
-      "h": 412.54547119140625
+      "x": 5.6,
+      "y": 47.26699999999999,
+      "w": 159.81817245483398,
+      "h": 312.18177795410156,
+      "z": 1300,
+      "locked": false
     },
     "paint-bar": {
-      "x": 5.601,
-      "y": 50,
-      "w": 94.36363983154297,
-      "h": 271.4544677734375
+      "x": 5.6,
+      "y": 50.517,
+      "w": 28.181804656982422,
+      "h": 240.9090118408203,
+      "z": 400,
+      "locked": true
     },
     "soap-slot-frame": {
       "x": 28.26,
       "y": 69.126,
       "w": 128.90911865234375,
-      "h": 178.18182373046875
+      "h": 178.18182373046875,
+      "z": 1400,
+      "locked": true
     },
     "soap-slot-card": {
       "x": 28.207,
       "y": 69.126,
       "w": 87.81817626953125,
-      "h": 125.45458984375
+      "h": 125.45458984375,
+      "z": 1500,
+      "locked": true
     },
     "weapon-cycle-frame": {
       "x": 15.964,
       "y": 69.486,
       "w": 150,
-      "h": 200
+      "h": 200,
+      "z": 1600,
+      "locked": true
     },
     "weapon-cycle-card": {
       "x": 15.756,
       "y": 69.601,
       "w": 106,
-      "h": 148
+      "h": 148,
+      "z": 1700,
+      "locked": true
     },
     "clean-btn-frame": {
-      "x": 16,
-      "y": 74,
-      "w": 132,
-      "h": 132
+      "x": 94.145,
+      "y": 58.895,
+      "w": 105.82,
+      "h": 97.09,
+      "z": 500,
+      "locked": true
     },
     "clean-btn": {
-      "x": 16,
-      "y": 74,
-      "w": 64,
-      "h": 64
+      "x": 94.093,
+      "y": 58.695,
+      "w": 64.73,
+      "h": 64.73,
+      "z": 600,
+      "locked": true
     },
     "special-btn-frame": {
-      "x": 74.619,
-      "y": 83.399,
-      "w": 152,
-      "h": 152
+      "x": 76.442,
+      "y": 83.075,
+      "w": 98.90911865234375,
+      "h": 101.8182373046875,
+      "z": 1800,
+      "locked": true
     },
     "special-btn": {
-      "x": 74.619,
-      "y": 83.399,
-      "w": 74,
-      "h": 74
+      "x": 76.442,
+      "y": 82.645,
+      "w": 62.36376953125,
+      "h": 63.0909423828125,
+      "z": 2400,
+      "locked": true
     },
     "jump-btn-frame": {
-      "x": 84.822,
-      "y": 83.399,
-      "w": 152,
-      "h": 152
+      "x": 84.718,
+      "y": 83.183,
+      "w": 104.7274169921875,
+      "h": 106.18182373046875,
+      "z": 1900,
+      "locked": true
     },
     "jump-btn": {
-      "x": 84.822,
-      "y": 83.399,
-      "w": 74,
-      "h": 74
+      "x": 84.77,
+      "y": 82.86,
+      "w": 65.2728271484375,
+      "h": 65.27276611328125,
+      "z": 2500,
+      "locked": true
     },
     "attack-btn-frame": {
-      "x": 94.524,
-      "y": 83.399,
-      "w": 152,
-      "h": 152
+      "x": 93.586,
+      "y": 82.86,
+      "w": 106.1817626953125,
+      "h": 100.36361694335938,
+      "z": 2000,
+      "locked": true
     },
     "attack-btn": {
-      "x": 94.524,
-      "y": 83.399,
-      "w": 74,
-      "h": 74
+      "x": 93.586,
+      "y": 82.753,
+      "w": 67.45458984375,
+      "h": 66,
+      "z": 2600,
+      "locked": true
     },
     "viewport-frame-top": {
-      "x": 50,
-      "y": 8.4,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.34
+      "x": 50.052,
+      "y": 16.154,
+      "w": 1395.2727272510529,
+      "h": 219.2436627197266,
+      "z": 100,
+      "locked": true
     },
     "viewport-frame-bottom": {
-      "x": 50,
-      "y": 91.6,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.4
+      "x": 49.948,
+      "y": 82.57,
+      "w": 1396,
+      "h": 252.8,
+      "z": 900,
+      "locked": true
     },
     "viewport-frame-left": {
-      "x": 11,
-      "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "x": 11.051,
+      "y": 51.719,
+      "w": 307.847294921875,
+      "h": 703.9998834133148,
+      "z": 800,
+      "locked": true
     },
     "viewport-frame-right": {
       "x": 89,
-      "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "y": 50.536,
+      "w": 309.301640625,
+      "h": 717.0909075737,
+      "z": 700,
+      "locked": true
+    },
+    "loadout-toggle-frame": {
+      "x": 5.925,
+      "y": 84.607,
+      "w": 76.0000057220459,
+      "h": 74.54544067382812,
+      "z": 2100,
+      "locked": true
+    },
+    "loadout-toggle": {
+      "x": 5.846,
+      "y": 84.22,
+      "w": 46.73,
+      "h": 46.73,
+      "z": 2700,
+      "locked": true
+    },
+    "joystick-zone": {
+      "x": 0,
+      "y": 0,
+      "w": 80,
+      "h": 80,
+      "z": 161212
+    },
+    "kill-icon": {
+      "x": 10.636,
+      "y": 14.318,
+      "w": 43.63636779785156,
+      "h": 39.81819152832031,
+      "z": 160202,
+      "locked": true
+    },
+    "kill-count": {
+      "x": 12.26,
+      "y": 13.858,
+      "w": 48,
+      "h": 30,
+      "z": 160303,
+      "locked": true
+    },
+    "coin-glyph": {
+      "x": 76.063,
+      "y": 14.767,
+      "w": 14.5455322265625,
+      "h": 20.363624572753906,
+      "z": 160707,
+      "locked": true
+    },
+    "coin-icon": {
+      "x": 77.942,
+      "y": 15.342,
+      "w": 28.727294921875,
+      "h": 35.81819152832031,
+      "z": 18232323,
+      "locked": true
+    },
+    "coin-count": {
+      "x": 80.085,
+      "y": 14.997,
+      "w": 40.727294921875,
+      "h": 28.545440673828125,
+      "z": 160808,
+      "locked": true
+    },
+    "shop-icon": {
+      "x": 90.84599999999999,
+      "y": 15.014999999999999,
+      "w": 62.54541015625,
+      "h": 152.1818084716797,
+      "z": 160909,
+      "locked": true
     }
   },
   "mobile": {
     "kill-box-frame": {
-      "x": 10.587,
-      "y": 10.751,
-      "w": 156.36,
-      "h": 84.36
+      "x": 19.041,
+      "y": 9.832,
+      "w": 88.00000762939453,
+      "h": 45.81816101074219,
+      "z": 1100,
+      "locked": true
     },
     "kill-box": {
-      "x": 11.006,
-      "y": 10.061,
-      "w": 95.45,
-      "h": 32.53
+      "x": 20.381,
+      "y": 9.813,
+      "w": 57.63181991577149,
+      "h": 28.18182373046875,
+      "z": 700,
+      "locked": true
     },
     "timer-box": {
-      "x": 49.92,
-      "y": 15.204,
-      "w": 40,
-      "h": 18
+      "x": 50.11799999999998,
+      "y": 7.426,
+      "w": 78.6,
+      "h": 17.15,
+      "z": 800,
+      "locked": true,
+      "wp": 19.8981,
+      "hp": 2.5367
     },
     "coin-box-frame": {
-      "x": 72.916,
-      "y": 17.769,
-      "w": 138.181884765625,
-      "h": 71.98815338134766
+      "x": 78.09700000000011,
+      "y": 9.477999999999998,
+      "w": 103.27278137207031,
+      "h": 49.45454406738281,
+      "z": 1200,
+      "locked": true
     },
     "coin-box": {
-      "x": 73.332,
-      "y": 17.538,
-      "w": 103.4393017578125,
-      "h": 28.902735595703124
+      "x": 79.02999999999999,
+      "y": 9.336999999999998,
+      "w": 66.9090576171875,
+      "h": 25.272705078125,
+      "z": 900,
+      "locked": true
     },
     "shop-btn-frame": {
-      "x": 72.759,
-      "y": 29.991,
-      "w": 154,
-      "h": 84
+      "x": 79.756,
+      "y": 15.237999999999879,
+      "w": 90.90908813476562,
+      "h": 47.6363525390625,
+      "z": 1300,
+      "locked": true
     },
     "shop-btn": {
-      "x": 73.594,
-      "y": 29.531,
-      "w": 85.09,
-      "h": 31.82
+      "x": 80.921,
+      "y": 15.19,
+      "w": 49.22,
+      "h": 18,
+      "z": 1000,
+      "locked": true,
+      "wp": 12.4599,
+      "hp": 2.6627
     },
     "paint-bar-frame": {
-      "x": 5.498,
-      "y": 45.972,
-      "w": 108.9,
-      "h": 412.55
+      "x": 9.365,
+      "y": 47.276,
+      "w": 136.78,
+      "h": 234.84,
+      "z": 200,
+      "locked": true,
+      "wp": 34.6279,
+      "hp": 34.7397
     },
     "paint-bar": {
-      "x": 5.602,
-      "y": 50,
-      "w": 94.36,
-      "h": 271.44
+      "x": 9.369,
+      "y": 49.64,
+      "w": 23.21,
+      "h": 179.73,
+      "z": 100,
+      "locked": true,
+      "wp": 5.8765,
+      "hp": 26.5867
     },
     "soap-slot-frame": {
-      "x": 16.233,
-      "y": 37.02,
-      "w": 128.91,
-      "h": 178.18
+      "x": 33.498,
+      "y": 54.296,
+      "w": 77.59,
+      "h": 120.62,
+      "z": 1400,
+      "locked": true,
+      "wp": 19.6441,
+      "hp": 17.8425
     },
     "soap-slot-card": {
-      "x": 16.231,
-      "y": 37.826,
-      "w": 87.81,
-      "h": 125.45
+      "x": 33.312,
+      "y": 54.394,
+      "w": 55.12,
+      "h": 96.62,
+      "z": 1500,
+      "locked": true,
+      "wp": 13.9542,
+      "hp": 14.2922
     },
     "weapon-cycle-frame": {
-      "x": 15.968,
-      "y": 69.485,
-      "w": 150,
-      "h": 200
+      "x": 33.378,
+      "y": 36.098,
+      "w": 79.83,
+      "h": 100.48,
+      "z": 1600,
+      "locked": true,
+      "wp": 20.2106,
+      "hp": 14.8632
     },
     "weapon-cycle-card": {
-      "x": 15.759,
-      "y": 71.18,
-      "w": 106,
-      "h": 148
+      "x": 33.343,
+      "y": 36.24399999999999,
+      "w": 57.08,
+      "h": 76.1,
+      "z": 1700,
+      "locked": true,
+      "wp": 14.4499,
+      "hp": 11.2578
     },
     "clean-btn-frame": {
-      "x": 20,
-      "y": 62,
-      "w": 110,
-      "h": 110
+      "x": 85.887,
+      "y": 56.682,
+      "w": 56,
+      "h": 56,
+      "z": 1800,
+      "locked": true
     },
     "clean-btn": {
-      "x": 20,
-      "y": 62,
-      "w": 52,
-      "h": 52
+      "x": 85.887,
+      "y": 56.399,
+      "w": 36.47,
+      "h": 38.97,
+      "z": 2400,
+      "locked": true,
+      "wp": 9.233,
+      "hp": 5.7641
     },
     "special-btn-frame": {
-      "x": 76.664,
-      "y": 80.632,
-      "w": 103.27276611328125,
-      "h": 85.0909423828125
+      "x": 64.912,
+      "y": 76.105,
+      "w": 63.82,
+      "h": 64.06,
+      "z": 1900,
+      "locked": true,
+      "wp": 16.1569,
+      "hp": 9.4766
     },
     "special-btn": {
-      "x": 76.617,
-      "y": 80.292,
-      "w": 37.6363525390625,
-      "h": 39.0909423828125
+      "x": 64.65800000000002,
+      "y": 75.86700000000002,
+      "w": 40.83,
+      "h": 39.8,
+      "z": 2500,
+      "locked": true,
+      "wp": 10.3355,
+      "hp": 5.8882
     },
     "jump-btn-frame": {
-      "x": 82.3,
-      "y": 68.19,
-      "w": 78.12136840820312,
-      "h": 99.15142822265625
+      "x": 84.833,
+      "y": 70.55,
+      "w": 78.04,
+      "h": 76.66,
+      "z": 2100,
+      "locked": true,
+      "wp": 19.7579,
+      "hp": 11.3408
     },
     "jump-btn": {
-      "x": 82.184,
-      "y": 67.914,
-      "w": 34.0001220703125,
-      "h": 34.72723388671875
+      "x": 84.62500000000004,
+      "y": 70.17800000000001,
+      "w": 50.51,
+      "h": 49.96,
+      "z": 2600,
+      "locked": true,
+      "wp": 12.7878,
+      "hp": 7.3899
     },
     "attack-btn-frame": {
-      "x": 77.129,
-      "y": 56.6,
-      "w": 77.0909423828125,
-      "h": 84.36355590820312
+      "x": 84.084,
+      "y": 84.552,
+      "w": 80.39,
+      "h": 81.76,
+      "z": 2200,
+      "locked": true,
+      "wp": 20.351,
+      "hp": 12.0945
     },
     "attack-btn": {
-      "x": 77.085,
-      "y": 56.42,
-      "w": 36.9091796875,
-      "h": 35.45452880859375
+      "x": 84.024,
+      "y": 84.197,
+      "w": 52.9,
+      "h": 52.47,
+      "z": 2700,
+      "locked": true,
+      "wp": 13.3929,
+      "hp": 7.7621
     },
     "viewport-frame-top": {
       "x": 50,
-      "y": 8.4,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.34
+      "y": 8.301,
+      "w": 395,
+      "h": 112.22,
+      "z": 300,
+      "locked": true,
+      "wp": 100,
+      "hp": 16.601
     },
     "viewport-frame-bottom": {
-      "x": 50,
-      "y": 91.6,
-      "w": window.innerWidth,
-      "h": window.innerHeight * 0.4
+      "x": 50.032,
+      "y": 87.12,
+      "w": 576.51,
+      "h": 174.14,
+      "z": 600,
+      "locked": true,
+      "wp": 145.9523,
+      "hp": 25.7597
     },
     "viewport-frame-left": {
-      "x": 11,
+      "x": 19.229,
       "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "w": 151.91,
+      "h": 676,
+      "z": 400,
+      "locked": true,
+      "wp": 38.4586,
+      "hp": 100.0002
     },
     "viewport-frame-right": {
-      "x": 89,
+      "x": 80.391,
       "y": 50,
-      "w": window.innerWidth * 0.22,
-      "h": window.innerHeight
+      "w": 154.91,
+      "h": 676,
+      "z": 500,
+      "locked": true,
+      "wp": 39.2169,
+      "hp": 100.0003
+    },
+    "loadout-toggle-frame": {
+      "x": 20.369999999999905,
+      "y": 68.1910000000001,
+      "w": 56,
+      "h": 56,
+      "z": 2300,
+      "locked": true
+    },
+    "loadout-toggle": {
+      "x": 20.428999999999913,
+      "y": 68.20400000000006,
+      "w": 37.44,
+      "h": 37.96,
+      "z": 2800,
+      "locked": true,
+      "wp": 9.4775,
+      "hp": 5.6147
+    },
+    "joystick-zone": {
+      "x": 19.54,
+      "y": 81.931,
+      "w": 80.55,
+      "h": 80,
+      "z": 2000,
+      "locked": true,
+      "wp": 20.3936,
+      "hp": 11.8343
+    },
+    "kill-icon": {
+      "x": 18.115,
+      "y": 10.013,
+      "w": 38.54543495178223,
+      "h": 34.909095764160156,
+      "z": 2900,
+      "locked": true
+    },
+    "kill-count": {
+      "x": 23.303000000000004,
+      "y": 9.677,
+      "w": 45.090901374816895,
+      "h": 42.000003814697266,
+      "z": 3000,
+      "locked": true
+    },
+    "coin-glyph": {
+      "x": 70.08399999999979,
+      "y": 17.64899999999996,
+      "w": 14,
+      "h": 14,
+      "z": 3100,
+      "locked": false,
+      "hidden": true
+    },
+    "coin-icon": {
+      "x": 77.40599999999999,
+      "y": 9.712999999999997,
+      "w": 36.72719192504883,
+      "h": 38.72724151611328,
+      "z": 3200,
+      "locked": true
+    },
+    "coin-count": {
+      "x": 83.53200000000011,
+      "y": 9.351,
+      "w": 45.81823921203613,
+      "h": 26.72726821899414,
+      "z": 3300,
+      "locked": true
+    },
+    "shop-icon": {
+      "x": 81.18100000000001,
+      "y": 15.251999999999878,
+      "w": 69.81817054748535,
+      "h": 141.81816864013672,
+      "z": 3400,
+      "locked": true
     }
   }
 };
 const UI_LAYOUT_TARGET_DEFS=[
   {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40,baseW:156.36,baseH:84.36},
-  {id:'kill-box',label:'artist',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
+  {id:'kill-box',label:'artist bg',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
+  {id:'kill-icon',label:'artist icon',anchor:'center',minW:16,minH:16,baseW:34,baseH:34},
+  {id:'kill-count',label:'artist number',anchor:'center',minW:24,minH:18,baseW:48,baseH:30},
   {id:'timer-box',label:'timer',anchor:'center',minW:24,minH:12,baseW:40,baseH:18},
   {id:'coin-box-frame',label:'coin frame',anchor:'center',minW:80,minH:40,baseW:152,baseH:74.18},
-  {id:'coin-box',label:'coin',anchor:'center',minW:40,minH:18,baseW:84.55,baseH:29.64},
+  {id:'coin-box',label:'coin bg',anchor:'center',minW:40,minH:18,baseW:84.55,baseH:29.64},
+  {id:'coin-glyph',label:'coin glyph',anchor:'center',minW:14,minH:14,baseW:24,baseH:24},
+  {id:'coin-icon',label:'coin word',anchor:'center',minW:20,minH:14,baseW:48,baseH:30},
+  {id:'coin-count',label:'coin number',anchor:'center',minW:24,minH:18,baseW:48,baseH:30},
   {id:'shop-btn-frame',label:'shop frame',anchor:'center',minW:72,minH:36,baseW:154,baseH:84},
-  {id:'shop-btn',label:'shop',anchor:'center',minW:36,minH:18,baseW:85.09,baseH:31.82},
+  {id:'shop-btn',label:'shop bg',anchor:'center',minW:36,minH:18,baseW:85.09,baseH:31.82},
+  {id:'shop-icon',label:'shop word',anchor:'center',minW:24,minH:16,baseW:60,baseH:30},
   {id:'paint-bar-frame',label:'paint frame',anchor:'center',minW:30,minH:120,baseW:108.91,baseH:412.55},
   {id:'paint-bar',label:'paint',anchor:'center',minW:12,minH:80,baseW:94.36,baseH:271.45},
   {id:'soap-slot-frame',label:'soap frame',anchor:'center',minW:72,minH:96,baseW:128.91,baseH:178.18},
@@ -4508,29 +5485,233 @@ const UI_LAYOUT_TARGET_DEFS=[
   {id:'attack-btn',label:'punch btn',anchor:'center',minW:24,minH:24,baseW:74,baseH:74},
   {id:'loadout-toggle-frame',label:'E frame',anchor:'center',minW:56,minH:56,baseW:116,baseH:116},
   {id:'loadout-toggle',label:'E btn',anchor:'center',minW:24,minH:24,baseW:54,baseH:54},
+  {id:'joystick-zone',label:'joystick',anchor:'center',minW:80,minH:80,baseW:120,baseH:120},
   {id:'viewport-frame-top',label:'frame top',anchor:'center',minW:200,minH:40,baseW:window.innerWidth,baseH:window.innerHeight*0.34},
   {id:'viewport-frame-bottom',label:'frame bottom',anchor:'center',minW:200,minH:40,baseW:window.innerWidth,baseH:window.innerHeight*0.40},
   {id:'viewport-frame-left',label:'frame left',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
   {id:'viewport-frame-right',label:'frame right',anchor:'center',minW:40,minH:200,baseW:window.innerWidth*0.22,baseH:window.innerHeight},
 ];
-const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,clipboard:null};
+const UI_LAYOUT_COMPARE_PAIRS={
+  'kill-box-frame':'kill-box',
+  'kill-box':'kill-box-frame',
+  'coin-box-frame':'coin-box',
+  'coin-box':'coin-box-frame',
+  'shop-btn-frame':'shop-btn',
+  'shop-btn':'shop-btn-frame',
+  'paint-bar-frame':'paint-bar',
+  'paint-bar':'paint-bar-frame',
+  'soap-slot-frame':'soap-slot-card',
+  'soap-slot-card':'soap-slot-frame',
+  'weapon-cycle-frame':'weapon-cycle-card',
+  'weapon-cycle-card':'weapon-cycle-frame',
+  'clean-btn-frame':'clean-btn',
+  'clean-btn':'clean-btn-frame',
+  'special-btn-frame':'special-btn',
+  'special-btn':'special-btn-frame',
+  'jump-btn-frame':'jump-btn',
+  'jump-btn':'jump-btn-frame',
+  'attack-btn-frame':'attack-btn',
+  'attack-btn':'attack-btn-frame',
+  'loadout-toggle-frame':'loadout-toggle',
+  'loadout-toggle':'loadout-toggle-frame',
+};
+const UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT=66;
+const MOBILE_LAYOUT_REFERENCE_WIDTH=430;
+const MOBILE_LAYOUT_REFERENCE_HEIGHT=932;
+const UI_LAYOUT_EDGE_SNAP_PX=14;
+const UI_LAYOUT_VIEWPORT_FRAME_IDS=new Set(['viewport-frame-top','viewport-frame-bottom','viewport-frame-left','viewport-frame-right']);
+const uiLayoutState={active:false,config:loadUILayoutConfig(),editor:null,overlays:new Map(),drag:null,panelDrag:null,listDrag:null,panelRect:{left:16,top:16,width:340,height:520},objectPanelCollapsed:false,objectPanelScrollTop:0,toastTimer:0,exportButton:null,modal:null,forcedMode:null,selectedId:null,selectedIds:[],clipboard:null,history:[],suppressRowClick:false,editedBuckets:new Set()};
 window.__uiLayoutConfig=uiLayoutState.config;
+
+function getUILayoutViewportBounds(){
+  const cs=getComputedStyle(document.body);
+  const padTop=parseFloat(cs.paddingTop)||0;
+  const padRight=parseFloat(cs.paddingRight)||0;
+  const padBottom=parseFloat(cs.paddingBottom)||0;
+  const padLeft=parseFloat(cs.paddingLeft)||0;
+  return {
+    left:padLeft,
+    top:padTop,
+    width:Math.max(1,window.innerWidth-padLeft-padRight),
+    height:Math.max(1,window.innerHeight-padTop-padBottom),
+  };
+}
+function isMobileUILayoutBucket(){
+  return getUILayoutBucket()==='mobile';
+}
+function resolveUILayoutSize(def,metrics){
+  if(!isMobileUILayoutBucket()){
+    return {
+      width:Math.max(def.minW,metrics?.w||def.minW),
+      height:Math.max(def.minH,metrics?.h||def.minH),
+    };
+  }
+  const bounds=getUILayoutViewportBounds();
+  const wp=Number.isFinite(metrics?.wp) ? metrics.wp : ((metrics?.w||def.minW)/MOBILE_LAYOUT_REFERENCE_WIDTH)*100;
+  const hp=Number.isFinite(metrics?.hp) ? metrics.hp : ((metrics?.h||def.minH)/MOBILE_LAYOUT_REFERENCE_HEIGHT)*100;
+  return {
+    width:Math.max(def.minW,bounds.width*(wp/100)),
+    height:Math.max(def.minH,bounds.height*(hp/100)),
+  };
+}
+function isUILayoutViewportFrame(def){
+  return !!def && UI_LAYOUT_VIEWPORT_FRAME_IDS.has(def.id);
+}
+function getUILayoutSnapEdges(def,resize,corner=''){
+  if(!isUILayoutViewportFrame(def)) return null;
+  if(!resize) return {left:true,right:true,top:true,bottom:true};
+  return {
+    left:corner.includes('w'),
+    right:corner.includes('e'),
+    top:corner.includes('n'),
+    bottom:corner.includes('s'),
+  };
+}
+function snapUILayoutRectToViewport(rect,bounds,edges,mode='move'){
+  if(!edges) return rect;
+  const next={...rect};
+  const boundLeft=bounds.left;
+  const boundTop=bounds.top;
+  const boundRight=bounds.left+bounds.width;
+  const boundBottom=bounds.top+bounds.height;
+  const right=()=>next.left+next.width;
+  const bottom=()=>next.top+next.height;
+  if(mode==='move'){
+    let bestHX=null;
+    if(edges.left){
+      const dist=next.left-boundLeft;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX) bestHX={kind:'left',dist:Math.abs(dist)};
+    }
+    if(edges.right){
+      const dist=right()-boundRight;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX && (!bestHX || Math.abs(dist)<bestHX.dist)) bestHX={kind:'right',dist:Math.abs(dist)};
+    }
+    if(bestHX?.kind==='left') next.left=boundLeft;
+    else if(bestHX?.kind==='right') next.left=boundRight-next.width;
+
+    let bestVY=null;
+    if(edges.top){
+      const dist=next.top-boundTop;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX) bestVY={kind:'top',dist:Math.abs(dist)};
+    }
+    if(edges.bottom){
+      const dist=bottom()-boundBottom;
+      if(Math.abs(dist)<=UI_LAYOUT_EDGE_SNAP_PX && (!bestVY || Math.abs(dist)<bestVY.dist)) bestVY={kind:'bottom',dist:Math.abs(dist)};
+    }
+    if(bestVY?.kind==='top') next.top=boundTop;
+    else if(bestVY?.kind==='bottom') next.top=boundBottom-next.height;
+    return next;
+  }
+  const fixedRight=right();
+  const fixedBottom=bottom();
+  if(edges.left && Math.abs(next.left-boundLeft)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.left=boundLeft;
+    next.width=Math.max(1,fixedRight-next.left);
+  }
+  if(edges.right && Math.abs(right()-boundRight)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.width=Math.max(1,boundRight-next.left);
+  }
+  if(edges.top && Math.abs(next.top-boundTop)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.top=boundTop;
+    next.height=Math.max(1,fixedBottom-next.top);
+  }
+  if(edges.bottom && Math.abs(bottom()-boundBottom)<=UI_LAYOUT_EDGE_SNAP_PX){
+    next.height=Math.max(1,boundBottom-next.top);
+  }
+  return next;
+}
 
 function cloneUILayoutConfig(config){
   return JSON.parse(JSON.stringify(config||{desktop:{},mobile:{}}));
 }
+function pushUILayoutHistory(label='change'){
+  uiLayoutState.history.push({
+    label,
+    config:cloneUILayoutConfig(sanitizeUILayoutConfig(uiLayoutState.config)),
+    selectedId:uiLayoutState.selectedId,
+    mode:uiLayoutState.forcedMode,
+  });
+  if(uiLayoutState.history.length>80) uiLayoutState.history.shift();
+}
+function undoUILayoutChange(){
+  const entry=uiLayoutState.history.pop();
+  if(!entry) return false;
+  uiLayoutState.config=cloneUILayoutConfig(entry.config);
+  window.__uiLayoutConfig=uiLayoutState.config;
+  if(entry.mode==='desktop'||entry.mode==='mobile') uiLayoutState.forcedMode=entry.mode;
+  applyUILayoutConfig();
+  refreshUILayoutEditorToolbar();
+  setUILayoutSelection(entry.selectedId||UI_LAYOUT_TARGET_DEFS[0]?.id||null);
+  showUILayoutToast(`Undo ${entry.label}`);
+  return true;
+}
 function sanitizeUILayoutConfig(config){
   const allowed=new Set(UI_LAYOUT_TARGET_DEFS.map(def=>def.id));
-  const cleanBucket=bucket=>{
+  const cleanBucket=(bucket,bucketName)=>{
     const out={};
     for(const [key,val] of Object.entries(bucket||{})){
-      if(allowed.has(key)) out[key]=val;
+      if(!allowed.has(key)||!val||typeof val!=='object') continue;
+      const def=getUILayoutDef(key);
+      const next={...val};
+      // Allow items to live well off-screen so the admin canvas-zoom
+      // mode can park elements in the black margin while still
+      // clamping the wildest values.
+      if(Number.isFinite(next.x)) next.x=Math.max(-80,Math.min(180,next.x));
+      if(Number.isFinite(next.y)) next.y=Math.max(-80,Math.min(180,next.y));
+      if(Number.isFinite(next.w) && def) next.w=Math.max(def.minW,next.w);
+      if(Number.isFinite(next.h) && def) next.h=Math.max(def.minH,next.h);
+      out[key]=next;
+    }
+    const migrateActionButtonToFrame=(frameId,buttonId)=>{
+      const frame=out[frameId];
+      const button=out[buttonId];
+      if(!frame||!button) return;
+      const invalidY=!Number.isFinite(button.y) || button.y < -2 || button.y > 102;
+      const invalidX=!Number.isFinite(button.x) || button.x < -2 || button.x > 102;
+      const driftedTooFar=Math.abs((button.x??0)-(frame.x??0))>20 || Math.abs((button.y??0)-(frame.y??0))>20;
+      if(invalidX || invalidY || driftedTooFar){
+        button.x=frame.x;
+        button.y=frame.y;
+      }
+    };
+    migrateActionButtonToFrame('clean-btn-frame','clean-btn');
+    if(bucketName==='mobile'){
+      const syncCardToFrame=(frameId,cardId,defaultW,defaultH,fallback=null)=>{
+        const frame=out[frameId];
+        const card=out[cardId];
+        if(!frame||!card) return;
+        const offscreen=card.y>110||card.y<-10||card.x>110||card.x<-10;
+        const tooFar=Math.abs(card.x-frame.x)>18||Math.abs(card.y-frame.y)>18;
+        const oversized=card.w>(frame.w*1.8)||card.h>(frame.h*2.8);
+        const badFrame=frame.y>84||(fallback&&frame.h<card.h*0.65);
+        if(offscreen||tooFar||oversized){
+          card.x=frame.x;
+          card.y=frame.y;
+          card.w=defaultW;
+          card.h=defaultH;
+        }
+        if(badFrame&&fallback){
+          frame.x=fallback.frame.x;
+          frame.y=fallback.frame.y;
+          frame.w=fallback.frame.w;
+          frame.h=fallback.frame.h;
+          card.x=fallback.card.x;
+          card.y=fallback.card.y;
+          card.w=fallback.card.w;
+          card.h=fallback.card.h;
+        }
+      };
+      syncCardToFrame('soap-slot-frame','soap-slot-card',87.81,125.45);
+      syncCardToFrame('weapon-cycle-frame','weapon-cycle-card',106,148,{
+        frame:{x:44,y:71,w:126,h:170},
+        card:{x:44,y:71,w:90,h:126},
+      });
     }
     return out;
   };
   return {
-    desktop:cleanBucket(config?.desktop),
-    mobile:cleanBucket(config?.mobile),
+    desktop:cleanBucket(config?.desktop,'desktop'),
+    mobile:cleanBucket(config?.mobile,'mobile'),
   };
 }
 function mergeUILayoutConfig(base,override){
@@ -4540,7 +5721,7 @@ function mergeUILayoutConfig(base,override){
   };
 }
 function loadUILayoutConfig(){
-  const base=cloneUILayoutConfig(UI_LAYOUT_DEFAULTS);
+  const base=sanitizeUILayoutConfig(cloneUILayoutConfig(UI_LAYOUT_DEFAULTS));
   try{
     const raw=localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
     if(!raw) return base;
@@ -4549,6 +5730,19 @@ function loadUILayoutConfig(){
   }catch{
     return base;
   }
+}
+function readUILayoutFromStorage(){
+  try{
+    const raw=localStorage.getItem(UI_LAYOUT_STORAGE_KEY);
+    if(!raw) return null;
+    return sanitizeUILayoutConfig(JSON.parse(raw));
+  }catch{
+    return null;
+  }
+}
+function markUILayoutBucketEdited(bucket){
+  const target=bucket||getUILayoutBucket();
+  if(target==='desktop'||target==='mobile') uiLayoutState.editedBuckets?.add(target);
 }
 function getUILayoutBucket(){ return uiLayoutState.forcedMode || (mobileLoadoutQuery.matches ? 'mobile' : 'desktop'); }
 function getUILayoutStore(){ return uiLayoutState.config[getUILayoutBucket()]||(uiLayoutState.config[getUILayoutBucket()]={}); }
@@ -4567,15 +5761,19 @@ function setUILayoutMode(mode){
     }
   }
   uiLayoutState.forcedMode=mode==='desktop'||mode==='mobile' ? mode : null;
+  if(uiLayoutState.active) setAdminStageModeZoom(uiLayoutState.forcedMode);
   applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
-  if(uiLayoutState.active) showUILayoutToast(`Layout admin editing ${getUILayoutBucket()}`);
+  syncJoystickVisibility();
 }
 function formatUILayoutExport(){
-  return `const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
+  const uiBlock=`const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
+  const riverSource=riverEditorState.regions?.length ? riverEditorState.regions : (loadManualRiverRegions().length ? loadManualRiverRegions() : RIVERS);
+  const riverBlock=`const RIVER_REGION_DEFAULTS=${JSON.stringify(sanitizeRiverRegions(riverSource),null,2)};`;
+  return `${uiBlock}\n\n${riverBlock}`;
 }
 function showUILayoutToast(msg){
-  let el=uiLayoutState.editor?.querySelector('.ui-layout-toast');
+  let el=document.querySelector('.ui-layout-toast');
   if(!el){
     el=document.createElement('div');
     el.className='ui-layout-toast';
@@ -4583,33 +5781,54 @@ function showUILayoutToast(msg){
   }
   el.textContent=msg;
   window.clearTimeout(uiLayoutState.toastTimer);
-  uiLayoutState.toastTimer=window.setTimeout(()=>el.remove(),2200);
+  uiLayoutState.toastTimer=window.setTimeout(()=>el.remove(),850);
 }
 function currentUILayoutMetrics(def){
   const el=document.getElementById(def.id);
   if(!el) return null;
   const r=el.getBoundingClientRect();
+  const bounds=getUILayoutViewportBounds();
   if(def.anchor==='topLeft'){
-    return {x:+((r.left/window.innerWidth)*100).toFixed(3),y:+((r.top/window.innerHeight)*100).toFixed(3),w:+r.width.toFixed(2),h:+r.height.toFixed(2)};
+    const metrics={
+      x:+(((r.left-bounds.left)/bounds.width)*100).toFixed(3),
+      y:+(((r.top-bounds.top)/bounds.height)*100).toFixed(3),
+      w:+r.width.toFixed(2),
+      h:+r.height.toFixed(2)
+    };
+    if(isMobileUILayoutBucket()){
+      metrics.wp=+((r.width/bounds.width)*100).toFixed(4);
+      metrics.hp=+((r.height/bounds.height)*100).toFixed(4);
+    }
+    return metrics;
   }
-  return {x:+(((r.left+r.width*0.5)/window.innerWidth)*100).toFixed(3),y:+(((r.top+r.height*0.5)/window.innerHeight)*100).toFixed(3),w:+r.width.toFixed(2),h:+r.height.toFixed(2)};
+  const metrics={
+    x:+((((r.left-bounds.left)+r.width*0.5)/bounds.width)*100).toFixed(3),
+    y:+((((r.top-bounds.top)+r.height*0.5)/bounds.height)*100).toFixed(3),
+    w:+r.width.toFixed(2),
+    h:+r.height.toFixed(2)
+  };
+  if(isMobileUILayoutBucket()){
+    metrics.wp=+((r.width/bounds.width)*100).toFixed(4);
+    metrics.hp=+((r.height/bounds.height)*100).toFixed(4);
+  }
+  return metrics;
 }
 function getUILayoutDef(targetId){
   return UI_LAYOUT_TARGET_DEFS.find(def=>def.id===targetId)||null;
 }
 function getUILayoutBoxRect(def,metrics){
-  const width=Math.max(def.minW,metrics?.w||def.minW);
-  const height=Math.max(def.minH,metrics?.h||def.minH);
+  const bounds=getUILayoutViewportBounds();
+  const {width,height}=resolveUILayoutSize(def,metrics);
   if(def.anchor==='topLeft'){
     return {
-      left:(metrics.x/100)*window.innerWidth,
-      top:(metrics.y/100)*window.innerHeight,
+      left:bounds.left+(metrics.x/100)*bounds.width,
+      top:bounds.top+(metrics.y/100)*bounds.height,
       width,
       height,
     };
   }
-  const centerX=(metrics.x/100)*window.innerWidth;
-  const centerY=(metrics.y/100)*window.innerHeight;
+  const centerX=bounds.left+(metrics.x/100)*bounds.width;
+  const centerY=bounds.top+(metrics.y/100)*bounds.height;
   return {
     left:centerX-width*0.5,
     top:centerY-height*0.5,
@@ -4617,9 +5836,142 @@ function getUILayoutBoxRect(def,metrics){
     height,
   };
 }
+function buildUILayoutMetricsFromRect(def,metrics,rect){
+  const bounds=getUILayoutViewportBounds();
+  const nextRect={
+    left:rect.left,
+    top:rect.top,
+    width:Math.max(def.minW,rect.width),
+    height:Math.max(def.minH,rect.height),
+  };
+  metrics.w=+nextRect.width.toFixed(2);
+  metrics.h=+nextRect.height.toFixed(2);
+  if(isMobileUILayoutBucket()){
+    metrics.wp=+((nextRect.width/bounds.width)*100).toFixed(4);
+    metrics.hp=+((nextRect.height/bounds.height)*100).toFixed(4);
+  }
+  if(def.anchor==='topLeft'){
+    metrics.x=+(((nextRect.left-bounds.left)/bounds.width)*100).toFixed(3);
+    metrics.y=+(((nextRect.top-bounds.top)/bounds.height)*100).toFixed(3);
+  }else{
+    metrics.x=+((((nextRect.left-bounds.left)+nextRect.width*0.5)/bounds.width)*100).toFixed(3);
+    metrics.y=+((((nextRect.top-bounds.top)+nextRect.height*0.5)/bounds.height)*100).toFixed(3);
+  }
+  return metrics;
+}
+function resizeUILayoutRectFromEdge(startRect,corner,dx,dy,def){
+  const next={...startRect};
+  if(corner==='e'){
+    next.width=Math.max(def.minW,startRect.width+dx);
+  }else if(corner==='w'){
+    const width=Math.max(def.minW,startRect.width-dx);
+    next.left=startRect.left+(startRect.width-width);
+    next.width=width;
+  }else if(corner==='s'){
+    next.height=Math.max(def.minH,startRect.height+dy);
+  }else if(corner==='n'){
+    const height=Math.max(def.minH,startRect.height-dy);
+    next.top=startRect.top+(startRect.height-height);
+    next.height=height;
+  }
+  return next;
+}
+function resizeUILayoutRectFromCorner(startRect,corner,dx,dy,def){
+  const aspect=startRect.width/Math.max(1e-6,startRect.height);
+  const minScale=Math.max(def.minW/startRect.width,def.minH/startRect.height);
+  const scaleX=(corner.includes('e') ? (startRect.width+dx) : (startRect.width-dx))/Math.max(1e-6,startRect.width);
+  const scaleY=(corner.includes('s') ? (startRect.height+dy) : (startRect.height-dy))/Math.max(1e-6,startRect.height);
+  const useX=Math.abs(scaleX-1)>=Math.abs(scaleY-1);
+  const rawScale=useX ? scaleX : scaleY;
+  const scale=Math.max(minScale,rawScale);
+  const width=Math.max(def.minW,startRect.width*scale);
+  const height=Math.max(def.minH,width/aspect);
+  const next={width,height,left:startRect.left,top:startRect.top};
+  if(corner.includes('w')) next.left=startRect.left+(startRect.width-width);
+  if(corner.includes('n')) next.top=startRect.top+(startRect.height-height);
+  return next;
+}
+function getUILayoutDefaultLayer(def){
+  const el=document.getElementById(def.id);
+  if(!el) return UI_LAYOUT_TARGET_DEFS.indexOf(def);
+  const computed=Number.parseInt(window.getComputedStyle(el).zIndex||'',10);
+  const base=Number.isFinite(computed) ? computed : 0;
+  return base*100+UI_LAYOUT_TARGET_DEFS.indexOf(def);
+}
+function getUILayoutLayer(def,metrics){
+  return Number.isFinite(metrics?.z) ? metrics.z : getUILayoutDefaultLayer(def);
+}
+function getUILayoutStateFlags(metrics){
+  const parts=[];
+  if(metrics?.locked) parts.push('locked');
+  if(metrics?.hidden) parts.push('hidden');
+  parts.push(`z ${Number.isFinite(metrics?.z) ? metrics.z : 0}`);
+  return parts.join(' | ');
+}
+function getUILayoutOrderedDefs(desc=false){
+  const defs=[...UI_LAYOUT_TARGET_DEFS];
+  defs.sort((a,b)=>{
+    const za=getUILayoutLayer(a,ensureUILayoutMetrics(a));
+    const zb=getUILayoutLayer(b,ensureUILayoutMetrics(b));
+    if(za!==zb) return desc ? zb-za : za-zb;
+    return UI_LAYOUT_TARGET_DEFS.indexOf(a)-UI_LAYOUT_TARGET_DEFS.indexOf(b);
+  });
+  return defs;
+}
+function getUILayoutOrderedIds(desc=false){
+  return getUILayoutOrderedDefs(desc).map(def=>def.id);
+}
+function applyUILayoutLayerOrder(orderedIdsDesc){
+  const store=getUILayoutStore();
+  const total=orderedIdsDesc.length;
+  orderedIdsDesc.forEach((id,index)=>{
+    const def=getUILayoutDef(id);
+    if(!def) return;
+    const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+    metrics.z=(total-index)*100;
+    store[id]=metrics;
+    applyUILayoutMetrics(def,metrics);
+  });
+  markUILayoutBucketEdited();
+}
+function clampUILayoutPanelRect(rect){
+  const width=Math.max(260,Math.min(rect.width,window.innerWidth-16));
+  const minHeight=uiLayoutState.objectPanelCollapsed ? UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT : 220;
+  const height=Math.max(minHeight,Math.min(rect.height,window.innerHeight-16));
+  const maxLeft=Math.max(0,window.innerWidth-width);
+  const maxTop=Math.max(0,window.innerHeight-height);
+  return {
+    left:Math.min(Math.max(0,rect.left),maxLeft),
+    top:Math.min(Math.max(0,rect.top),maxTop),
+    width,
+    height,
+  };
+}
+function applyUILayoutObjectPanelRect(){
+  const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
+  if(!panel) return;
+  const sourceRect=uiLayoutState.objectPanelCollapsed
+    ? {...uiLayoutState.panelRect,height:UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT}
+    : uiLayoutState.panelRect;
+  const rect=clampUILayoutPanelRect(sourceRect);
+  if(uiLayoutState.objectPanelCollapsed) uiLayoutState.panelRect.left=rect.left, uiLayoutState.panelRect.top=rect.top, uiLayoutState.panelRect.width=rect.width;
+  else uiLayoutState.panelRect=rect;
+  panel.classList.toggle('is-collapsed',uiLayoutState.objectPanelCollapsed);
+  panel.style.left=`${rect.left}px`;
+  panel.style.top=`${rect.top}px`;
+  panel.style.width=`${rect.width}px`;
+  panel.style.height=`${rect.height}px`;
+  const toggle=panel.querySelector('.ui-layout-object-panel-toggle');
+  if(toggle) toggle.textContent=uiLayoutState.objectPanelCollapsed ? '+' : '−';
+}
+function toggleUILayoutObjectPanelCollapsed(force){
+  uiLayoutState.objectPanelCollapsed=force===undefined ? !uiLayoutState.objectPanelCollapsed : !!force;
+  applyUILayoutObjectPanelRect();
+}
 function ensureUILayoutMetrics(def){
   const store=getUILayoutStore();
   if(!store[def.id]) store[def.id]=currentUILayoutMetrics(def);
+  if(store[def.id] && !Number.isFinite(store[def.id].z)) store[def.id].z=getUILayoutDefaultLayer(def);
   return store[def.id];
 }
 function applyUILayoutMetrics(def,metrics){
@@ -4627,11 +5979,11 @@ function applyUILayoutMetrics(def,metrics){
   if(!el||!metrics) return;
   if(metrics.hidden){
     el.style.setProperty('display','none','important');
+    if(def.id==='clean-btn' && cleanBtnBadge) cleanBtnBadge.style.display='none';
     return;
   }
   el.style.removeProperty('display');
-  const width=Math.max(def.minW,metrics.w);
-  const height=Math.max(def.minH,metrics.h);
+  const {width,height}=resolveUILayoutSize(def,metrics);
   const scaleX=def.baseW ? width/def.baseW : 1;
   const scaleY=def.baseH ? height/def.baseH : 1;
   const textScale=Math.max(0.42,Math.min(scaleX,scaleY));
@@ -4646,6 +5998,13 @@ function applyUILayoutMetrics(def,metrics){
   el.style.setProperty('--ui-scale-x',`${scaleX.toFixed(3)}`,'important');
   el.style.setProperty('--ui-scale-y',`${scaleY.toFixed(3)}`,'important');
   el.style.setProperty('--ui-scale',`${textScale.toFixed(3)}`,'important');
+  el.style.setProperty('z-index',String(getUILayoutLayer(def,metrics)),'important');
+  if(def.id==='clean-btn') updateCleanBadgeLayout();
+  if(def.id==='shop-btn'){
+    el.style.setProperty('padding','0 6px','important');
+    el.style.setProperty('font-size',`${Math.max(8,13*textScale)}px`,'important');
+    el.style.setProperty('letter-spacing',`${Math.max(0.06,0.22*textScale)}em`,'important');
+  }
   if(def.id==='loadout-bar'){
     el.style.setProperty('max-width','none','important');
     el.style.setProperty('flex-wrap',mobileLoadoutQuery.matches?'nowrap':'wrap','important');
@@ -4660,6 +6019,15 @@ function applyUILayoutConfig(){
 }
 function saveUILayoutConfig(){
   uiLayoutState.config=sanitizeUILayoutConfig(uiLayoutState.config);
+  // Sibling window safety: only overwrite the buckets the user actually
+  // edited in this session. The other bucket gets merged from whatever's
+  // on disk so a desktop save can't clobber a mobile preview popup's
+  // edits (and vice versa).
+  const latest=readUILayoutFromStorage();
+  if(latest){
+    if(!uiLayoutState.editedBuckets?.has('desktop') && latest.desktop) uiLayoutState.config.desktop=latest.desktop;
+    if(!uiLayoutState.editedBuckets?.has('mobile') && latest.mobile) uiLayoutState.config.mobile=latest.mobile;
+  }
   localStorage.setItem(UI_LAYOUT_STORAGE_KEY,JSON.stringify(uiLayoutState.config));
   window.__uiLayoutConfig=uiLayoutState.config;
 }
@@ -4684,9 +6052,9 @@ function showUILayoutExportModal(){
   modal.className='ui-layout-modal';
   const code=formatUILayoutExport();
   modal.innerHTML=`<div class="ui-layout-modal-card">
-    <h3>Export UI Layout</h3>
-    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code> block in <code>urban-legend-framework/index.html</code>.</p>
-    <p>After replacing it, save the file and refresh the game. Desktop and mobile adjustments are both included in this export.</p>
+    <h3>Export UI + Rivers</h3>
+    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code> and <code>const RIVER_REGION_DEFAULTS=...</code> blocks in <code>urban-legend-framework/index.html</code>.</p>
+    <p>After replacing them, save the file and refresh the game. Desktop/mobile UI and river regions are both included in this export.</p>
     <textarea spellcheck="false"></textarea>
     <div class="ui-layout-modal-actions">
       <button type="button" data-action="copy">Copy Code</button>
@@ -4732,28 +6100,272 @@ function refreshUILayoutEditorToolbar(){
   if(!toolbar) return;
   const mode=getUILayoutBucket();
   const autoMode=getUILayoutAutoBucket();
-  toolbar.querySelector('[data-mode="desktop"]')?.classList.toggle('is-active',mode==='desktop');
-  toolbar.querySelector('[data-mode="mobile"]')?.classList.toggle('is-active',mode==='mobile');
+  const desktopBtn=toolbar.querySelector('[data-mode="desktop"]');
+  const mobileBtn=toolbar.querySelector('[data-mode="mobile"]');
+  const riverEditBtn=toolbar.querySelector('[data-action="river-edit"]');
+  const riverAddBtn=toolbar.querySelector('[data-action="river-add"]');
+  const riverDelBtn=toolbar.querySelector('[data-action="river-del"]');
+  const riverSaveBtn=toolbar.querySelector('[data-action="river-save"]');
+  const riverAutoBtn=toolbar.querySelector('[data-action="river-auto"]');
+  const exportBtn=toolbar.querySelector('[data-action="export"]');
+  const closeBtn=toolbar.querySelector('[data-action="close"]');
+  const isMobileEditor=mode==='mobile';
+  toolbar.classList.toggle('is-mobile-minimal',isMobileEditor);
+  desktopBtn?.classList.toggle('is-active',mode==='desktop');
+  mobileBtn?.classList.toggle('is-active',mode==='mobile');
+  if(desktopBtn) desktopBtn.hidden=isMobileEditor;
+  if(mobileBtn) mobileBtn.hidden=isMobileEditor;
+  if(exportBtn) exportBtn.hidden=isMobileEditor;
+  if(riverEditBtn) riverEditBtn.hidden=isMobileEditor;
+  if(riverAddBtn) riverAddBtn.hidden=isMobileEditor;
+  if(riverDelBtn) riverDelBtn.hidden=isMobileEditor;
+  if(riverSaveBtn) riverSaveBtn.hidden=isMobileEditor;
+  if(riverAutoBtn) riverAutoBtn.hidden=isMobileEditor;
+  if(closeBtn) closeBtn.textContent=isMobileEditor?'SAVE':'Save & Exit';
   const pill=toolbar.querySelector('.ui-layout-mode-pill');
   if(pill){
+    pill.hidden=isMobileEditor;
     pill.textContent=uiLayoutState.forcedMode
       ? `Editing: ${mode} | Viewport: ${autoMode}`
       : `Editing: ${mode} (auto)`;
   }
+  refreshRiverEditorButtonState();
 }
-function setUILayoutSelection(targetId){
-  uiLayoutState.selectedId=targetId||null;
+function toggleUILayoutLock(targetId){
+  const def=getUILayoutDef(targetId);
+  if(!def) return false;
+  pushUILayoutHistory('lock');
+  const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+  metrics.locked=!metrics.locked;
+  const store=getUILayoutStore();
+  store[def.id]=metrics;
+  markUILayoutBucketEdited();
+  applyUILayoutMetrics(def,metrics);
+  if(metrics.locked && uiLayoutState.selectedId===def.id) setUILayoutSelection(null);
+  refreshUILayoutEditor();
+  refreshUILayoutObjectPanel();
+  showUILayoutToast(`${def.label} ${metrics.locked?'locked':'unlocked'}`);
+  return true;
+}
+function moveUILayoutLayer(targetId,direction){
+  const defs=getUILayoutOrderedDefs(true);
+  const index=defs.findIndex(def=>def.id===targetId);
+  const swapIndex=direction==='up' ? index-1 : index+1;
+  if(index<0||swapIndex<0||swapIndex>=defs.length) return false;
+  const current=defs[index];
+  const other=defs[swapIndex];
+  pushUILayoutHistory(direction==='up'?'layer up':'layer down');
+  const currentMetrics={...(ensureUILayoutMetrics(current)||currentUILayoutMetrics(current))};
+  const otherMetrics={...(ensureUILayoutMetrics(other)||currentUILayoutMetrics(other))};
+  const currentZ=getUILayoutLayer(current,currentMetrics);
+  const otherZ=getUILayoutLayer(other,otherMetrics);
+  currentMetrics.z=otherZ;
+  otherMetrics.z=currentZ;
+  const store=getUILayoutStore();
+  store[current.id]=currentMetrics;
+  store[other.id]=otherMetrics;
+  markUILayoutBucketEdited();
+  applyUILayoutMetrics(current,currentMetrics);
+  applyUILayoutMetrics(other,otherMetrics);
+  refreshUILayoutEditor();
+  showUILayoutToast(`${current.label} moved ${direction}`);
+  return true;
+}
+function moveSelectedUILayoutItems(edge){
+  const selectedIds=uiLayoutState.selectedIds.filter(id=>UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+  if(!selectedIds.length) return false;
+  const ordered=getUILayoutOrderedIds(true);
+  const moving=ordered.filter(id=>selectedIds.includes(id));
+  const remaining=ordered.filter(id=>!selectedIds.includes(id));
+  const next=edge==='top' ? [...moving,...remaining] : [...remaining,...moving];
+  const changed=next.some((id,index)=>id!==ordered[index]);
+  if(!changed) return false;
+  pushUILayoutHistory(edge==='top'?'to top':'to bottom');
+  applyUILayoutLayerOrder(next);
+  refreshUILayoutEditor();
+  showUILayoutToast(`Moved ${moving.length} item(s) to ${edge}`);
+  return true;
+}
+function syncUILayoutSelectionStyles(){
   for(const [id,box] of uiLayoutState.overlays.entries()){
-    box.classList.toggle('selected',id===uiLayoutState.selectedId);
+    box.classList.toggle('selected',uiLayoutState.selectedIds.includes(id));
   }
+  const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
+  list?.querySelectorAll?.('.ui-layout-object-row').forEach(row=>{
+    row.classList.toggle('is-selected',uiLayoutState.selectedIds.includes(row.dataset.targetId));
+  });
+}
+function captureUILayoutObjectPanelScroll(){
+  const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
+  if(list) uiLayoutState.objectPanelScrollTop=list.scrollTop;
+}
+function restoreUILayoutObjectPanelScroll(){
+  const list=uiLayoutState.editor?.querySelector('.ui-layout-object-list');
+  if(list) list.scrollTop=uiLayoutState.objectPanelScrollTop||0;
+}
+function refreshUILayoutGuides(){
+  const editor=uiLayoutState.editor;
+  if(!editor) return;
+  const guideV=editor.querySelector('.ui-layout-guide.guide-v');
+  const guideH=editor.querySelector('.ui-layout-guide.guide-h');
+  const pairGuideV=editor.querySelector('.ui-layout-guide.pair-v');
+  const pairGuideH=editor.querySelector('.ui-layout-guide.pair-h');
+  if(!guideV||!guideH||!pairGuideV||!pairGuideH) return;
+  const selectedBox=uiLayoutState.selectedId ? uiLayoutState.overlays.get(uiLayoutState.selectedId) : null;
+  if(!uiLayoutState.active||!selectedBox){
+    guideV.classList.remove('is-visible','is-snap');
+    guideH.classList.remove('is-visible','is-snap');
+    pairGuideV.classList.remove('is-visible','is-snap');
+    pairGuideH.classList.remove('is-visible','is-snap');
+    return;
+  }
+  const rect=selectedBox.getBoundingClientRect();
+  const cx=rect.left+rect.width*0.5;
+  const cy=rect.top+rect.height*0.5;
+  const bounds=getUILayoutViewportBounds();
+  const centerX=bounds.left+bounds.width*0.5;
+  const centerY=bounds.top+bounds.height*0.5;
+  const snapX=Math.abs(cx-centerX)<=8;
+  const snapY=Math.abs(cy-centerY)<=8;
+  guideV.style.left=`${centerX}px`;
+  guideH.style.top=`${centerY}px`;
+  guideV.classList.add('is-visible');
+  guideH.classList.add('is-visible');
+  guideV.classList.toggle('is-snap',snapX);
+  guideH.classList.toggle('is-snap',snapY);
+  const pairId=UI_LAYOUT_COMPARE_PAIRS[uiLayoutState.selectedId];
+  const pairBox=pairId ? uiLayoutState.overlays.get(pairId) : null;
+  if(!pairBox){
+    pairGuideV.classList.remove('is-visible','is-snap');
+    pairGuideH.classList.remove('is-visible','is-snap');
+    return;
+  }
+  const pairRect=pairBox.getBoundingClientRect();
+  const pairCx=pairRect.left+pairRect.width*0.5;
+  const pairCy=pairRect.top+pairRect.height*0.5;
+  pairGuideV.style.left=`${pairCx}px`;
+  pairGuideH.style.top=`${pairCy}px`;
+  pairGuideV.classList.add('is-visible','is-pair');
+  pairGuideH.classList.add('is-visible','is-pair');
+  pairGuideV.classList.toggle('is-snap',Math.abs(cx-pairCx)<=6);
+  pairGuideH.classList.toggle('is-snap',Math.abs(cy-pairCy)<=6);
+}
+function refreshUILayoutObjectPanel(){
+  const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
+  const list=panel?.querySelector('.ui-layout-object-list');
+  if(!list) return;
+  captureUILayoutObjectPanelScroll();
+  applyUILayoutObjectPanelRect();
+  list.innerHTML='';
+  for(const def of getUILayoutOrderedDefs(true)){
+    const metrics=ensureUILayoutMetrics(def);
+    const row=document.createElement('div');
+    row.className='ui-layout-object-row';
+    row.dataset.targetId=def.id;
+    row.classList.toggle('is-selected',uiLayoutState.selectedIds.includes(def.id));
+    row.classList.toggle('is-hidden',!!metrics.hidden);
+    row.classList.toggle('is-locked',!!metrics.locked);
+    row.classList.toggle('is-dragging',!!uiLayoutState.listDrag && uiLayoutState.listDrag.selectedIds.includes(def.id));
+    row.classList.toggle('is-drop-before',!!uiLayoutState.listDrag && uiLayoutState.listDrag.insertBeforeId===def.id);
+    row.innerHTML=`<div class="ui-layout-object-meta">
+      <span class="ui-layout-object-name">${def.label}</span>
+      <span class="ui-layout-object-state">${getUILayoutStateFlags(metrics)}</span>
+    </div>
+    <div class="ui-layout-object-actions">
+      <button type="button" data-action="lock" class="${metrics.locked?'is-active':''}">${metrics.locked?'Unlock':'Lock'}</button>
+    </div>
+    <div class="ui-layout-object-order">
+      <button type="button" data-action="up">↑</button>
+      <button type="button" data-action="down">↓</button>
+    </div>`;
+    row.addEventListener('pointerdown',e=>{
+      if(e.target?.closest?.('button')) return;
+      if(e.shiftKey){
+        e.preventDefault();
+        e.stopPropagation();
+        setUILayoutSelection(def.id,{additive:true});
+        uiLayoutState.suppressRowClick=true;
+        return;
+      }
+      if(!uiLayoutState.selectedIds.includes(def.id)){
+        setUILayoutSelection(def.id);
+      }
+      if(uiLayoutState.selectedIds.includes(def.id)){
+        uiLayoutState.listDrag={
+          pointerId:e.pointerId,
+          selectedIds:[...uiLayoutState.selectedIds],
+          anchorId:def.id,
+          insertBeforeId:def.id,
+          startX:e.clientX,
+          startY:e.clientY,
+          moved:false,
+        };
+        row.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    row.addEventListener('click',e=>{
+      if(uiLayoutState.suppressRowClick){
+        uiLayoutState.suppressRowClick=false;
+        refreshUILayoutEditor();
+        return;
+      }
+      const action=e.target?.dataset?.action;
+      if(action==='lock'){
+        e.stopPropagation();
+        toggleUILayoutLock(def.id);
+        return;
+      }
+      if(action==='up'){
+        e.stopPropagation();
+        moveUILayoutLayer(def.id,'up');
+        return;
+      }
+      if(action==='down'){
+        e.stopPropagation();
+        moveUILayoutLayer(def.id,'down');
+        return;
+      }
+      if(e.shiftKey){
+        setUILayoutSelection(def.id,{additive:true});
+      }else{
+        setUILayoutSelection(def.id);
+      }
+      refreshUILayoutEditor();
+    });
+    list.appendChild(row);
+  }
+  restoreUILayoutObjectPanelScroll();
+  syncUILayoutSelectionStyles();
+  refreshUILayoutGuides();
+}
+function setUILayoutSelection(targetId,options={}){
+  const {additive=false}=options;
+  if(!targetId){
+    uiLayoutState.selectedId=null;
+    uiLayoutState.selectedIds=[];
+  }else if(additive){
+    const next=new Set(uiLayoutState.selectedIds);
+    if(next.has(targetId)) next.delete(targetId);
+    else next.add(targetId);
+    uiLayoutState.selectedIds=[...next];
+    uiLayoutState.selectedId=uiLayoutState.selectedIds[uiLayoutState.selectedIds.length-1]||null;
+  }else{
+    uiLayoutState.selectedId=targetId;
+    uiLayoutState.selectedIds=[targetId];
+  }
+  syncUILayoutSelectionStyles();
+  refreshUILayoutGuides();
 }
 function buildUILayoutEditor(){
   if(uiLayoutState.editor) return uiLayoutState.editor;
   const editor=document.createElement('div');
   editor.className='ui-layout-editor';
+  editor.innerHTML='<div class="ui-layout-guide guide-v"></div><div class="ui-layout-guide guide-h"></div><div class="ui-layout-guide guide-v pair-v is-pair"></div><div class="ui-layout-guide guide-h pair-h is-pair"></div>';
   const toolbar=document.createElement('div');
   toolbar.className='ui-layout-toolbar';
-  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
+  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="river-edit">River Edit</button><button type="button" data-action="river-add">+ River</button><button type="button" data-action="river-del">Delete River</button><button type="button" data-action="river-save">Save Rivers</button><button type="button" data-action="river-auto">Auto Rivers</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
   toolbar.addEventListener('click',e=>{
     const action=e.target?.dataset?.action;
     const mode=e.target?.dataset?.mode;
@@ -4761,21 +6373,76 @@ function buildUILayoutEditor(){
       setUILayoutMode(mode);
       return;
     }
+    if(action==='river-edit'){ toggleRiverEditor(); return; }
+    if(action==='river-add'){ addRiverEditorRegion(); return; }
+    if(action==='river-del'){ deleteRiverEditorRegion(); return; }
+    if(action==='river-save'){ saveRiverEditorRegions(); return; }
+    if(action==='river-auto'){ autoDetectRiverEditorRegions(); return; }
     if(action==='export') showUILayoutExportModal();
     if(action==='close') disableUILayoutEditor(true);
   });
   editor.appendChild(toolbar);
+  const panel=document.createElement('div');
+  panel.className='ui-layout-object-panel';
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-chrome"><button type="button" class="ui-layout-object-panel-toggle" data-action="collapse">−</button><div class="ui-layout-object-panel-handle"></div></div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.querySelector('.ui-layout-object-list')?.addEventListener('scroll',()=>{
+    captureUILayoutObjectPanelScroll();
+  });
+  panel.addEventListener('click',e=>{
+    const action=e.target?.dataset?.action;
+    if(action==='top'){
+      e.preventDefault();
+      e.stopPropagation();
+      moveSelectedUILayoutItems('top');
+    }
+    if(action==='bottom'){
+      e.preventDefault();
+      e.stopPropagation();
+      moveSelectedUILayoutItems('bottom');
+    }
+    if(action==='collapse'){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleUILayoutObjectPanelCollapsed();
+    }
+  });
+  panel.addEventListener('pointerdown',e=>{
+    if(e.target?.closest?.('[data-action]')) return;
+    const resize=e.target?.closest?.('.ui-layout-object-panel-resize');
+    const header=e.target?.closest?.('.ui-layout-object-panel-header');
+    if(!resize && !header) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect=clampUILayoutPanelRect(uiLayoutState.panelRect);
+    uiLayoutState.panelDrag={
+      mode:resize?'resize':'move',
+      corner:resize?.dataset?.corner||'se',
+      startX:e.clientX,
+      startY:e.clientY,
+      startRect:{...rect},
+      pointerId:e.pointerId,
+    };
+    panel.setPointerCapture?.(e.pointerId);
+  });
+  editor.appendChild(panel);
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=document.createElement('div');
     box.className='ui-layout-box';
     box.dataset.targetId=def.id;
-    box.innerHTML=`<div class="ui-layout-label">${def.label}</div><div class="ui-layout-handle"></div>`;
+    box.innerHTML=`<div class="ui-layout-label">${def.label}</div><div class="ui-layout-handle" data-corner="nw"></div><div class="ui-layout-handle" data-corner="n"></div><div class="ui-layout-handle" data-corner="ne"></div><div class="ui-layout-handle" data-corner="e"></div><div class="ui-layout-handle" data-corner="se"></div><div class="ui-layout-handle" data-corner="s"></div><div class="ui-layout-handle" data-corner="sw"></div><div class="ui-layout-handle" data-corner="w"></div>`;
     box.addEventListener('pointerdown',e=>{
       e.preventDefault();
       e.stopPropagation();
+      const locked=!!ensureUILayoutMetrics(def)?.locked;
+      if(locked){
+        showUILayoutToast(`${def.label} is locked`);
+        return;
+      }
       setUILayoutSelection(def.id);
+      pushUILayoutHistory('move');
       const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
-      uiLayoutState.drag={def,startX:e.clientX,startY:e.clientY,startMetrics:metrics,resize:e.target.classList.contains('ui-layout-handle')};
+      const handle=e.target?.closest?.('.ui-layout-handle');
+      uiLayoutState.drag={def,startX:e.clientX,startY:e.clientY,startMetrics:metrics,resize:!!handle,corner:handle?.dataset?.corner||'se'};
       box.classList.add('active');
       box.setPointerCapture?.(e.pointerId);
     });
@@ -4787,10 +6454,13 @@ function buildUILayoutEditor(){
   window.addEventListener('pointercancel',handleUILayoutPointerUp);
   uiLayoutState.editor=editor;
   refreshUILayoutEditorToolbar();
+  refreshRiverEditorButtonState();
+  refreshUILayoutObjectPanel();
   return editor;
 }
 function refreshUILayoutEditor(){
   if(!uiLayoutState.active||!uiLayoutState.editor) return;
+  captureUILayoutObjectPanelScroll();
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=uiLayoutState.overlays.get(def.id);
     const el=document.getElementById(def.id);
@@ -4801,33 +6471,138 @@ function refreshUILayoutEditor(){
     box.style.top=`${r.top}px`;
     box.style.width=`${r.width}px`;
     box.style.height=`${r.height}px`;
+    box.style.zIndex=String(getUILayoutLayer(def,metrics));
     box.classList.toggle('is-hidden',!!metrics.hidden);
+    box.classList.toggle('is-locked',!!metrics.locked);
+    box.style.pointerEvents=metrics.locked ? 'none' : 'auto';
     box.querySelector('.ui-layout-label').textContent=`${def.label}${metrics.hidden?' [hidden]':''}`;
   }
-  setUILayoutSelection(uiLayoutState.selectedId);
+  for(const def of getUILayoutOrderedDefs(false)){
+    const box=uiLayoutState.overlays.get(def.id);
+    if(box) uiLayoutState.editor.appendChild(box);
+  }
+  const panel=uiLayoutState.editor.querySelector('.ui-layout-object-panel');
+  if(panel) uiLayoutState.editor.appendChild(panel);
+  restoreUILayoutObjectPanelScroll();
+  syncUILayoutSelectionStyles();
+  refreshUILayoutGuides();
 }
 function handleUILayoutPointerMove(e){
+  if(uiLayoutState.listDrag){
+    const drag=uiLayoutState.listDrag;
+    if(drag.pointerId!==undefined && e.pointerId!==drag.pointerId) return;
+    const dx=e.clientX-drag.startX;
+    const dy=e.clientY-drag.startY;
+    if(!drag.moved && Math.hypot(dx,dy)>=6){
+      drag.moved=true;
+      uiLayoutState.suppressRowClick=true;
+      refreshUILayoutObjectPanel();
+    }
+    if(drag.moved){
+      const row=e.target?.closest?.('.ui-layout-object-row') || document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.ui-layout-object-row');
+      if(row?.dataset?.targetId && drag.insertBeforeId!==row.dataset.targetId){
+        drag.insertBeforeId=row.dataset.targetId;
+        refreshUILayoutObjectPanel();
+      }
+    }
+    return;
+  }
+  if(uiLayoutState.panelDrag){
+    const drag=uiLayoutState.panelDrag;
+    if(drag.pointerId!==undefined && e.pointerId!==drag.pointerId) return;
+    const dx=e.clientX-drag.startX;
+    const dy=e.clientY-drag.startY;
+    if(drag.mode==='resize'){
+      if(uiLayoutState.objectPanelCollapsed) return;
+      const next={...drag.startRect};
+      if(drag.corner.includes('e')) next.width=drag.startRect.width+dx;
+      if(drag.corner.includes('s')) next.height=drag.startRect.height+dy;
+      if(drag.corner.includes('w')){
+        next.left=drag.startRect.left+dx;
+        next.width=drag.startRect.width-dx;
+      }
+      if(drag.corner.includes('n')){
+        next.top=drag.startRect.top+dy;
+        next.height=drag.startRect.height-dy;
+      }
+      uiLayoutState.panelRect=clampUILayoutPanelRect(next);
+    }else{
+      uiLayoutState.panelRect=clampUILayoutPanelRect({
+        ...drag.startRect,
+        left:drag.startRect.left+dx,
+        top:drag.startRect.top+dy,
+      });
+    }
+    applyUILayoutObjectPanelRect();
+    return;
+  }
   if(!uiLayoutState.active||!uiLayoutState.drag) return;
-  const {def,startX,startY,startMetrics,resize}=uiLayoutState.drag;
-  const dx=e.clientX-startX;
-  const dy=e.clientY-startY;
+  const {def,startX,startY,startMetrics,resize,corner}=uiLayoutState.drag;
+  // Cursor delta is in viewport pixels. The dragged item lives inside
+  // #admin-stage which may be CSS-scaled (mobile bucket canvas). Divide
+  // by the current stage zoom so 1 viewport-px of cursor travel maps to
+  // 1 intrinsic-px of layout coordinate space.
+  const stageScale=getAdminStageZoom()||1;
+  const dx=(e.clientX-startX)/stageScale;
+  const dy=(e.clientY-startY)/stageScale;
+  const bounds=getUILayoutViewportBounds();
   const store=getUILayoutStore();
   const metrics={...startMetrics};
   if(resize){
-    metrics.w=Math.max(def.minW,startMetrics.w+dx);
-    metrics.h=Math.max(def.minH,startMetrics.h+dy);
-  }else if(def.anchor==='topLeft'){
-    metrics.x=+(((startMetrics.x/100*window.innerWidth)+dx)/window.innerWidth*100).toFixed(3);
-    metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
+    const startRect=getUILayoutBoxRect(def,startMetrics);
+    let nextRect=corner.length===1
+      ? resizeUILayoutRectFromEdge(startRect,corner,dx,dy,def)
+      : resizeUILayoutRectFromCorner(startRect,corner,dx,dy,def);
+    nextRect=snapUILayoutRectToViewport(nextRect,bounds,getUILayoutSnapEdges(def,true,corner),'resize');
+    buildUILayoutMetricsFromRect(def,metrics,nextRect);
   }else{
-    metrics.x=+(((startMetrics.x/100*window.innerWidth)+dx)/window.innerWidth*100).toFixed(3);
-    metrics.y=+(((startMetrics.y/100*window.innerHeight)+dy)/window.innerHeight*100).toFixed(3);
+    if(isUILayoutViewportFrame(def)){
+      const startRect=getUILayoutBoxRect(def,startMetrics);
+      const nextRect=snapUILayoutRectToViewport({
+        ...startRect,
+        left:startRect.left+dx,
+        top:startRect.top+dy,
+      },bounds,getUILayoutSnapEdges(def,false),'move');
+      buildUILayoutMetricsFromRect(def,metrics,nextRect);
+    }else if(def.anchor==='topLeft'){
+      metrics.x=+((((startMetrics.x/100)*bounds.width)+dx)/bounds.width*100).toFixed(3);
+      metrics.y=+((((startMetrics.y/100)*bounds.height)+dy)/bounds.height*100).toFixed(3);
+    }else{
+      metrics.x=+((((startMetrics.x/100)*bounds.width)+dx)/bounds.width*100).toFixed(3);
+      metrics.y=+((((startMetrics.y/100)*bounds.height)+dy)/bounds.height*100).toFixed(3);
+    }
   }
   store[def.id]=metrics;
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,metrics);
   refreshUILayoutEditor();
 }
 function handleUILayoutPointerUp(){
+  if(uiLayoutState.listDrag){
+    const drag=uiLayoutState.listDrag;
+    uiLayoutState.listDrag=null;
+    uiLayoutState.suppressRowClick=false;
+    const selectedIds=drag.selectedIds.filter(id=>UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+    if(drag.moved && selectedIds.length){
+      const ordered=getUILayoutOrderedIds(true);
+      const moving=ordered.filter(id=>selectedIds.includes(id));
+      const remaining=ordered.filter(id=>!selectedIds.includes(id));
+      let insertIndex=remaining.findIndex(id=>id===drag.insertBeforeId);
+      if(insertIndex<0) insertIndex=remaining.length;
+      const next=[...remaining.slice(0,insertIndex),...moving,...remaining.slice(insertIndex)];
+      const changed=next.length===ordered.length && next.some((id,index)=>id!==ordered[index]);
+      if(changed){
+        pushUILayoutHistory('layer reorder');
+        applyUILayoutLayerOrder(next);
+      }
+    }
+    refreshUILayoutEditor();
+    return;
+  }
+  if(uiLayoutState.panelDrag){
+    uiLayoutState.panelDrag=null;
+    return;
+  }
   if(!uiLayoutState.drag) return;
   const box=uiLayoutState.overlays.get(uiLayoutState.drag.def.id);
   box?.classList.remove('active');
@@ -4845,6 +6620,7 @@ function copySelectedUILayoutItem(){
 function pasteSelectedUILayoutItem(){
   const def=getUILayoutDef(uiLayoutState.selectedId);
   if(!def||!uiLayoutState.clipboard?.metrics) return false;
+  pushUILayoutHistory('paste');
   const store=getUILayoutStore();
   const source=uiLayoutState.clipboard.metrics;
   store[def.id]={
@@ -4855,6 +6631,7 @@ function pasteSelectedUILayoutItem(){
     h:source.h,
     hidden:false,
   };
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,store[def.id]);
   refreshUILayoutEditor();
   showUILayoutToast(`Pasted onto ${def.label}`);
@@ -4863,10 +6640,12 @@ function pasteSelectedUILayoutItem(){
 function deleteSelectedUILayoutItem(){
   const def=getUILayoutDef(uiLayoutState.selectedId);
   if(!def) return false;
+  pushUILayoutHistory('delete');
   const store=getUILayoutStore();
   const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
   metrics.hidden=true;
   store[def.id]=metrics;
+  markUILayoutBucketEdited();
   applyUILayoutMetrics(def,metrics);
   refreshUILayoutEditor();
   showUILayoutToast(`Deleted ${def.label}`);
@@ -4875,38 +6654,181 @@ function deleteSelectedUILayoutItem(){
 function enableUILayoutEditor(){
   if(uiLayoutState.active) return;
   uiLayoutState.active=true;
+  uiLayoutState.history=[];
+  uiLayoutState.editedBuckets=new Set();
+  // Re-read disk in case a sibling preview window saved newer values
+  // for the other bucket since this page loaded.
+  uiLayoutState.config=loadUILayoutConfig();
+  window.__uiLayoutConfig=uiLayoutState.config;
   uiLayoutState.forcedMode=getUILayoutAutoBucket();
   document.body.classList.add('admin-layout-mode');
   hideUILayoutExportButton();
+  ensureAdminStage();
+  setAdminStageModeZoom(uiLayoutState.forcedMode);
+  window.addEventListener('wheel',handleAdminStageWheel,{passive:false,capture:true});
   document.body.appendChild(buildUILayoutEditor());
   applyUILayoutConfig();
   refreshUILayoutEditor();
-  setUILayoutSelection(uiLayoutState.selectedId||UI_LAYOUT_TARGET_DEFS[0]?.id||null);
+  setUILayoutSelection(null);
   refreshUILayoutEditorToolbar();
-  showUILayoutToast(`Layout admin ON (${getUILayoutBucket()})`);
+  refreshRiverEditorButtonState();
+  syncJoystickVisibility();
 }
 function disableUILayoutEditor(openExport=false){
   if(!uiLayoutState.active) return;
   uiLayoutState.active=false;
   document.body.classList.remove('admin-layout-mode');
+  window.removeEventListener('wheel',handleAdminStageWheel,{capture:true});
+  if(riverEditorState.active||riverEditorState.dirty){
+    saveManualRiverRegions(riverEditorState.regions);
+    riverEditorState.dirty=false;
+  }
+  toggleRiverEditor(false);
   uiLayoutState.editor?.remove();
   uiLayoutState.editor=null;
   uiLayoutState.overlays.clear();
   uiLayoutState.selectedId=null;
+  uiLayoutState.selectedIds=[];
   uiLayoutState.forcedMode=null;
+  uiLayoutState.adminZoom=1;
+  dismantleAdminStage();
   saveUILayoutConfig();
   ensureUILayoutExportButton();
   if(openExport) showUILayoutExportModal();
-  showUILayoutToast(`Layout admin saved locally (${getUILayoutBucket()})`);
+  syncJoystickVisibility();
 }
 function toggleUILayoutEditor(){
   if(uiLayoutState.active) disableUILayoutEditor();
   else enableUILayoutEditor();
 }
+function nudgeSelectedUILayoutItems(dx,dy){
+  const ids=(uiLayoutState.selectedIds?.length?uiLayoutState.selectedIds:[uiLayoutState.selectedId])
+    .filter(id=>id&&UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+  if(!ids.length) return false;
+  let moved=false;
+  for(const id of ids){
+    const def=getUILayoutDef(id);
+    if(!def) continue;
+    const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+    if(metrics.locked) continue;
+    metrics.x=Math.max(-80,Math.min(180,(metrics.x||0)+dx));
+    metrics.y=Math.max(-80,Math.min(180,(metrics.y||0)+dy));
+    getUILayoutStore()[def.id]=metrics;
+    applyUILayoutMetrics(def,metrics);
+    moved=true;
+  }
+  if(moved){
+    markUILayoutBucketEdited();
+    refreshUILayoutEditor();
+    refreshUILayoutObjectPanel();
+  }
+  return moved;
+}
+let __uiNudgeHistoryTimer=0;
+function scheduleUILayoutNudgeHistory(){
+  if(__uiNudgeHistoryTimer) clearTimeout(__uiNudgeHistoryTimer);
+  pushUILayoutHistory('nudge');
+  __uiNudgeHistoryTimer=setTimeout(()=>{__uiNudgeHistoryTimer=0;},220);
+}
+// === Admin "stage" wrapper + wheel-zoom for mobile bucket editing ===
+// On enter we move all game UI into #admin-stage so a single transform
+// can shrink it inside a black canvas. On exit we put everything back.
+const ADMIN_STAGE_DEFAULT_MOBILE_ZOOM=0.65;
+function isAdminStageKeepOut(el){
+  if(!el||el.nodeType!==1) return false;
+  if(el.id==='admin-stage') return true;
+  if(el.classList?.contains?.('ui-layout-editor')) return true;
+  if(el.classList?.contains?.('ui-layout-modal')) return true;
+  if(el.classList?.contains?.('ui-layout-toast')) return true;
+  if(el.classList?.contains?.('ui-layout-export-btn')) return true;
+  return false;
+}
+function ensureAdminStage(){
+  let stage=document.getElementById('admin-stage');
+  if(stage) return stage;
+  stage=document.createElement('div');
+  stage.id='admin-stage';
+  const children=[...document.body.children];
+  for(const child of children){
+    if(isAdminStageKeepOut(child)) continue;
+    stage.appendChild(child);
+  }
+  document.body.appendChild(stage);
+  document.body.classList.add('admin-stage-active');
+  return stage;
+}
+function dismantleAdminStage(){
+  const stage=document.getElementById('admin-stage');
+  if(!stage) return;
+  while(stage.firstChild) document.body.appendChild(stage.firstChild);
+  stage.remove();
+  document.body.classList.remove('admin-stage-active','admin-stage-mobile');
+  document.body.style.removeProperty('--admin-zoom');
+}
+function applyAdminStageZoom(){
+  const stage=document.getElementById('admin-stage');
+  if(!stage) return;
+  const z=Number.isFinite(uiLayoutState.adminZoom)?uiLayoutState.adminZoom:1;
+  stage.style.setProperty('--admin-zoom',String(z));
+  document.body.style.setProperty('--admin-zoom',String(z));
+  document.body.classList.toggle('admin-stage-mobile',uiLayoutState.forcedMode==='mobile');
+}
+function setAdminStageZoom(z){
+  uiLayoutState.adminZoom=Math.max(0.25,Math.min(2,z));
+  applyAdminStageZoom();
+}
+function getAdminStageZoom(){
+  return Number.isFinite(uiLayoutState.adminZoom)?uiLayoutState.adminZoom:1;
+}
+function handleAdminStageWheel(e){
+  if(!uiLayoutState.active) return;
+  if(uiLayoutState.forcedMode!=='mobile') return;
+  if(e.target?.closest?.('.ui-layout-editor,.ui-layout-modal')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const factor=Math.exp(-e.deltaY*0.0015);
+  setAdminStageZoom(getAdminStageZoom()*factor);
+}
+function setAdminStageModeZoom(mode){
+  uiLayoutState.adminZoom=mode==='mobile' ? ADMIN_STAGE_DEFAULT_MOBILE_ZOOM : 1;
+  applyAdminStageZoom();
+}
+function mirrorSelectedUILayoutItems(axis){
+  const ids=(uiLayoutState.selectedIds?.length?uiLayoutState.selectedIds:[uiLayoutState.selectedId])
+    .filter(id=>id&&UI_LAYOUT_TARGET_DEFS.some(def=>def.id===id));
+  if(!ids.length) return false;
+  pushUILayoutHistory('mirror');
+  let moved=false;
+  for(const id of ids){
+    const def=getUILayoutDef(id);
+    if(!def) continue;
+    const metrics={...(ensureUILayoutMetrics(def)||currentUILayoutMetrics(def))};
+    if(metrics.locked) continue;
+    if(axis==='horizontal') metrics.x=+(100-(metrics.x||0)).toFixed(3);
+    else if(axis==='vertical') metrics.y=+(100-(metrics.y||0)).toFixed(3);
+    getUILayoutStore()[def.id]=metrics;
+    applyUILayoutMetrics(def,metrics);
+    moved=true;
+  }
+  if(moved){
+    markUILayoutBucketEdited();
+    refreshUILayoutEditor();
+    refreshUILayoutObjectPanel();
+    showUILayoutToast(`Mirrored ${axis==='horizontal'?'left/right':'top/bottom'}`);
+  }
+  return moved;
+}
 function handleUILayoutHotkeys(e){
   if(!uiLayoutState.active) return false;
   if(e.target?.closest?.('input,textarea')) return false;
   const key=(e.key||'').toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&key==='z'&&!e.shiftKey){
+    if(undoUILayoutChange()){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
   if((e.ctrlKey||e.metaKey)&&key==='c'){
     if(copySelectedUILayoutItem()){
       e.preventDefault();
@@ -4921,24 +6843,99 @@ function handleUILayoutHotkeys(e){
     }
     return false;
   }
+  // Ctrl+M / Ctrl+N : mirror selection across the viewport's vertical /
+  // horizontal centre line. x = 100 - x flips left/right; y = 100 - y
+  // flips top/bottom. Locked items are skipped.
+  if((e.ctrlKey||e.metaKey)&&key==='m'){
+    if(mirrorSelectedUILayoutItems('horizontal')){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+  if((e.ctrlKey||e.metaKey)&&key==='n'){
+    if(mirrorSelectedUILayoutItems('vertical')){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
   if(key==='delete'||key==='backspace'){
     if(deleteSelectedUILayoutItem()){
       e.preventDefault();
       return true;
     }
   }
+  // Arrow-key nudge: 0.1% per press, 1% with Shift. Holding the key
+  // triggers OS-level auto-repeat which keeps moving the selection.
+  if(key==='arrowleft'||key==='arrowright'||key==='arrowup'||key==='arrowdown'){
+    const step=e.shiftKey?1:0.1;
+    let dx=0,dy=0;
+    if(key==='arrowleft') dx=-step;
+    else if(key==='arrowright') dx=step;
+    else if(key==='arrowup') dy=-step;
+    else dy=step;
+    if(!e.repeat) scheduleUILayoutNudgeHistory();
+    if(nudgeSelectedUILayoutItems(dx,dy)){
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
   return false;
 }
 
 function setShopOpen(open){
   if(!shopPanel) return;
+  if(open) setLoadoutExpanded(false);
   shopPanel.classList.toggle('show',!!open);
+  document.body.classList.toggle('shop-open',!!open);
+  if(open) renderShopState();
 }
 
 const mobileLoadoutQuery=window.matchMedia('(max-width:640px)');
+const GAMEOVER_HIDE_IDS=[
+  'hud','paint-bar','shop-btn','shop-panel','loadout-toggle','loadout-bar',
+  'game-controls','joystick-zone','jump-btn','attack-btn','special-btn','clean-btn',
+  'title','ui-frame-layer','timer-box','kill-box','coin-box',
+  'kill-icon','kill-count','coin-glyph','coin-icon','coin-count','shop-icon',
+  'kill-box-frame','coin-box-frame','shop-btn-frame','paint-bar-frame',
+  'clean-btn-frame','special-btn-frame','jump-btn-frame','attack-btn-frame',
+  'loadout-toggle-frame','weapon-cycle-frame','weapon-cycle-card',
+  'soap-slot-frame','soap-slot-card',
+];
+function setGameOverUIHidden(hidden){
+  const apply=el=>{
+    if(!el) return;
+    if(hidden){
+      el.dataset.gameOverHidden='1';
+      el.style.setProperty('display','none','important');
+    }else if(el.dataset.gameOverHidden){
+      delete el.dataset.gameOverHidden;
+      el.style.removeProperty('display');
+    }
+  };
+  for(const id of GAMEOVER_HIDE_IDS) apply(document.getElementById(id));
+  document.querySelectorAll('#loadout-bar .loadout-slot, #loadout-bar .loadout-slot-frame').forEach(apply);
+}
+function syncLoadoutSlotVisibility(open){
+  if(loadoutBar){
+    loadoutBar.style.setProperty('display',open?'flex':'none','important');
+    loadoutBar.style.setProperty('opacity',open?'1':'0','important');
+    loadoutBar.style.setProperty('pointer-events',open?'auto':'none','important');
+    loadoutBar.style.setProperty('transform','none','important');
+  }
+  loadoutBar?.querySelectorAll?.('.loadout-slot,.loadout-slot-frame')?.forEach?.(el=>{
+    el.style.setProperty('display',open?(el.classList.contains('loadout-slot')?'flex':'block'):'none','important');
+    el.style.setProperty('opacity',open?'1':'0','important');
+    el.style.setProperty('pointer-events',open?'auto':'none','important');
+    el.style.setProperty('transform',open?'translate(-50%,-50%)':'translate(-50%,12px)','important');
+  });
+}
 function setLoadoutExpanded(open){
   document.body.classList.toggle('loadout-open',!!open);
   loadoutToggle?.setAttribute('aria-expanded',open?'true':'false');
+  syncLoadoutSlotVisibility(!!open);
 }
 function syncLoadoutLayout(forceClosed=false){
   if(forceClosed){
@@ -4947,15 +6944,37 @@ function syncLoadoutLayout(forceClosed=false){
   }
   if(!document.body.classList.contains('loadout-open')) setLoadoutExpanded(false);
 }
+function syncJoystickVisibility(){
+  // Show joystick on real mobile/touch viewports OR while admin mode
+  // is editing the mobile bucket (so the on-screen control can be
+  // tweaked from a desktop browser's mobile-preview popup).
+  const showForDevice=mobileLoadoutQuery.matches || IS_MOBILE_LAYOUT;
+  const showForAdmin=uiLayoutState.active && getUILayoutBucket()==='mobile';
+  document.body.classList.toggle('show-joystick',!!(showForDevice||showForAdmin));
+}
 mobileLoadoutQuery.addEventListener?.('change',()=>{
   if(!uiLayoutState.forcedMode) applyUILayoutConfig();
   refreshUILayoutEditorToolbar();
-  if(uiLayoutState.active&&!uiLayoutState.forcedMode) showUILayoutToast(`Layout admin switched to ${getUILayoutBucket()}`);
+  syncJoystickVisibility();
+});
+// Pull in changes saved by a sibling window (e.g. the mobile preview popup)
+// so the parent window doesn't keep stale values it would otherwise write
+// back when its own save fires.
+window.addEventListener('storage',e=>{
+  if(e.key!==UI_LAYOUT_STORAGE_KEY) return;
+  const latest=readUILayoutFromStorage();
+  if(!latest) return;
+  const edits=uiLayoutState.editedBuckets;
+  if(!edits||!edits.has('desktop')) uiLayoutState.config.desktop=latest.desktop;
+  if(!edits||!edits.has('mobile')) uiLayoutState.config.mobile=latest.mobile;
+  window.__uiLayoutConfig=uiLayoutState.config;
+  if(uiLayoutState.active) applyUILayoutConfig();
 });
 applyUILayoutConfig();
 if(layoutQuery.get('layoutMode')==='mobile'){
   uiLayoutState.forcedMode='mobile';
 }
+syncJoystickVisibility();
 
 let lastSpecialBtnHTML='';
 let lastSpecialBtnCooling=null;
@@ -5035,17 +7054,11 @@ function applyCheatInventory(){
   purchasedWeapons=new Set(WEAPON_SHOP_ITEMS.map(item=>item.id));
   if(!equippedWeapon) equippedWeapon='flame';
   cleanerUses=Math.max(cleanerUses,999);
-  wateringUses=Math.max(wateringUses,999);
   coinCount=Math.max(coinCount,999);
 }
 
 function syncBurstShopVisibility(){
-  const supported=new Set();
-  for(const [id,btn] of Object.entries(burstBuyButtons)){
-    const card=btn?.closest('.shop-card');
-    if(card && !supported.has(`buy-burst-${id}-btn`)) card.remove();
-  }
-  document.querySelector('#shop-panel .burst-section')?.remove?.();
+  return;
 }
 
 function unlockBurstEffectsByKills(){
@@ -5056,26 +7069,54 @@ function unlockBurstEffectsByKills(){
 function refreshSpecialButton(){
   if(!specialBtn) return;
   if(debugCheatMode) applyCheatInventory();
-  // Icon-only render: SKILL button shows a single weapon glyph
-  // with an optional small corner badge for cooldown / water
-  // uses. The "SKILL" text label was dropped in favour of the
-  // visual SVG/emoji language used by JUMP and PUNCH.
+  // SKILL button shows ONE shared white icon regardless of which
+  // weapon is equipped — keeps the right-side action cluster visually
+  // unified. Cooldown / water-uses still surface as a small corner badge.
+  const skillIcon=`<img class="btn-ico-img" src="game icon/skill.png" alt="" aria-hidden="true">`;
   if(!equippedWeapon){
-    specialBtn.innerHTML=`<span class="btn-ico">\u2726</span>`;
+    specialBtn.innerHTML=skillIcon;
     specialBtn.classList.add('cooling');
     return;
   }
-  const item=findWeaponItem(equippedWeapon);
   const cd=specialCooldownRemaining(equippedWeapon);
   let sub='';
-  if(equippedWeapon==='water'){
-    sub=debugCheatMode ? '∞' : String(wateringUses);
-  }else if(cd>0 && !debugCheatMode){
+  if(cd>0 && !debugCheatMode){
     sub=cd.toFixed(1)+'s';
   }
   const subHtml=sub ? `<span class="btn-sub">${sub}</span>` : '';
-  specialBtn.innerHTML=`<span class="btn-ico">${item?.icon||'\u2726'}</span>${subHtml}`;
-  specialBtn.classList.toggle('cooling',equippedWeapon==='water' ? (!debugCheatMode&&wateringUses<=0) : (cd>0 && !debugCheatMode));
+  specialBtn.innerHTML=`${skillIcon}${subHtml}`;
+  specialBtn.classList.toggle('cooling',cd>0 && !debugCheatMode);
+}
+function getCleanIconSVG(){
+  return `<img class="clean-ico-img" src="game icon/clean.png" alt="" aria-hidden="true">`;
+}
+function updateCleanBadgeLayout(){
+  if(!cleanBtnBadge||!cleanBtn) return;
+  const hidden=cleanBtn.classList.contains('hidden') || getComputedStyle(cleanBtn).display==='none' || !cleanBtnBadge.textContent;
+  if(hidden){
+    cleanBtnBadge.style.display='none';
+    return;
+  }
+  const rect=cleanBtn.getBoundingClientRect();
+  cleanBtnBadge.style.left=`${rect.right-4}px`;
+  cleanBtnBadge.style.top=`${rect.top+4}px`;
+  cleanBtnBadge.style.display='block';
+}
+function refreshCleanButton(){
+  if(!cleanBtn) return;
+  if(debugCheatMode) applyCheatInventory();
+  const hasCleaner=debugCheatMode || cleanerUses>0;
+  const canClean=debugCheatMode ? !!currentCleanTarget : (hasCleaner && !!currentCleanTarget);
+  const sub=hasCleaner ? (debugCheatMode ? '∞' : String(cleanerUses)) : '';
+  cleanBtn.classList.remove('hidden');
+  cleanBtnFrame?.classList.remove('hidden');
+  cleanBtn.innerHTML=getCleanIconSVG();
+  cleanBtn.classList.toggle('cooling',!canClean);
+  cleanBtn.setAttribute('aria-disabled',canClean?'false':'true');
+  if(cleanBtnBadge){
+    cleanBtnBadge.textContent=sub;
+    updateCleanBadgeLayout();
+  }
 }
 
 function spendCoins(cost){
@@ -5101,26 +7142,27 @@ function renderLoadoutBar(){
     </div>`
   );
   const ownedWeapons=getOwnedWeaponIds();
-  if(ownedWeapons.length){
-    const current=findWeaponItem(equippedWeapon)||findWeaponItem(ownedWeapons[0]);
-    if(current && (!equippedWeapon || !ownedWeapons.includes(equippedWeapon))) equippedWeapon=current.id;
-    parts.push(
-      `<div id="weapon-cycle-frame" class="loadout-slot-frame"></div>
-      <div class="loadout-slot skill-slot active" id="weapon-cycle-card" data-weapon-cycle="1">
-        <div class="slot-kind">SKILL</div>
-        <div class="slot-icon">${current?.icon||getSkillIconSafe('water','weapon')}</div>
-        <div class="slot-name">${current?.name||'SKILL'}</div>
-        <div class="slot-meta">${ownedWeapons.length} owned</div>
-        <button type="button">${ownedWeapons.length>1?'NEXT':'EQUIPPED'}</button>
-      </div>`
-    );
-  }
+  const current=findWeaponItem(equippedWeapon)||findWeaponItem(ownedWeapons[0]);
+  if(current && (!equippedWeapon || !ownedWeapons.includes(equippedWeapon))) equippedWeapon=current.id;
+  parts.push(
+    `<div id="weapon-cycle-frame" class="loadout-slot-frame"></div>
+    <div class="loadout-slot skill-slot ${ownedWeapons.length?'active':'inactive'}" id="weapon-cycle-card" data-weapon-cycle="1">
+      <div class="slot-kind">SKILL</div>
+      <div class="slot-icon">${current?.icon||getSkillIconSafe('water','weapon')}</div>
+      <div class="slot-name">${current?.name||'EMPTY'}</div>
+      <div class="slot-meta">${ownedWeapons.length?`${ownedWeapons.length} owned`:'buy from shop'}</div>
+      <button type="button">${ownedWeapons.length?(ownedWeapons.length>1?'NEXT':'EQUIPPED'):'SHOP'}</button>
+    </div>`
+  );
   loadoutBar.innerHTML=parts.join('');
   loadoutBar.querySelectorAll('[data-weapon-cycle]').forEach(el=>{
     const cycle=()=>{
-      cycleOwnedWeapon();
-      renderShopState();
-      if(mobileLoadoutQuery.matches) setLoadoutExpanded(false);
+      if(!getOwnedWeaponIds().length){
+        setShopOpen(true);
+      }else{
+        cycleOwnedWeapon();
+        renderShopState();
+      }
     };
     el.addEventListener('click',cycle);
     el.querySelector('button')?.addEventListener('click',e=>{
@@ -5129,6 +7171,7 @@ function renderLoadoutBar(){
     });
   });
   applyUILayoutConfig();
+  syncLoadoutSlotVisibility(document.body.classList.contains('loadout-open'));
 }
 
 function renderShopState(){
@@ -5137,7 +7180,7 @@ function renderShopState(){
   syncBurstShopVisibility();
   if(buyCleanerBtn){
     buyCleanerBtn.disabled=!debugCheatMode&&coinCount<1;
-    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES':'BUY CLEANER';
+    buyCleanerBtn.textContent=cleanerUses>0?'BUY +3 USES · 1 COIN':'BUY DETERGENT · 1 COIN';
   }
   for(const item of BURST_UNLOCK_ITEMS){
     if(item.id==='amber') continue;
@@ -5150,17 +7193,16 @@ function renderShopState(){
   for(const item of WEAPON_SHOP_ITEMS){
     const btn=weaponBuyButtons[item.id];
     if(!btn) continue;
-    const owned=purchasedWeapons.has(item.id);
-    // Water is consumable: always re-buyable to top up charges.
     if(item.id==='water'){
-      btn.disabled=!debugCheatMode&&coinCount<item.cost;
-      btn.textContent=`BUY WATER +5 (${debugCheatMode?'∞':wateringUses})`;
-    }else{
-      btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
-      btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name}`;
+      btn.closest('.shop-card')?.setAttribute('hidden','hidden');
+      continue;
     }
+    const owned=purchasedWeapons.has(item.id);
+    btn.disabled=owned||(!debugCheatMode&&coinCount<item.cost);
+    btn.textContent=owned ? (equippedWeapon===item.id?'OWNED / EQUIPPED':'OWNED') : `BUY ${item.name} · ${item.cost} COINS`;
   }
   refreshSpecialButton();
+  refreshCleanButton();
   renderLoadoutBar();
 }
 
@@ -5168,17 +7210,18 @@ function resetShopState(){
   cleanerUses=0;
   purchasedBurstEffects=new Set(['amber']);
   equippedBurstEffect='amber';
-  purchasedWeapons=new Set();
-  equippedWeapon=null;
+  purchasedWeapons=new Set(ALWAYS_OWNED_WEAPON_IDS);
+  equippedWeapon='water';
   debugCheatMode=false;
   for(const jet of activeFlameJets) scene.remove(jet.mesh);
   activeFlameJets.length=0;
+  for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
+  activeCleanMagicBursts.length=0;
   for(const bomb of activeBombs) scene.remove(bomb.group);
   activeBombs.length=0;
   for(const field of activeIceFields) disposeSpecialVisual(field.group);
   activeIceFields.length=0;
   currentCleanTarget=null;
-  cleanBtn.classList.add('hidden');
   setShopOpen(false);
   renderShopState();
 }
@@ -5200,6 +7243,13 @@ function disposeGraffiti(p){
 function cleanPillar(p){
   if(!p||(!debugCheatMode&&cleanerUses<=0)) return false;
   playSFX('cleanGraffiti');
+  const {x:fx,z:fz}=getForwardXZ(player.yaw||0);
+  const handOrigin={
+    x:(player.root?.position.x||p.pos.x)+fx*0.42+fz*0.16,
+    y:(player.root?.position.y||p.pos.y)+1.18,
+    z:(player.root?.position.z||p.pos.z)+fz*0.42-fx*0.16,
+  };
+  spawnCleanMagicBurst(handOrigin,p.pos);
   if(!debugCheatMode) cleanerUses=Math.max(0,cleanerUses-1);
   if(p.fillCounted){
     p.fillCounted=false;
@@ -5236,8 +7286,8 @@ function updateCleanPrompt(){
   }
   cleanPromptCooldown=6; // ~10 checks/sec instead of every frame
   currentCleanTarget=null;
-  if(gameState!=='playing' || (!debugCheatMode&&cleanerUses<=0) || !player.root){
-    cleanBtn.classList.add('hidden');
+  if(gameState!=='playing' || !player.root){
+    refreshCleanButton();
     return;
   }
   let best=null;
@@ -5250,10 +7300,11 @@ function updateCleanPrompt(){
     if(d<bestD){bestD=d;best=p;}
   }
   currentCleanTarget=best;
-  cleanBtn.classList.toggle('hidden',!best);
+  refreshCleanButton();
 }
 
 shopBtn?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
+document.getElementById('shop-icon')?.addEventListener('click',()=>setShopOpen(!shopPanel.classList.contains('show')));
 shopClose?.addEventListener('click',()=>setShopOpen(false));
 buyCleanerBtn?.addEventListener('click',()=>{
   if(!spendCoins(1)) return;
@@ -5270,6 +7321,7 @@ for(const item of BURST_UNLOCK_ITEMS){
 }
 for(const item of WEAPON_SHOP_ITEMS){
   weaponBuyButtons[item.id]?.addEventListener('click',()=>{
+    if(item.id==='water') return;
     if(purchasedWeapons.has(item.id)) return;
     if(!spendCoins(item.cost)) return;
     purchasedWeapons.add(item.id);
@@ -5277,22 +7329,9 @@ for(const item of WEAPON_SHOP_ITEMS){
     renderShopState();
   });
 }
-if(weaponBuyButtons.water){
-  const freshWaterBtn=weaponBuyButtons.water.cloneNode(true);
-  weaponBuyButtons.water.replaceWith(freshWaterBtn);
-  weaponBuyButtons.water=freshWaterBtn;
-  weaponBuyButtons.water.addEventListener('click',()=>{
-    if(!purchasedWeapons.has('water')){
-      if(!spendCoins(1)) return;
-      purchasedWeapons.add('water');
-    }else if(!spendCoins(1)) return;
-    wateringUses+=5;
-    equippedWeapon='water';
-    renderShopState();
-  });
-}
 cleanBtn?.addEventListener('pointerdown',e=>{
   e.preventDefault();
+  if(cleanBtn.classList.contains('cooling')) return;
   unlockSFX();
   if(currentCleanTarget) requestCleanAction(currentCleanTarget);
 });
@@ -5315,6 +7354,12 @@ specialBtn?.addEventListener('pointerleave',e=>{
   if(specialInputState.isDown && e.pointerType==='mouse') handleSpecialRelease(e.pointerId);
 });
 loadoutToggle?.addEventListener('click',()=>setLoadoutExpanded(!document.body.classList.contains('loadout-open')));
+document.addEventListener('pointerdown',e=>{
+  if(!document.body.classList.contains('loadout-open')) return;
+  const target=e.target;
+  if(target?.closest?.('#loadout-bar,#loadout-toggle,#loadout-toggle-frame,.ui-layout-editor,.ui-layout-modal')) return;
+  setLoadoutExpanded(false);
+});
 mobileLoadoutQuery.addEventListener?.('change',()=>syncLoadoutLayout(true));
 syncLoadoutLayout(true);
 if(layoutQuery.get('layoutAdmin')==='1'){
@@ -5323,6 +7368,7 @@ if(layoutQuery.get('layoutAdmin')==='1'){
     if(layoutQuery.get('layoutMode')==='mobile') setUILayoutMode('mobile');
   },{once:true});
 }
+refreshCleanButton();
 renderShopState();
 
 function updateCoins(dt,now){
@@ -5445,18 +7491,21 @@ function handleSpecialPress(pointerId=null){
 
 function getSpecialCharge(){
   if(!specialInputState.downAt) return 0;
-  return clamp((performance.now()-specialInputState.downAt)/900,0,1);
+  return clamp((performance.now()-specialInputState.downAt)/600,0,1);
 }
 
 function handleSpecialRelease(pointerId=null){
   if(!specialInputState.isDown) return;
   if(pointerId!==null && specialInputState.pointerId!==null && pointerId!==specialInputState.pointerId) return;
   const charge=getSpecialCharge();
+  const lockedAimTarget=cloneSpecialThrowTarget(currentSpecialAimTarget);
   specialInputState.isDown=false;
   specialInputState.pointerId=null;
   specialInputState.downAt=0;
   setSpecialAimMarkerVisible(false);
+  if(lockedAimTarget) currentSpecialAimTarget=lockedAimTarget;
   useSpecialWeapon(charge);
+  currentSpecialAimTarget=null;
 }
 
 window.addEventListener('keydown',e=>{
@@ -5479,7 +7528,16 @@ window.addEventListener('keydown',e=>{
   if(k===' '||k==='spacebar'){keys.space=true;tryJump();e.preventDefault()}
   if((k==='f'||k==='j') && !e.repeat){handleAttackPress();e.preventDefault()}
   if((k==='q'||k==='k') && !e.repeat){handleSpecialPress();e.preventDefault()}
-  if(k==='e'||(k==='c'&&!e.shiftKey)){ if(currentCleanTarget) { requestCleanAction(currentCleanTarget); e.preventDefault(); } }
+  if(k==='e'){
+    if(currentCleanTarget){
+      requestCleanAction(currentCleanTarget);
+      e.preventDefault();
+    }else{
+      setLoadoutExpanded(!document.body.classList.contains('loadout-open'));
+      e.preventDefault();
+    }
+  }
+  if(k==='c'&&!e.shiftKey){ if(currentCleanTarget) { requestCleanAction(currentCleanTarget); e.preventDefault(); } }
   // Shift+X: toggle the debug coordinate readout. Updated in tick().
   if(k==='x'&&e.shiftKey){
     const el=document.getElementById('debug-coords');
@@ -5582,6 +7640,7 @@ function tryJump(){
 let camYaw=Math.PI,camPitch=0.25,camDist=3.15;
 let dragging=false,dragPId=null,dx0=0,dy0=0,yaw0=0,pitch0=0;
 canvas.addEventListener('pointerdown',e=>{
+  if(handleRiverEditorCanvasPointerDown(e)) return;
   if(e.target!==canvas)return;
   dragging=true;dragPId=e.pointerId;
   dx0=e.clientX;dy0=e.clientY;
@@ -5589,8 +7648,10 @@ canvas.addEventListener('pointerdown',e=>{
   pitch0=gameState==='ended' ? endCameraPitch : camPitch;
 });
 canvas.addEventListener('pointermove',e=>{
+  if(handleRiverEditorCanvasPointerMove(e)) return;
   if(!dragging||e.pointerId!==dragPId)return;
   if(gameState==='ended'){
+    endCameraAutoRotate=false;
     endCameraOrbitAngle=yaw0-(e.clientX-dx0)/W()*4;
     endCameraPitch=clamp(pitch0+(e.clientY-dy0)/H()*2.2,0.3,1.3);
     return;
@@ -5599,11 +7660,12 @@ canvas.addEventListener('pointermove',e=>{
   camPitch=clamp(pitch0+(e.clientY-dy0)/H()*3,-0.2,1.0);
 });
 const endDrag=e=>{if(e.pointerId===dragPId){dragging=false;dragPId=null}};
-canvas.addEventListener('pointerup',endDrag);
-canvas.addEventListener('pointercancel',endDrag);
+canvas.addEventListener('pointerup',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; endDrag(e); });
+canvas.addEventListener('pointercancel',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; endDrag(e); });
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   if(gameState==='ended'){
+    endCameraAutoRotate=false;
     endCameraZoom=clamp(endCameraZoom+e.deltaY*0.0015,0.45,1.85);
     return;
   }
@@ -5612,6 +7674,11 @@ canvas.addEventListener('wheel',e=>{
 
 function updateCam(){
   if(gameState==='ended'){
+    if(endCameraAutoRotate){
+      // dt isn't passed in but the render loop runs ~60fps; advance
+      // by one tick's worth so the orbit feels gentle on phones too.
+      endCameraOrbitAngle+=END_CAMERA_AUTO_RATE/60;
+    }
     const b=getPlayableBounds();
     const radius=Math.max(12,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*0.62)*endCameraZoom;
     const tx=b.centerX;
@@ -5843,16 +7910,24 @@ function killArtist(a,cause='generic'){
 // ===== HUD / Timer / Game state =====
 const GAME_DURATION=180; // 3 min
 let gameState='intro'; // intro|playing|ended|artWins
+document.body.classList.add('intro-active');
 let gameTime=0;
 let killCount=0;
 let paintFillCount=0;
-const PAINT_FILL_GOAL=15;
+const PAINT_FILL_GOAL=20;
 const killEl=document.getElementById('kill-count');
 const timerEl=document.getElementById('timer-text');
 const timerBox=document.getElementById('timer-box');
 const paintBarFill=document.getElementById('paint-bar-fill');
 const paintBarLabel=document.getElementById('paint-bar-label');
+const paintBarGrid=document.getElementById('paint-bar-grid');
 const artWinsOverlay=document.getElementById('art-wins');
+if(paintBarGrid&&!paintBarGrid.children.length){
+  for(let i=0;i<PAINT_FILL_GOAL;i++){
+    const tick=document.createElement('span');
+    paintBarGrid.appendChild(tick);
+  }
+}
 
 function updateKillUI(){killEl.textContent=killCount}
 function updateTimerUI(){
@@ -5883,6 +7958,8 @@ function triggerArtWins(){
   // Kick off the fade-to-black + overlay reveal
   fadeEl.classList.add('show');
   artWinsOverlay.classList.add('show');
+  setLoadoutExpanded(false);
+  setGameOverUIHidden(true);
   // Freeze artists where they are; no more spawns, no more movement.
   // The scene keeps rendering underneath the fade for a couple seconds
   // then the overlay fully covers it.
@@ -5992,9 +8069,9 @@ const SFX_DEFS={
   paintWhisperB:{src:'sound/Cute Goblin Wisper (2).mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   paintWhisperC:{src:'sound/Cute Goblin Wisper (1).mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
   paintWhisperD:{src:'sound/Cute Goblin Wisper.mp3',volume:0.42,maxDuration:2.2,pool:3,minGap:0.1},
-  throwIce:{src:'sound/Throw  Something.mp3',volume:0.84,maxDuration:0.7,pool:3},
-  throwBomb:{src:'sound/Throw  Something.mp3',volume:0.84,maxDuration:0.7,pool:3},
-  flame:{src:'sound/Fire Flame.mp3',volume:0.7,maxDuration:0.58,pool:3},
+  throwIce:{src:'sound/throw ice.mp3',volume:0.84,maxDuration:0.7,pool:3},
+  throwBomb:{src:'sound/throw bomb.mp3',volume:0.84,maxDuration:0.7,pool:3},
+  flame:{src:'sound/Fire Flame.mp3',volume:1.2,maxDuration:0.58,pool:3},
   coinPickup:{src:'sound/Got A Mario Gold Coin2.mp3',volume:0.68,maxDuration:0.54,pool:4},
   jump:{src:'sound/Jump With Shoes.mp3',volume:0.7,maxDuration:0.34,pool:3},
   cleanGraffiti:{src:'sound/\u64e6\u6389\u5857\u9d09.m4a',volume:0.68,maxDuration:0.55,pool:2},
@@ -6158,7 +8235,7 @@ function playSFX(id,opts={}){
       if(!buffer) return null;
       const source=ctx.createBufferSource();
       const gain=ctx.createGain();
-      gain.gain.value=clamp(opts.volume ?? def.volume ?? 1,0,1);
+      gain.gain.value=clamp(opts.volume ?? def.volume ?? 1,0,2);
       source.buffer=buffer;
       source.playbackRate.value=opts.playbackRate ?? def.playbackRate ?? 1;
       source.connect(gain);
@@ -6287,7 +8364,84 @@ let replaySceneEntryId=null;
 let endCameraOrbitAngle=0;
 let endCameraPitch=0.78;
 let endCameraZoom=1;
+let endPinchActive=false;
+let endPinchStartDist=0;
+let endPinchStartZoom=1;
+// Auto-orbit until the player drags / zooms the end-screen camera —
+// then we freeze the angle wherever they left it.
+let endCameraAutoRotate=true;
+const END_CAMERA_AUTO_RATE=0.08; // radians / second
+function getTouchDistance(t0,t1){
+  const dx=t1.clientX-t0.clientX;
+  const dy=t1.clientY-t0.clientY;
+  return Math.hypot(dx,dy);
+}
 let introProgressValue=0;
+let introProgressTargetValue=0;
+let introProgressLabel='LOADING';
+let introProgressTicker=0;
+let introProgressLastStepAt=0;
+let introProgressStartAt=0;
+
+function getIntroProgressSoftCap(label='LOADING'){
+  switch(label){
+    case 'BOOT': return 24;
+    case 'PLAYER': return 40;
+    case 'WORLD': return 58;
+    case 'TERRAIN': return 92;
+    case 'ARTISTS': return 95;
+    case 'ITEMS': return 98;
+    case 'READY': return 100;
+    default: return 95;
+  }
+}
+
+function renderIntroProgressDisplay(){
+  if(introProgressText) introProgressText.textContent=`${introProgressLabel} ${introProgressValue}%`;
+  if(introProgressFill) introProgressFill.style.width=`${introProgressValue}%`;
+}
+
+function stopIntroProgressSmoother(){
+  if(introProgressTicker){
+    clearInterval(introProgressTicker);
+    introProgressTicker=0;
+  }
+}
+
+function startIntroProgressSmoother(){
+  stopIntroProgressSmoother();
+  introProgressStartAt=performance.now();
+  introProgressLastStepAt=performance.now();
+  introProgressTicker=window.setInterval(()=>{
+    const now=performance.now();
+    const softCap=getIntroProgressSoftCap(introProgressLabel);
+    const forcedFloor=Math.min(95,Math.floor((now-introProgressStartAt)/1000)+1);
+    const maxVisible=Math.max(introProgressTargetValue,Math.min(Math.max(softCap,forcedFloor),99));
+    let next=introProgressValue;
+    if(introProgressValue<introProgressTargetValue){
+      const gap=introProgressTargetValue-introProgressValue;
+      next+=gap>=18 ? 3 : (gap>=8 ? 2 : 1);
+    }else if(introProgressValue<maxVisible && now-introProgressLastStepAt>=1000){
+      next+=1;
+    }
+    next=Math.min(next,maxVisible);
+    if(next!==introProgressValue){
+      introProgressValue=next;
+      introProgressLastStepAt=now;
+      renderIntroProgressDisplay();
+    }
+  },240);
+}
+
+function yieldToMainThread(){
+  return new Promise(resolve=>{
+    if(typeof window.requestAnimationFrame==='function'){
+      window.requestAnimationFrame(()=>resolve());
+    }else{
+      window.setTimeout(resolve,0);
+    }
+  });
+}
 
 function setEndOverlaySceneView(minimized){
   endOverlay.classList.toggle('scene-view',!!minimized);
@@ -6329,8 +8483,12 @@ function clearLeaderboardSceneVisuals(){
     disposeCoin(COINS_FLOATING[i]);
     COINS_FLOATING.splice(i,1);
   }
+  for(const proj of activeThrownProjectiles) disposeSpecialVisual(proj.group);
+  activeThrownProjectiles.length=0;
   for(const jet of activeFlameJets) disposeSpecialVisual(jet.mesh);
   activeFlameJets.length=0;
+  for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
+  activeCleanMagicBursts.length=0;
   for(const bomb of activeBombs) disposeSpecialVisual(bomb.group);
   activeBombs.length=0;
   for(const field of activeIceFields) disposeSpecialVisual(field.group);
@@ -6421,20 +8579,22 @@ function showLeaderboardScene(entry){
 
 function setIntroProgress(pct,label='LOADING'){
   const clamped=Math.max(0,Math.min(100,Math.round(pct)));
-  if(clamped<introProgressValue) return;
-  introProgressValue=clamped;
-  if(introProgressText) introProgressText.textContent=`${label} ${clamped}%`;
-  if(introProgressFill) introProgressFill.style.width=`${clamped}%`;
+  if(clamped < introProgressTargetValue && label===introProgressLabel) return;
+  introProgressTargetValue=Math.max(introProgressTargetValue,clamped);
+  introProgressLabel=label;
+  renderIntroProgressDisplay();
 }
 
 startBtn.addEventListener('click',()=>{
   intro.classList.add('hidden');
+  document.body.classList.remove('intro-active');
   startGame();
 });
 
 function startGame(){
   unlockSFX();
   setEndOverlaySceneView(false);
+  setGameOverUIHidden(false);
   gameState='playing';
   gameTime=0;killCount=0;coinCount=0;sketchDropped=false;paintFillCount=0;
   resetShopState();
@@ -6448,6 +8608,7 @@ function startGame(){
   player.pendingSpecialAction=null;
   player.pendingSpecialTimer=0;
   player.pendingSpecialCharge=0;
+  player.pendingSpecialThrow=null;
   player.pendingCleanTarget=null;
   setSpecialAimMarkerVisible(false);
   fadeEl.classList.remove('show');
@@ -6470,6 +8631,7 @@ async function endGame(){
   endCameraOrbitAngle=0;
   endCameraPitch=0.78;
   endCameraZoom=1;
+  endCameraAutoRotate=true;
   setEndOverlaySceneView(false);
   endScore.textContent=killCount;
   endOverlay.classList.add('show');
@@ -6477,6 +8639,11 @@ async function endGame(){
   // that would otherwise overlap the end overlay and its minimized
   // scene-view pill.
   document.body.classList.add('game-ended');
+  // Inline display:none on every gameplay HUD element so leftover
+  // inline display:flex from syncLoadoutSlotVisibility (and friends)
+  // can't outlive game-over and bleed through the leaderboard.
+  setLoadoutExpanded(false);
+  setGameOverUIHidden(true);
   nameInput.value='';submitBtn.disabled=false;
   await refreshLeaderboard();
 }
@@ -6536,9 +8703,31 @@ endOverlay?.addEventListener('click',e=>{
     setEndOverlaySceneView(true);
   }
 });
+endOverlay?.addEventListener('touchstart',e=>{
+  if(gameState!=='ended' || e.touches.length!==2) return;
+  endPinchActive=true;
+  endCameraAutoRotate=false;
+  endPinchStartDist=getTouchDistance(e.touches[0],e.touches[1]);
+  endPinchStartZoom=endCameraZoom;
+  e.preventDefault();
+},{passive:false});
+endOverlay?.addEventListener('touchmove',e=>{
+  if(gameState!=='ended' || !endPinchActive || e.touches.length!==2) return;
+  const nextDist=getTouchDistance(e.touches[0],e.touches[1]);
+  if(nextDist<=0 || endPinchStartDist<=0) return;
+  endCameraZoom=clamp(endPinchStartZoom*(endPinchStartDist/nextDist),0.45,1.85);
+  e.preventDefault();
+},{passive:false});
+const endPinchEnd=()=>{
+  endPinchActive=false;
+  endPinchStartDist=0;
+};
+endOverlay?.addEventListener('touchend',endPinchEnd,{passive:false});
+endOverlay?.addEventListener('touchcancel',endPinchEnd,{passive:false});
 replayBtn.addEventListener('click',()=>{
   endOverlay.classList.remove('show');
   document.body.classList.remove('game-ended');
+  setGameOverUIHidden(false);
   // Re-enable VHS unconditionally so a replay always starts with the
   // full post-process look, even if the player toggled it off mid-run.
   vhsEnabled=true;
@@ -6569,6 +8758,10 @@ function resetWorld(){
   }
   // Clear coins
   for(let i=COINS_FLOATING.length-1;i>=0;i--){disposeCoin(COINS_FLOATING[i]);COINS_FLOATING.splice(i,1)}
+  for(const proj of activeThrownProjectiles) disposeSpecialVisual(proj.group);
+  activeThrownProjectiles.length=0;
+  for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
+  activeCleanMagicBursts.length=0;
   // Reset pillars graffiti
   for(const p of pillars){
     if(p.graffiti){
@@ -6591,12 +8784,12 @@ function resetWorld(){
   player.vy=0;player.isAir=false;player.inWater=false;player.wasInWater=false;player.walkPhase=0;
   player.attackT=-1;player.attackCooldown=0;player.attackHit.clear();player.attackVariantIndex=0;player.currentAttackAnim='punch';player.currentAttackDur=ATTACK_DUR;player.attackRecovering=false;
   player.specialAnim='none';player.specialAnimT=0;
-  player.pendingSpecialAction=null;player.pendingSpecialTimer=0;player.pendingSpecialCharge=0;player.pendingCleanTarget=null;
+  player.pendingSpecialAction=null;player.pendingSpecialTimer=0;player.pendingSpecialCharge=0;player.pendingSpecialThrow=null;player.pendingCleanTarget=null;
   specialInputState.isDown=false;specialInputState.pointerId=null;specialInputState.downAt=0;
   setSpecialAimMarkerVisible(false);
   player.specialCooldowns.flame=0;player.specialCooldowns.water=0;player.specialCooldowns.ice=0;player.specialCooldowns.bomb=0;
   currentCleanTarget=null;
-  cleanBtn.classList.add('hidden');
+  refreshCleanButton();
   spawnTimer=1.5;
 }
 
@@ -6737,13 +8930,20 @@ async function init(){
   startBtn.disabled=true;
   const origLabel=startBtn.textContent;
   startBtn.textContent='LOADINGâ€¦';
+  introProgressValue=0;
+  introProgressTargetValue=0;
+  introProgressLabel='BOOT';
+  renderIntroProgressDisplay();
+  startIntroProgressSmoother();
   setIntroProgress(2,'BOOT');
 
   // Enable BVH raycast acceleration BEFORE loading the playground, so
   // computeBoundsTree runs on its geometry right after load.
-  await setupBVH();
+  const bvhPromise=setupBVH();
+  const playerAssetsPromise=loadPlayerAssets();
+  await bvhPromise;
   setIntroProgress(8,'BOOT');
-  await loadPlayerAssets();
+  await playerAssetsPromise;
   setIntroProgress(18,'PLAYER');
   await loadPlayground();
   setIntroProgress(30,'WORLD');
@@ -6775,16 +8975,23 @@ async function init(){
   }
   attachPlayer();
   placePlayerOnPlayableLayer();
-  await schedulePlaygroundBVHBuild(playgroundRoot);
-  setIntroProgress(44,'WORLD');
-  await loadDeferredPlayerSkillClips();
-  setIntroProgress(58,'PLAYER');
-  await loadCharacterTemplate();
-  setIntroProgress(70,'ARTISTS');
-  await loadExtraCharacterClips();
-  setIntroProgress(78,'ARTISTS');
-  await loadCoin();
+  setIntroProgress(40,'WORLD');
+  const playgroundBVHPromise=schedulePlaygroundBVHBuild(playgroundRoot);
+  const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
+  const characterTemplatePromise=loadCharacterTemplate();
+  const extraCharacterClipsReadyPromise=characterTemplatePromise.then(async()=>{
+    setIntroProgress(62,'ARTISTS');
+    return loadExtraCharacterClips();
+  });
+  const coinPromise=loadCoin();
+  await deferredPlayerClipsPromise;
+  setIntroProgress(52,'PLAYER');
+  await Promise.all([playgroundBVHPromise,characterTemplatePromise,coinPromise]);
+  setIntroProgress(76,'ARTISTS');
+  await extraCharacterClipsReadyPromise;
   setIntroProgress(84,'ITEMS');
+  ensureIceSpecialVisualAssets();
+  primeSFX();
   if(false&&bvhReady){
     Promise.resolve().then(async()=>{
       try{
@@ -6805,15 +9012,22 @@ async function init(){
         console.warn('[floor] detection failed',e);
       }finally{}
       try{
-        RIVERS=await detectRiverBounds();
-        RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
-        if(RIVERS&&RIVERS.length){
-          console.log('[river] detected:',RIVERS);
-          waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
+        const manualRiverRegions=loadManualRiverRegions();
+        if(manualRiverRegions.length){
+          applyRiverRegions(manualRiverRegions);
           placePlayerOnPlayableLayer();
           setIntroProgress(100,'READY');
         }else{
-          console.warn('[river] no trench detected Ã¢â‚¬â€ playground may be flat');
+          RIVERS=await detectRiverBounds();
+          RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
+          if(RIVERS&&RIVERS.length){
+            console.log('[river] detected:',RIVERS);
+            applyRiverRegions(RIVERS);
+            placePlayerOnPlayableLayer();
+            setIntroProgress(100,'READY');
+          }else{
+            console.warn('[river] no trench detected Ã¢â‚¬â€ playground may be flat');
+          }
         }
       }catch(e){
         console.warn('[river] detection failed',e);
@@ -6825,7 +9039,11 @@ async function init(){
   tick(); // begin rendering â€” intro is still on top
 
   // River detection needs many raycasts. Only attempt when BVH is available.
-  if(bvhReady){
+  const manualRiverRegions=loadManualRiverRegions();
+  if(manualRiverRegions.length){
+    applyRiverRegions(manualRiverRegions);
+    placePlayerOnPlayableLayer();
+  }else if(bvhReady){
     try{
       startBtn.textContent='SCANNING TERRAINâ€¦';
       RIVERS=await detectRiverBounds(p=>{ 
@@ -6836,7 +9054,7 @@ async function init(){
       RIVER=RIVERS&&RIVERS.length?RIVERS[0]:null;
       if(RIVERS&&RIVERS.length){
         console.log('[river] detected:',RIVERS);
-        waterMeshes.splice(0,waterMeshes.length,...RIVERS.map(r=>createWaterMesh(r)));
+        applyRiverRegions(RIVERS);
         placePlayerOnPlayableLayer();
       }else{
         console.warn('[river] no trench detected â€” playground may be flat');
@@ -6849,8 +9067,11 @@ async function init(){
   }
 
   startBtn.textContent=origLabel;
-  startBtn.disabled=false;
   setIntroProgress(100,'READY');
+  introProgressValue=100;
+  renderIntroProgressDisplay();
+  stopIntroProgressSmoother();
+  startBtn.disabled=false;
 }
 init();
 
@@ -6861,6 +9082,7 @@ window.addEventListener('resize',()=>{
   camera.aspect=W()/H();
   camera.updateProjectionMatrix();
   vhsPass.uniforms.resolution.value.set(W(),H());
+  updateCleanBadgeLayout();
 });
 
 document.addEventListener('selectstart',e=>{
@@ -6868,9 +9090,9 @@ document.addEventListener('selectstart',e=>{
   e.preventDefault();
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
-document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
-document.addEventListener('gestureend',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gesturestart',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); },{passive:false});
+document.addEventListener('gesturechange',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); },{passive:false});
+document.addEventListener('gestureend',e=>{ if(!allowEndOverlayGesture(e)) e.preventDefault(); },{passive:false});
 let lastTouchEndAt=0;
 document.addEventListener('touchend',e=>{
   const now=performance.now();
@@ -6878,10 +9100,12 @@ document.addEventListener('touchend',e=>{
   lastTouchEndAt=now;
 },{passive:false});
 
-// Debug: press P to log pillar count
+// Debug: Shift+O logs pillar and artist counts without colliding with
+// the Shift+P layout-editor toggle.
 window.addEventListener('keydown',e=>{
-  if(e.key.toLowerCase()==='p'&&e.shiftKey){
+  if(e.key.toLowerCase()==='o'&&e.shiftKey){
     console.log('[debug] pillars:',pillars.length,pillars.map(p=>({x:p.pos.x.toFixed(1),z:p.pos.z.toFixed(1),h:p.topY.toFixed(1)})));
     console.log('[debug] artists:',artists.length);
+    e.preventDefault();
   }
 });
