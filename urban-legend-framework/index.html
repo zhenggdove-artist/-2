@@ -4121,8 +4121,8 @@ function rewireArtistActions(){
   }
 }
 
-const ARTIST_SKIN_TARGET=new THREE.Color('#FFDCBD');
-const ARTIST_SKIN_EMISSIVE=new THREE.Color('#5a3925');
+const ARTIST_SKIN_TARGET=new THREE.Color('#FFE3CC');
+const ARTIST_SKIN_EMISSIVE=new THREE.Color('#8a6248');
 function isLikelyArtistSkin(mesh,material){
   const hint=`${mesh?.name||''} ${material?.name||''}`.toLowerCase();
   if(/skin|face|head|neck|hand|arm|leg|body/.test(hint)) return true;
@@ -4144,7 +4144,7 @@ function tuneArtistMaterial(mesh,material){
   }else{
     if(material.color) material.color.multiplyScalar(1.06);
     if(material.emissive && 'emissiveIntensity' in material){
-      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.03);
+      material.emissiveIntensity=Math.max(material.emissiveIntensity||0,0.32);
     }
   }
 }
