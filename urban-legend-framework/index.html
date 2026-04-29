@@ -997,7 +997,7 @@
   #intro{position:fixed;inset:0;background:radial-gradient(circle at 50% 50%,rgba(30,10,40,0.85),rgba(0,0,0,0.95));
     z-index:400;display:flex;align-items:center;justify-content:center;
     color:#f0d0ff;text-align:center;padding:20px;font-family:"GoldenGirdle","Trebuchet MS",sans-serif;pointer-events:auto;
-    overflow:hidden}
+    overflow:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #intro .intro-card{width:min(94vw,820px);max-height:min(92vh,860px);display:flex;flex-direction:column;align-items:center;gap:16px;
     padding:38px 44px 28px;border-radius:28px;background:rgba(255, 82, 166, 0.7);
     border:1px solid rgba(255,214,150,0.24);box-shadow:0 20px 56px rgba(0,0,0,0.48),inset 0 0 0 1px rgba(255,255,255,0.06);
@@ -1031,8 +1031,8 @@
     transition:transform 0.2s;pointer-events:auto;position:relative;z-index:2}
   #intro button:hover{transform:translateY(-2px)}
   @media (max-width:640px){
-    #intro{padding:12px}
-    #intro .intro-card{width:min(94vw,420px);max-height:min(94vh,860px);gap:12px;padding:22px 18px 18px;border-radius:22px}
+    #intro{padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));align-items:flex-start}
+    #intro .intro-card{width:min(94vw,420px);max-height:none;min-height:calc(100dvh - 24px - env(safe-area-inset-bottom,0px));gap:12px;padding:22px 18px 18px;border-radius:22px;overflow-y:auto;-webkit-overflow-scrolling:touch}
     /* Mobile title: RunArtistRun is 12 chars in a wide display
        font — on narrow devices the glyphs overflow the card width.
        Shrunk font + reduced letter-spacing + 16px safety padding
@@ -1055,7 +1055,8 @@
     background:radial-gradient(circle at 50% 35%,rgba(255,158,210,0.45) 0%,rgba(217,38,128,0.55) 45%,rgba(120,15,68,0.72) 100%);
     backdrop-filter:blur(5px) saturate(1.18);
     -webkit-backdrop-filter:blur(5px) saturate(1.18);
-    z-index:500;display:none;align-items:center;justify-content:center;padding:6vw;touch-action:none}
+    z-index:500;display:none;align-items:center;justify-content:center;padding:6vw;touch-action:none;
+    overflow:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #end-overlay.show{display:flex}
   /* When the end screen is showing, all gameplay UI gets out of
      the way — otherwise the game HUD, SHOP button, loadout bar,
@@ -1180,6 +1181,10 @@
     color:var(--ink);font-size:15px;letter-spacing:2px;cursor:pointer;
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;
     box-shadow:0 0 0 1.5px var(--neon-deep),0 4px 10px rgba(180,150,30,0.35),inset 0 0 0 1px rgba(255,255,255,0.6)}
+  @media (max-width:640px){
+    #end-overlay{padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));align-items:flex-start}
+    #end-box{width:min(94vw,460px);max-height:none;min-height:calc(100dvh - 24px - env(safe-area-inset-bottom,0px));padding:24px 16px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  }
 
   /* Stone tablet cutscene */
   #tablet-scene{position:fixed;inset:0;background:#000;z-index:600;display:none;
