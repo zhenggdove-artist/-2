@@ -1098,6 +1098,8 @@
     font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif;letter-spacing:0.1em;
     text-shadow:0 1px 0 rgba(255,255,255,0.5)}
   #name-row{display:flex;gap:8px;margin-bottom:12px}
+  #name-label{display:flex;align-items:center;white-space:nowrap;font-size:13px;letter-spacing:0.12em;
+    color:rgba(26,15,36,0.72);font-family:"HydrogenWhiskey","Trebuchet MS",sans-serif}
   #name-input{flex:1;padding:10px 14px;border-radius:999px;border:1.5px solid rgba(26,15,36,0.18);
     background:#fffbe9;color:var(--ink);font-size:15px;outline:none;letter-spacing:1px}
   #submit-btn{padding:10px 20px;border-radius:999px;border:none;
@@ -1402,10 +1404,11 @@
 <div id="end-overlay">
   <div id="end-box">
     <button id="end-toggle" type="button" aria-label="Toggle leaderboard view">-</button>
-    <h2>GAME OVER</h2>
+    <h2>HOME SWEET HOME</h2>
     <div class="sub">artists repelled</div>
     <div id="end-score">0</div>
     <div id="name-row">
+      <span id="name-label">Homeowner:</span>
       <input id="name-input" maxlength="12" placeholder="your name" />
       <button id="submit-btn">SUBMIT</button>
     </div>
@@ -5017,10 +5020,26 @@ let iceFieldPointsGeometry=null;
 let iceFieldPointsMaterial=null;
 let iceFieldRingGeometry=null;
 let iceFieldRingMaterial=null;
+let bombWingGeometry=null;
+let bombEyeGeometry=null;
+let bombTongueGeometry=null;
+let bombBodyMaterial=null;
+let bombWingMaterial=null;
+let bombFaceMaterial=null;
+let bombTongueMaterial=null;
+function makeSharedShapeGeometry(points,depth=0.04){
+  const shape=new THREE.Shape();
+  shape.moveTo(points[0][0],points[0][1]);
+  for(let i=1;i<points.length;i++) shape.lineTo(points[i][0],points[i][1]);
+  shape.closePath();
+  const geo=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false});
+  geo.center();
+  return geo;
+}
 function ensureIceSpecialVisualAssets(){
   if(iceProjectileGeometry) return;
-  iceProjectileGeometry=new THREE.CylinderGeometry(0.5,0.5,0.92,6,1,false);
-  iceProjectileMaterial=new THREE.MeshStandardMaterial({color:'#b7efff',roughness:0.18,metalness:0.05,transparent:true,opacity:0.9,emissive:'#8bdcff',emissiveIntensity:0.35});
+  iceProjectileGeometry=new THREE.OctahedronGeometry(0.34,0);
+  iceProjectileMaterial=new THREE.MeshStandardMaterial({color:'#d9f7ff',roughness:0.14,metalness:0.04,transparent:true,opacity:0.92,emissive:'#b0ecff',emissiveIntensity:0.42});
   iceProjectileTrailGeometry=new THREE.TorusGeometry(0.55,0.05,10,30);
   iceProjectileTrailMaterial=new THREE.MeshBasicMaterial({color:'#d7f5ff',transparent:true,opacity:0.72,depthWrite:false});
 
@@ -5049,30 +5068,137 @@ function ensureIceSpecialVisualAssets(){
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
   iceFieldPointsGeometry=geo;
   iceFieldPointsMaterial=new THREE.PointsMaterial({size:0.09,transparent:true,opacity:0.96,depthWrite:false,vertexColors:true,sizeAttenuation:true});
+
+  bombWingGeometry=makeSharedShapeGeometry([
+    [-0.72,0.02],[-0.34,0.42],[0.08,0.32],[0.56,0.82],[0.48,0.28],[0.84,0.12],[0.42,-0.08],[0.76,-0.42],[0.16,-0.3],[-0.18,-0.62],[-0.3,-0.18],[-0.72,0.02]
+  ],0.035);
+  bombEyeGeometry=makeSharedShapeGeometry([
+    [-0.34,0.02],[-0.02,0.18],[0.28,0.1],[0.18,-0.12],[-0.12,-0.18],[-0.34,0.02]
+  ],0.02);
+  bombTongueGeometry=makeSharedShapeGeometry([
+    [-0.16,0.2],[0.16,0.2],[0.16,-0.24],[0,-0.34],[-0.16,-0.24],[-0.16,0.2]
+  ],0.02);
+  bombBodyMaterial=new THREE.MeshStandardMaterial({color:'#ff68b7',roughness:0.62,metalness:0.04,emissive:'#ff79bf',emissiveIntensity:0.24});
+  bombWingMaterial=new THREE.MeshStandardMaterial({color:'#fffdf8',roughness:0.88,metalness:0.02});
+  bombFaceMaterial=new THREE.MeshStandardMaterial({color:'#111111',roughness:0.9,metalness:0});
+  bombTongueMaterial=new THREE.MeshStandardMaterial({color:'#ff8ec7',roughness:0.72,metalness:0.02,emissive:'#ffb1da',emissiveIntensity:0.12});
+}
+
+function createIceCrystalGroup(scale=1){
+  ensureIceSpecialVisualAssets();
+  const root=new THREE.Group();
+  const shardDefs=[
+    {rotZ:0,len:1.4,rad:0.085},
+    {rotZ:Math.PI/3,len:1.08,rad:0.072},
+    {rotZ:-Math.PI/3,len:1.08,rad:0.072},
+    {rotZ:Math.PI/2,len:0.94,rad:0.062},
+  ];
+  for(const def of shardDefs){
+    const shard=new THREE.Mesh(
+      new THREE.CylinderGeometry(0,def.rad,def.len,4,1,false),
+      iceProjectileMaterial
+    );
+    shard.userData.sharedSpecialVisual=true;
+    shard.rotation.z=def.rotZ;
+    shard.rotation.x=Math.PI*0.5;
+    shard.position.set(Math.cos(def.rotZ)*0.02,0,Math.sin(def.rotZ)*0.02);
+    root.add(shard);
+
+    const backShard=new THREE.Mesh(
+      new THREE.CylinderGeometry(0,def.rad*0.78,def.len*0.82,4,1,false),
+      iceProjectileMaterial
+    );
+    backShard.userData.sharedSpecialVisual=true;
+    backShard.rotation.z=def.rotZ+Math.PI;
+    backShard.rotation.x=Math.PI*0.5;
+    backShard.position.set(-Math.cos(def.rotZ)*0.02,0,-Math.sin(def.rotZ)*0.02);
+    root.add(backShard);
+  }
+  const core=new THREE.Mesh(new THREE.OctahedronGeometry(0.16,0),iceProjectileMaterial);
+  core.userData.sharedSpecialVisual=true;
+  root.add(core);
+  root.scale.setScalar(scale);
+  return root;
+}
+
+function createBombSketchGroup(scale=1){
+  ensureIceSpecialVisualAssets();
+  const root=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.42,22,18),bombBodyMaterial);
+  body.userData.sharedSpecialVisual=true;
+  root.add(body);
+  const fuseStem=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.16,8),bombFaceMaterial);
+  fuseStem.userData.sharedSpecialVisual=true;
+  fuseStem.position.y=0.48;
+  root.add(fuseStem);
+  const fuseCap=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.14,0.16),bombFaceMaterial);
+  fuseCap.userData.sharedSpecialVisual=true;
+  fuseCap.position.y=0.62;
+  root.add(fuseCap);
+  const leftWing=new THREE.Mesh(bombWingGeometry,bombWingMaterial);
+  leftWing.userData.sharedSpecialVisual=true;
+  leftWing.position.set(-0.72,0.02,-0.06);
+  leftWing.rotation.y=Math.PI*0.12;
+  leftWing.rotation.z=Math.PI*0.08;
+  root.add(leftWing);
+  const rightWing=leftWing.clone();
+  rightWing.userData={sharedSpecialVisual:true};
+  rightWing.position.x=0.72;
+  rightWing.rotation.y=-Math.PI*0.12;
+  rightWing.rotation.z=-Math.PI*0.08;
+  rightWing.scale.x=-1;
+  root.add(rightWing);
+  const leftEye=new THREE.Mesh(bombEyeGeometry,bombFaceMaterial);
+  leftEye.userData.sharedSpecialVisual=true;
+  leftEye.position.set(-0.14,0.08,0.37);
+  leftEye.rotation.y=-0.08;
+  leftEye.rotation.z=0.18;
+  root.add(leftEye);
+  const rightEye=leftEye.clone();
+  rightEye.userData={sharedSpecialVisual:true};
+  rightEye.position.x=0.14;
+  rightEye.rotation.y=0.08;
+  rightEye.rotation.z=-0.18;
+  rightEye.scale.x=-1;
+  root.add(rightEye);
+  const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.04,0.04),bombFaceMaterial);
+  mouth.userData.sharedSpecialVisual=true;
+  mouth.position.set(0,-0.12,0.4);
+  root.add(mouth);
+  const toothLeft=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.12,0.035),bombFaceMaterial);
+  toothLeft.userData.sharedSpecialVisual=true;
+  toothLeft.position.set(-0.04,-0.2,0.4);
+  root.add(toothLeft);
+  const toothRight=toothLeft.clone();
+  toothRight.userData={sharedSpecialVisual:true};
+  toothRight.position.x=0.04;
+  root.add(toothRight);
+  const tongue=new THREE.Mesh(bombTongueGeometry,bombTongueMaterial);
+  tongue.userData.sharedSpecialVisual=true;
+  tongue.position.set(0,-0.24,0.38);
+  root.add(tongue);
+  root.scale.setScalar(scale);
+  return root;
 }
 
 function createSpecialProjectileGroup(kind){
   if(kind==='ice'){
     ensureIceSpecialVisualAssets();
     const group=new THREE.Group();
-    const block=new THREE.Mesh(iceProjectileGeometry,iceProjectileMaterial);
-    block.userData.sharedSpecialVisual=true;
-    block.rotation.y=Math.PI/6;
+    const crystal=createIceCrystalGroup(0.56);
     const trail=new THREE.Mesh(iceProjectileTrailGeometry,iceProjectileTrailMaterial);
     trail.userData.sharedSpecialVisual=true;
     trail.rotation.x=Math.PI*0.5;
     trail.position.y=-0.02;
-    group.add(block,trail);
+    group.add(crystal,trail);
     return group;
   }
-  const group=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),new THREE.MeshStandardMaterial({color:'#1f1f2e',metalness:0.35,roughness:0.6,emissive:'#6a2020',emissiveIntensity:0.4}));
-  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.18,8),new THREE.MeshBasicMaterial({color:'#ffd36b'}));
-  fuse.position.y=0.22;
-  const aura=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.03,10,32),new THREE.MeshBasicMaterial({color:'#ffb35c',transparent:true,opacity:0.45,depthWrite:false}));
+  const group=createBombSketchGroup(0.7);
+  const aura=new THREE.Mesh(new THREE.TorusGeometry(0.56,0.03,10,32),new THREE.MeshBasicMaterial({color:'#ffb35c',transparent:true,opacity:0.45,depthWrite:false}));
+  aura.userData.sharedSpecialVisual=true;
   aura.rotation.x=Math.PI*0.5;
   aura.position.y=0.04;
-  group.add(body,fuse,aura);
+  group.add(aura);
   return group;
 }
 function launchThrownProjectile(kind,throwData){
@@ -9233,7 +9359,7 @@ function updateCam(){
       endCameraOrbitAngle+=END_CAMERA_AUTO_RATE/60;
     }
     const b=getPlayableBounds();
-    const radius=Math.max(24,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*1.24)*endCameraZoom;
+    const radius=Math.max(48,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*2.48)*endCameraZoom;
     const tx=b.centerX;
     const tz=b.centerZ;
     const ty=(playableLayer?.y||0)+1.2;
@@ -9923,7 +10049,7 @@ let endPinchStartZoom=1;
 // Auto-orbit until the player drags / zooms the end-screen camera —
 // then we freeze the angle wherever they left it.
 let endCameraAutoRotate=true;
-const END_CAMERA_AUTO_RATE=0.08; // radians / second
+const END_CAMERA_AUTO_RATE=0.16; // radians / second
 function getTouchDistance(t0,t1){
   const dx=t1.clientX-t0.clientX;
   const dy=t1.clientY-t0.clientY;
