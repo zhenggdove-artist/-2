@@ -6483,6 +6483,13 @@ const UI_LAYOUT_COMPARE_PAIRS={
   'loadout-toggle-frame':'loadout-toggle',
   'loadout-toggle':'loadout-toggle-frame',
 };
+const UI_LAYOUT_FRAME_DRIVEN_BUTTONS={
+  'clean-btn':'clean-btn-frame',
+  'special-btn':'special-btn-frame',
+  'jump-btn':'jump-btn-frame',
+  'attack-btn':'attack-btn-frame',
+  'loadout-toggle':'loadout-toggle-frame',
+};
 const UI_LAYOUT_OBJECT_PANEL_COLLAPSED_HEIGHT=66;
 const MOBILE_LAYOUT_REFERENCE_WIDTH=430;
 const MOBILE_LAYOUT_REFERENCE_HEIGHT=932;
@@ -6781,7 +6788,28 @@ function currentUILayoutMetrics(def){
 function getUILayoutDef(targetId){
   return UI_LAYOUT_TARGET_DEFS.find(def=>def.id===targetId)||null;
 }
+function getUILayoutResolvedMetrics(def,metrics){
+  if(!def||!metrics) return metrics;
+  const frameId=UI_LAYOUT_FRAME_DRIVEN_BUTTONS[def.id];
+  if(!frameId) return metrics;
+  const frameDef=getUILayoutDef(frameId);
+  const frameMetrics=frameDef ? (ensureUILayoutMetrics(frameDef)||currentUILayoutMetrics(frameDef)) : null;
+  if(!frameDef||!frameMetrics) return metrics;
+  const frameSize=resolveUILayoutSize(frameDef,frameMetrics);
+  const next={...metrics};
+  next.x=frameMetrics.x;
+  next.y=frameMetrics.y;
+  next.w=+(frameSize.width*(def.baseW/frameDef.baseW)).toFixed(2);
+  next.h=+(frameSize.height*(def.baseH/frameDef.baseH)).toFixed(2);
+  if(isMobileUILayoutBucket()){
+    const bounds=getUILayoutViewportBounds();
+    next.wp=+((next.w/bounds.width)*100).toFixed(4);
+    next.hp=+((next.h/bounds.height)*100).toFixed(4);
+  }
+  return next;
+}
 function getUILayoutBoxRect(def,metrics){
+  metrics=getUILayoutResolvedMetrics(def,metrics);
   const bounds=getUILayoutViewportBounds();
   const {width,height}=resolveUILayoutSize(def,metrics);
   if(def.anchor==='topLeft'){
@@ -6942,6 +6970,7 @@ function ensureUILayoutMetrics(def){
 function applyUILayoutMetrics(def,metrics){
   const el=document.getElementById(def.id);
   if(!el||!metrics) return;
+  metrics=getUILayoutResolvedMetrics(def,metrics);
   if(metrics.hidden){
     el.style.setProperty('display','none','important');
     return;
@@ -7830,6 +7859,7 @@ function setShopOpen(open){
   if(open) setLoadoutExpanded(false);
   shopPanel.classList.toggle('show',!!open);
   document.body.classList.toggle('shop-open',!!open);
+  if(open) renderShopState();
 }
 
 const mobileLoadoutQuery=window.matchMedia('(max-width:640px)');
@@ -7998,12 +8028,7 @@ function applyCheatInventory(){
 }
 
 function syncBurstShopVisibility(){
-  const supported=new Set();
-  for(const [id,btn] of Object.entries(burstBuyButtons)){
-    const card=btn?.closest('.shop-card');
-    if(card && !supported.has(`buy-burst-${id}-btn`)) card.remove();
-  }
-  document.querySelector('#shop-panel .burst-section')?.remove?.();
+  return;
 }
 
 function unlockBurstEffectsByKills(){
