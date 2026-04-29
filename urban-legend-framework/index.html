@@ -183,6 +183,11 @@
   .ui-layout-object-panel-control-label{color:#fff7c9;font:11px/1.2 monospace;letter-spacing:0.04em;white-space:nowrap}
   .ui-layout-object-panel-control-value{margin-left:auto;color:#7cf8ff;font:11px/1.2 monospace;letter-spacing:0.04em}
   .ui-layout-object-panel-control input[type="range"]{width:100%;accent-color:#fff06a}
+  .scene-object-editor-fields{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 8px;align-items:center}
+  .scene-object-editor-fields label{color:#fff7c9;font:10px/1.2 monospace;letter-spacing:0.04em}
+  .scene-object-editor-fields input{width:100%;padding:5px 7px;border:none;border-radius:8px;background:rgba(255,255,255,0.08);color:#fff7c9;font:11px/1.2 monospace;box-shadow:0 0 0 1px rgba(255,235,120,0.1) inset}
+  .scene-object-editor-fields input:focus{outline:none;box-shadow:0 0 0 1px rgba(124,248,255,0.34) inset}
+  .scene-object-editor-hint{color:#f8efc0;font:10px/1.45 monospace;opacity:0.82}
   .ui-layout-object-panel-handle{flex:0 0 auto;width:18px;height:18px;border-radius:999px;background:#fff06a;
     box-shadow:0 0 0 2px #2a1738 inset,0 2px 8px rgba(0,0,0,0.45)}
   .ui-layout-object-panel-toggle{min-width:36px;padding:7px 12px!important}
@@ -2226,6 +2231,7 @@ function buildPlayableFootprint(samples,step){
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
+const SCENE_OBJECT_STORAGE_KEY='urbanLegendSceneObjectsV1';
 const RIVER_REGION_DEFAULTS=[
   {
     "minX": -13.948147487323128,
@@ -2250,6 +2256,7 @@ const RIVER_REGION_DEFAULTS=[
     "axis": "x"
   }
 ];
+const SCENE_OBJECT_DEFAULTS=[];
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
@@ -2438,12 +2445,21 @@ async function detectPlayableLayer(progressFn){
 // ===== River (auto-detected low trench) =====
 let RIVER=null; // primary river region for legacy callers
 let RIVERS=[]; // [{minX,maxX,minZ,maxZ,surfaceY,floorY,centerX,centerZ,axis:'x'|'z'}]
+let sceneObjects=[];
 const waterMeshes=[];
 const riverEditorState={active:false,regions:[],selectedIndex:-1,drag:null,dirty:false,group:null};
+const sceneObjectEditorState={active:false,objects:[],selectedIndex:-1,drag:null,dirty:false,group:null,clipboard:null,orbitAngle:0,pitch:0.98,zoom:1};
 const riverEditorRaycaster=new THREE.Raycaster();
 const riverEditorPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 const riverEditorPointerNDC=new THREE.Vector2();
 const riverEditorHitPoint=new THREE.Vector3();
+const sceneObjectRaycaster=new THREE.Raycaster();
+const sceneObjectPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+const sceneObjectPointerNDC=new THREE.Vector2();
+const sceneObjectHitPoint=new THREE.Vector3();
+const sceneObjectEntries=new Map();
+const sceneObjectUnitPlaneGeometry=new THREE.PlaneGeometry(1,1);
+let sceneObjectRootGroup=null;
 
 function normalizeRiverRegion(region){
   const minX=Math.min(region?.minX??0,region?.maxX??0);
@@ -2489,6 +2505,183 @@ function saveManualRiverRegions(regions){
     return [];
   }
   localStorage.setItem(RIVER_MANUAL_STORAGE_KEY,JSON.stringify(clean));
+  return clean;
+}
+
+function makeSceneObjectId(){
+  return `scene-object-${Math.random().toString(36).slice(2,10)}`;
+}
+
+function normalizeSceneObject(obj,index=0){
+  const width=Math.max(1,Number(obj?.width)||12);
+  const height=Math.max(1,Number(obj?.height)||10);
+  const x=Number.isFinite(Number(obj?.x)) ? Number(obj.x) : 0;
+  const y=Number.isFinite(Number(obj?.y)) ? Number(obj.y) : ((playableLayer?.y??0)+5);
+  const z=Number.isFinite(Number(obj?.z)) ? Number(obj.z) : 0;
+  const rotY=Number.isFinite(Number(obj?.rotY)) ? Number(obj.rotY) : 0;
+  const src=String(obj?.src||'background/movie.mp4');
+  return {
+    id:String(obj?.id||makeSceneObjectId()),
+    type:'video-wall',
+    src,
+    x:+x.toFixed(4),
+    y:+y.toFixed(4),
+    z:+z.toFixed(4),
+    width:+width.toFixed(4),
+    height:+height.toFixed(4),
+    rotY:+rotY.toFixed(4),
+    order:Number.isFinite(Number(obj?.order)) ? Number(obj.order) : index,
+  };
+}
+
+function sanitizeSceneObjects(objects){
+  if(!Array.isArray(objects)) return [];
+  const used=new Set();
+  return objects.map((obj,index)=>normalizeSceneObject(obj,index)).filter(obj=>{
+    if(used.has(obj.id)) obj.id=makeSceneObjectId();
+    used.add(obj.id);
+    return !!obj.src;
+  });
+}
+
+function seedDefaultSceneObjects(){
+  const bounds=getRiverWorldBounds();
+  const spanX=Math.max(12,bounds.maxX-bounds.minX+8);
+  const spanZ=Math.max(12,bounds.maxZ-bounds.minZ+8);
+  const centerX=bounds.centerX;
+  const centerZ=bounds.centerZ;
+  const baseY=(playableLayer?.y??0)+7.6;
+  const wallOffset=4.4;
+  const tall=Math.max(12,Math.min(18,Math.max(spanX,spanZ)*0.42));
+  return sanitizeSceneObjects([
+    {id:'scene-video-north',src:'background/movie.mp4',x:centerX,y:baseY,z:bounds.minZ-wallOffset,width:spanX,height:tall,rotY:0},
+    {id:'scene-video-south',src:'background/movie.mp4',x:centerX,y:baseY,z:bounds.maxZ+wallOffset,width:spanX,height:tall,rotY:Math.PI},
+    {id:'scene-video-west',src:'background/movie.mp4',x:bounds.minX-wallOffset,y:baseY,z:centerZ,width:spanZ,height:tall,rotY:Math.PI*0.5},
+    {id:'scene-video-east',src:'background/movie.mp4',x:bounds.maxX+wallOffset,y:baseY,z:centerZ,width:spanZ,height:tall,rotY:-Math.PI*0.5},
+  ]);
+}
+
+function getSceneObjectDefaults(){
+  const base=sanitizeSceneObjects(SCENE_OBJECT_DEFAULTS);
+  return base.length ? base : seedDefaultSceneObjects();
+}
+
+function loadManualSceneObjects(){
+  try{
+    const raw=localStorage.getItem(SCENE_OBJECT_STORAGE_KEY);
+    if(!raw) return [];
+    return sanitizeSceneObjects(JSON.parse(raw));
+  }catch{
+    return [];
+  }
+}
+
+function saveManualSceneObjects(objects){
+  const clean=sanitizeSceneObjects(objects);
+  if(!clean.length){
+    localStorage.removeItem(SCENE_OBJECT_STORAGE_KEY);
+    return [];
+  }
+  localStorage.setItem(SCENE_OBJECT_STORAGE_KEY,JSON.stringify(clean));
+  return clean;
+}
+
+function ensureSceneObjectRoot(){
+  if(sceneObjectRootGroup) return sceneObjectRootGroup;
+  sceneObjectRootGroup=new THREE.Group();
+  sceneObjectRootGroup.name='scene-object-root';
+  scene.add(sceneObjectRootGroup);
+  return sceneObjectRootGroup;
+}
+
+function disposeSceneObjectEntry(entry){
+  if(!entry) return;
+  entry.group?.removeFromParent?.();
+  try{
+    entry.video?.pause?.();
+    entry.video?.removeAttribute?.('src');
+    entry.video?.load?.();
+  }catch{}
+  entry.texture?.dispose?.();
+  entry.material?.dispose?.();
+}
+
+function createSceneObjectVideoElement(src){
+  const video=document.createElement('video');
+  video.src=encodeURI(src);
+  video.loop=true;
+  video.muted=true;
+  video.autoplay=true;
+  video.playsInline=true;
+  video.preload='auto';
+  video.crossOrigin='anonymous';
+  video.setAttribute('playsinline','');
+  video.setAttribute('webkit-playsinline','');
+  video.load();
+  const playPromise=video.play();
+  if(playPromise?.catch) playPromise.catch(()=>{});
+  return video;
+}
+
+function buildSceneObjectEntry(def){
+  const root=ensureSceneObjectRoot();
+  const video=createSceneObjectVideoElement(def.src);
+  const texture=new THREE.VideoTexture(video);
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.minFilter=THREE.LinearFilter;
+  texture.magFilter=THREE.LinearFilter;
+  texture.generateMipmaps=false;
+  const material=new THREE.MeshBasicMaterial({
+    map:texture,
+    side:THREE.DoubleSide,
+    transparent:true,
+    opacity:0.96,
+    toneMapped:false,
+  });
+  const mesh=new THREE.Mesh(sceneObjectUnitPlaneGeometry,material);
+  mesh.renderOrder=6;
+  mesh.userData={sceneObjectPick:true,sceneObjectId:def.id};
+  const group=new THREE.Group();
+  group.add(mesh);
+  root.add(group);
+  const entry={id:def.id,group,mesh,material,texture,video};
+  sceneObjectEntries.set(def.id,entry);
+  syncSceneObjectEntry(entry,def);
+  return entry;
+}
+
+function syncSceneObjectEntry(entry,def){
+  if(!entry||!def) return;
+  entry.group.position.set(def.x,def.y,def.z);
+  entry.group.rotation.set(0,def.rotY,0);
+  entry.mesh.scale.set(def.width,def.height,1);
+  entry.mesh.userData.sceneObjectId=def.id;
+}
+
+function resumeSceneObjectVideos(){
+  for(const entry of sceneObjectEntries.values()){
+    const p=entry.video?.play?.();
+    if(p?.catch) p.catch(()=>{});
+  }
+}
+
+function applySceneObjects(objects){
+  const clean=sanitizeSceneObjects(objects);
+  sceneObjects=clean;
+  const root=ensureSceneObjectRoot();
+  const seen=new Set();
+  for(const def of clean){
+    seen.add(def.id);
+    const entry=sceneObjectEntries.get(def.id) || buildSceneObjectEntry(def);
+    syncSceneObjectEntry(entry,def);
+  }
+  for(const [id,entry] of [...sceneObjectEntries.entries()]){
+    if(seen.has(id)) continue;
+    disposeSceneObjectEntry(entry);
+    sceneObjectEntries.delete(id);
+  }
+  root.visible=true;
+  resumeSceneObjectVideos();
   return clean;
 }
 
@@ -3427,6 +3620,7 @@ function refreshRiverEditorButtonState(){
 function toggleRiverEditor(force){
   const next=force===undefined ? !riverEditorState.active : !!force;
   if(next){
+    toggleSceneObjectEditor(false);
     const manual=loadManualRiverRegions();
     riverEditorState.regions=sanitizeRiverRegions(manual.length?manual:RIVERS);
     if(!riverEditorState.regions.length) riverEditorState.regions=[seedDefaultRiverRegion()];
@@ -3567,6 +3761,270 @@ function handleRiverEditorCanvasPointerUp(e){
   riverEditorState.drag=null;
   canvas.releasePointerCapture?.(e.pointerId);
   refreshRiverEditorButtonState();
+  return true;
+}
+
+function ensureSceneObjectEditorGroup(){
+  if(sceneObjectEditorState.group) return sceneObjectEditorState.group;
+  const group=new THREE.Group();
+  group.name='scene-object-editor-group';
+  group.visible=false;
+  scene.add(group);
+  sceneObjectEditorState.group=group;
+  return group;
+}
+
+function clearSceneObjectEditorVisuals(){
+  const group=sceneObjectEditorState.group;
+  if(!group) return;
+  while(group.children.length){
+    const child=group.children[group.children.length-1];
+    group.remove(child);
+    child.traverse?.(o=>{
+      if(o.isMesh){
+        o.geometry?.dispose?.();
+        const mats=Array.isArray(o.material)?o.material:[o.material];
+        mats.forEach(m=>m?.dispose?.());
+      }else if(o.isLineSegments){
+        o.geometry?.dispose?.();
+        o.material?.dispose?.();
+      }
+    });
+  }
+}
+
+function refreshSceneObjectEditorVisuals(){
+  const group=ensureSceneObjectEditorGroup();
+  clearSceneObjectEditorVisuals();
+  group.visible=sceneObjectEditorState.active;
+  if(!sceneObjectEditorState.active) return;
+  sceneObjectEditorState.objects=sanitizeSceneObjects(sceneObjectEditorState.objects);
+  const groundY=(playableLayer?.y??0)+0.06;
+  sceneObjectEditorState.objects.forEach((obj,index)=>{
+    const selected=index===sceneObjectEditorState.selectedIndex;
+    const wrap=new THREE.Group();
+    const footprintDepth=0.9;
+    const body=new THREE.Mesh(
+      new THREE.BoxGeometry(obj.width,0.12,footprintDepth),
+      new THREE.MeshBasicMaterial({
+        color:selected?'#fff06a':'#7cf8ff',
+        transparent:true,
+        opacity:selected?0.45:0.22,
+        depthWrite:false,
+      })
+    );
+    body.position.set(obj.x,groundY,obj.z);
+    body.rotation.y=obj.rotY;
+    body.renderOrder=18;
+    body.userData={sceneObjectEditPick:true,sceneObjectEditType:'body',objectIndex:index};
+    wrap.add(body);
+    const edge=new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(obj.width,0.12,footprintDepth)),
+      new THREE.LineBasicMaterial({color:selected?'#fffef8':'#d7f6ff',transparent:true,opacity:0.95})
+    );
+    edge.position.copy(body.position);
+    edge.rotation.y=obj.rotY;
+    edge.renderOrder=19;
+    wrap.add(edge);
+    group.add(wrap);
+  });
+}
+
+function refreshSceneObjectEditorButtonState(){
+  const toolbar=uiLayoutState.editor?.querySelector('.ui-layout-toolbar');
+  if(!toolbar) return;
+  const editBtn=toolbar.querySelector('[data-action="scene-edit"]');
+  const addBtn=toolbar.querySelector('[data-action="scene-add"]');
+  const delBtn=toolbar.querySelector('[data-action="scene-del"]');
+  const saveBtn=toolbar.querySelector('[data-action="scene-save"]');
+  editBtn?.classList.toggle('is-active',sceneObjectEditorState.active);
+  if(addBtn) addBtn.disabled=!uiLayoutState.active;
+  if(delBtn) delBtn.disabled=!uiLayoutState.active||sceneObjectEditorState.selectedIndex<0;
+  if(saveBtn) saveBtn.disabled=!uiLayoutState.active||!sceneObjectEditorState.objects.length;
+}
+
+function toggleSceneObjectEditor(force){
+  const next=force===undefined ? !sceneObjectEditorState.active : !!force;
+  if(next){
+    toggleRiverEditor(false);
+    const manual=loadManualSceneObjects();
+    sceneObjectEditorState.objects=sanitizeSceneObjects(manual.length?manual:sceneObjects.length?sceneObjects:getSceneObjectDefaults());
+    if(!sceneObjectEditorState.objects.length) sceneObjectEditorState.objects=seedDefaultSceneObjects();
+    sceneObjectEditorState.selectedIndex=Math.min(Math.max(0,sceneObjectEditorState.selectedIndex),sceneObjectEditorState.objects.length-1);
+    sceneObjectEditorState.active=true;
+    sceneObjectEditorState.dirty=false;
+    sceneObjectEditorState.orbitAngle=0;
+    sceneObjectEditorState.pitch=0.98;
+    sceneObjectEditorState.zoom=1;
+    applySceneObjects(sceneObjectEditorState.objects);
+    refreshSceneObjectEditorVisuals();
+    refreshSceneObjectAdminControl();
+    showUILayoutToast('Scene object edit enabled');
+  }else{
+    sceneObjectEditorState.active=false;
+    sceneObjectEditorState.drag=null;
+    refreshSceneObjectEditorVisuals();
+    refreshSceneObjectAdminControl();
+    showUILayoutToast('Scene object edit disabled');
+  }
+  refreshSceneObjectEditorButtonState();
+}
+
+function addSceneObjectEditorObject(){
+  if(!sceneObjectEditorState.active) toggleSceneObjectEditor(true);
+  const base=sceneObjectEditorState.objects[sceneObjectEditorState.selectedIndex]||seedDefaultSceneObjects()[0];
+  const next=normalizeSceneObject({
+    ...base,
+    id:makeSceneObjectId(),
+    x:base.x+1.2,
+    z:base.z+1.2,
+  },sceneObjectEditorState.objects.length);
+  sceneObjectEditorState.objects.push(next);
+  sceneObjectEditorState.selectedIndex=sceneObjectEditorState.objects.length-1;
+  sceneObjectEditorState.dirty=true;
+  applySceneObjects(sceneObjectEditorState.objects);
+  refreshSceneObjectEditorVisuals();
+  refreshSceneObjectEditorButtonState();
+  refreshSceneObjectAdminControl();
+}
+
+function deleteSceneObjectEditorObject(){
+  if(sceneObjectEditorState.selectedIndex<0) return false;
+  sceneObjectEditorState.objects.splice(sceneObjectEditorState.selectedIndex,1);
+  sceneObjectEditorState.selectedIndex=Math.min(sceneObjectEditorState.selectedIndex,sceneObjectEditorState.objects.length-1);
+  sceneObjectEditorState.dirty=true;
+  applySceneObjects(sceneObjectEditorState.objects);
+  refreshSceneObjectEditorVisuals();
+  refreshSceneObjectEditorButtonState();
+  refreshSceneObjectAdminControl();
+  return true;
+}
+
+function saveSceneObjectEditorObjects(){
+  const clean=saveManualSceneObjects(sceneObjectEditorState.objects);
+  sceneObjectEditorState.objects=clean;
+  sceneObjectEditorState.dirty=false;
+  applySceneObjects(clean);
+  refreshSceneObjectEditorVisuals();
+  refreshSceneObjectEditorButtonState();
+  refreshSceneObjectAdminControl();
+  showUILayoutToast('Scene objects saved');
+}
+
+function updateSceneObjectEditorObject(index,patch){
+  const current=sceneObjectEditorState.objects[index];
+  if(!current) return false;
+  const next=normalizeSceneObject({...current,...patch},index);
+  sceneObjectEditorState.objects[index]=next;
+  sceneObjectEditorState.dirty=true;
+  applySceneObjects(sceneObjectEditorState.objects);
+  refreshSceneObjectEditorVisuals();
+  refreshSceneObjectAdminControl();
+  return true;
+}
+
+function copySelectedSceneObject(){
+  const current=sceneObjectEditorState.objects[sceneObjectEditorState.selectedIndex];
+  if(!current) return false;
+  sceneObjectEditorState.clipboard={...current,id:undefined};
+  showUILayoutToast('Scene object copied');
+  return true;
+}
+
+function pasteSelectedSceneObject(){
+  if(!sceneObjectEditorState.clipboard) return false;
+  if(!sceneObjectEditorState.active) toggleSceneObjectEditor(true);
+  const base=sceneObjectEditorState.clipboard;
+  const next=normalizeSceneObject({
+    ...base,
+    id:makeSceneObjectId(),
+    x:(Number(base.x)||0)+1.4,
+    z:(Number(base.z)||0)+1.4,
+  },sceneObjectEditorState.objects.length);
+  sceneObjectEditorState.objects.push(next);
+  sceneObjectEditorState.selectedIndex=sceneObjectEditorState.objects.length-1;
+  sceneObjectEditorState.dirty=true;
+  applySceneObjects(sceneObjectEditorState.objects);
+  refreshSceneObjectEditorVisuals();
+  refreshSceneObjectEditorButtonState();
+  refreshSceneObjectAdminControl();
+  showUILayoutToast('Scene object pasted');
+  return true;
+}
+
+function getSceneObjectEditorPointerWorld(clientX,clientY,out=new THREE.Vector3()){
+  const rect=canvas.getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return null;
+  sceneObjectPointerNDC.set(
+    ((clientX-rect.left)/rect.width)*2-1,
+    -(((clientY-rect.top)/rect.height)*2-1)
+  );
+  sceneObjectRaycaster.setFromCamera(sceneObjectPointerNDC,camera);
+  sceneObjectPlane.constant=-(playableLayer?.y??0);
+  return sceneObjectRaycaster.ray.intersectPlane(sceneObjectPlane,out) ? out : null;
+}
+
+function pickSceneObjectEditorObject(clientX,clientY){
+  if(!sceneObjectEditorState.group||!sceneObjectEditorState.active) return null;
+  const rect=canvas.getBoundingClientRect();
+  sceneObjectPointerNDC.set(
+    ((clientX-rect.left)/rect.width)*2-1,
+    -(((clientY-rect.top)/rect.height)*2-1)
+  );
+  sceneObjectRaycaster.setFromCamera(sceneObjectPointerNDC,camera);
+  const picks=[];
+  sceneObjectEditorState.group.traverse(obj=>{ if(obj.visible&&obj.userData?.sceneObjectEditPick) picks.push(obj); });
+  const hit=sceneObjectRaycaster.intersectObjects(picks,false)[0];
+  return hit?.object||null;
+}
+
+function handleSceneObjectEditorCanvasPointerDown(e){
+  if(!sceneObjectEditorState.active||e.target!==canvas) return false;
+  const picked=pickSceneObjectEditorObject(e.clientX,e.clientY);
+  if(!picked){
+    sceneObjectEditorState.selectedIndex=-1;
+    refreshSceneObjectEditorVisuals();
+    refreshSceneObjectEditorButtonState();
+    refreshSceneObjectAdminControl();
+    return false;
+  }
+  const point=getSceneObjectEditorPointerWorld(e.clientX,e.clientY,sceneObjectHitPoint);
+  if(!point) return true;
+  const index=picked.userData?.objectIndex;
+  if(index<0) return false;
+  sceneObjectEditorState.selectedIndex=index;
+  sceneObjectEditorState.drag={
+    pointerId:e.pointerId,
+    startPoint:point.clone(),
+    startObject:{...sceneObjectEditorState.objects[index]},
+    objectIndex:index,
+  };
+  canvas.setPointerCapture?.(e.pointerId);
+  refreshSceneObjectEditorVisuals();
+  refreshSceneObjectEditorButtonState();
+  refreshSceneObjectAdminControl();
+  return true;
+}
+
+function handleSceneObjectEditorCanvasPointerMove(e){
+  const drag=sceneObjectEditorState.drag;
+  if(!sceneObjectEditorState.active||!drag||drag.pointerId!==e.pointerId) return false;
+  const point=getSceneObjectEditorPointerWorld(e.clientX,e.clientY,sceneObjectHitPoint);
+  if(!point) return true;
+  const dx=point.x-drag.startPoint.x;
+  const dz=point.z-drag.startPoint.z;
+  updateSceneObjectEditorObject(drag.objectIndex,{
+    x:drag.startObject.x+dx,
+    z:drag.startObject.z+dz,
+  });
+  return true;
+}
+
+function handleSceneObjectEditorCanvasPointerUp(e){
+  if(!sceneObjectEditorState.drag||sceneObjectEditorState.drag.pointerId!==e.pointerId) return false;
+  sceneObjectEditorState.drag=null;
+  canvas.releasePointerCapture?.(e.pointerId);
+  refreshSceneObjectEditorButtonState();
   return true;
 }
 
@@ -7808,7 +8266,9 @@ function formatUILayoutExport(){
   const uiBlock=`const UI_LAYOUT_DEFAULTS=${JSON.stringify(sanitizeUILayoutConfig(uiLayoutState.config),null,2)};`;
   const riverSource=riverEditorState.regions?.length ? riverEditorState.regions : (loadManualRiverRegions().length ? loadManualRiverRegions() : RIVERS);
   const riverBlock=`const RIVER_REGION_DEFAULTS=${JSON.stringify(sanitizeRiverRegions(riverSource),null,2)};`;
-  return `${uiBlock}\n\n${riverBlock}`;
+  const sceneObjectSource=sceneObjectEditorState.objects?.length ? sceneObjectEditorState.objects : (loadManualSceneObjects().length ? loadManualSceneObjects() : sceneObjects.length ? sceneObjects : getSceneObjectDefaults());
+  const sceneObjectBlock=`const SCENE_OBJECT_DEFAULTS=${JSON.stringify(sanitizeSceneObjects(sceneObjectSource),null,2)};`;
+  return `${uiBlock}\n\n${riverBlock}\n\n${sceneObjectBlock}`;
 }
 function showUILayoutToast(msg){
   let el=document.querySelector('.ui-layout-toast');
@@ -8090,9 +8550,9 @@ function showUILayoutExportModal(){
   modal.className='ui-layout-modal';
   const code=formatUILayoutExport();
   modal.innerHTML=`<div class="ui-layout-modal-card">
-    <h3>Export UI + Rivers</h3>
-    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code> and <code>const RIVER_REGION_DEFAULTS=...</code> blocks in <code>urban-legend-framework/index.html</code>.</p>
-    <p>After replacing them, save the file and refresh the game. Desktop/mobile UI and river regions are both included in this export.</p>
+    <h3>Export UI + Rivers + Scene Objects</h3>
+    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code>, <code>const RIVER_REGION_DEFAULTS=...</code>, and <code>const SCENE_OBJECT_DEFAULTS=...</code> blocks in <code>urban-legend-framework/index.html</code>.</p>
+    <p>After replacing them, save the file and refresh the game. Desktop/mobile UI, river regions, and 3D scene objects are all included in this export.</p>
     <textarea spellcheck="false"></textarea>
     <div class="ui-layout-modal-actions">
       <button type="button" data-action="copy">Copy Code</button>
@@ -8145,6 +8605,10 @@ function refreshUILayoutEditorToolbar(){
   const riverDelBtn=toolbar.querySelector('[data-action="river-del"]');
   const riverSaveBtn=toolbar.querySelector('[data-action="river-save"]');
   const riverAutoBtn=toolbar.querySelector('[data-action="river-auto"]');
+  const sceneEditBtn=toolbar.querySelector('[data-action="scene-edit"]');
+  const sceneAddBtn=toolbar.querySelector('[data-action="scene-add"]');
+  const sceneDelBtn=toolbar.querySelector('[data-action="scene-del"]');
+  const sceneSaveBtn=toolbar.querySelector('[data-action="scene-save"]');
   const exportBtn=toolbar.querySelector('[data-action="export"]');
   const closeBtn=toolbar.querySelector('[data-action="close"]');
   const isMobileEditor=mode==='mobile';
@@ -8159,6 +8623,10 @@ function refreshUILayoutEditorToolbar(){
   if(riverDelBtn) riverDelBtn.hidden=isMobileEditor;
   if(riverSaveBtn) riverSaveBtn.hidden=isMobileEditor;
   if(riverAutoBtn) riverAutoBtn.hidden=isMobileEditor;
+  if(sceneEditBtn) sceneEditBtn.hidden=isMobileEditor;
+  if(sceneAddBtn) sceneAddBtn.hidden=isMobileEditor;
+  if(sceneDelBtn) sceneDelBtn.hidden=isMobileEditor;
+  if(sceneSaveBtn) sceneSaveBtn.hidden=isMobileEditor;
   if(closeBtn) closeBtn.textContent=isMobileEditor?'SAVE':'Save & Exit';
   const pill=toolbar.querySelector('.ui-layout-mode-pill');
   if(pill){
@@ -8168,6 +8636,7 @@ function refreshUILayoutEditorToolbar(){
       : `Editing: ${mode} (auto)`;
   }
   refreshRiverEditorButtonState();
+  refreshSceneObjectEditorButtonState();
 }
 function refreshSceneGlowAdminControl(){
   const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
@@ -8176,6 +8645,25 @@ function refreshSceneGlowAdminControl(){
   const valueEl=panel.querySelector('[data-scene-glow-value]');
   if(slider) slider.value=String(sceneGlowStrength);
   if(valueEl) valueEl.textContent=`${Math.round(sceneGlowStrength*100)}%`;
+}
+function refreshSceneObjectAdminControl(){
+  const panel=uiLayoutState.editor?.querySelector('.ui-layout-object-panel');
+  if(!panel) return;
+  const wrap=panel.querySelector('[data-scene-object-control]');
+  if(!wrap) return;
+  wrap.hidden=!sceneObjectEditorState.active;
+  const countEl=panel.querySelector('[data-scene-object-count]');
+  if(countEl) countEl.textContent=`${sceneObjectEditorState.objects.length} objs`;
+  const current=sceneObjectEditorState.objects[sceneObjectEditorState.selectedIndex]||null;
+  const hint=panel.querySelector('[data-scene-object-hint]');
+  if(hint) hint.textContent=current ? `Selected: ${current.id}` : 'Select a video wall in the scene to edit it.';
+  const fields=['x','y','z','width','height','rotY'];
+  for(const field of fields){
+    const input=panel.querySelector(`[data-scene-object-field="${field}"]`);
+    if(!input) continue;
+    input.disabled=!current;
+    input.value=current ? String(current[field]??'') : '';
+  }
 }
 function toggleUILayoutLock(targetId){
   const def=getUILayoutDef(targetId);
@@ -8385,6 +8873,7 @@ function refreshUILayoutObjectPanel(){
   restoreUILayoutObjectPanelScroll();
   syncUILayoutSelectionStyles();
   refreshUILayoutGuides();
+  refreshSceneObjectAdminControl();
 }
 function setUILayoutSelection(targetId,options={}){
   const {additive=false}=options;
@@ -8411,7 +8900,7 @@ function buildUILayoutEditor(){
   editor.innerHTML='<div class="ui-layout-guide guide-v"></div><div class="ui-layout-guide guide-h"></div><div class="ui-layout-guide guide-v pair-v is-pair"></div><div class="ui-layout-guide guide-h pair-h is-pair"></div>';
   const toolbar=document.createElement('div');
   toolbar.className='ui-layout-toolbar';
-  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="river-edit">River Edit</button><button type="button" data-action="river-add">+ River</button><button type="button" data-action="river-del">Delete River</button><button type="button" data-action="river-save">Save Rivers</button><button type="button" data-action="river-auto">Auto Rivers</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
+  toolbar.innerHTML='<span class="ui-layout-mode-pill"></span><button type="button" data-mode="desktop">Desktop</button><button type="button" data-mode="mobile">Mobile</button><button type="button" data-action="river-edit">River Edit</button><button type="button" data-action="river-add">+ River</button><button type="button" data-action="river-del">Delete River</button><button type="button" data-action="river-save">Save Rivers</button><button type="button" data-action="river-auto">Auto Rivers</button><button type="button" data-action="scene-edit">Scene Edit</button><button type="button" data-action="scene-add">+ Screen</button><button type="button" data-action="scene-del">Delete Screen</button><button type="button" data-action="scene-save">Save Objects</button><button type="button" data-action="export">Export Layout</button><button type="button" data-action="close">Save & Exit</button>';
   toolbar.addEventListener('click',e=>{
     const action=e.target?.dataset?.action;
     const mode=e.target?.dataset?.mode;
@@ -8424,21 +8913,33 @@ function buildUILayoutEditor(){
     if(action==='river-del'){ deleteRiverEditorRegion(); return; }
     if(action==='river-save'){ saveRiverEditorRegions(); return; }
     if(action==='river-auto'){ autoDetectRiverEditorRegions(); return; }
+    if(action==='scene-edit'){ toggleSceneObjectEditor(); return; }
+    if(action==='scene-add'){ addSceneObjectEditorObject(); return; }
+    if(action==='scene-del'){ deleteSceneObjectEditorObject(); return; }
+    if(action==='scene-save'){ saveSceneObjectEditorObjects(); return; }
     if(action==='export') showUILayoutExportModal();
     if(action==='close') disableUILayoutEditor(true);
   });
   editor.appendChild(toolbar);
   const panel=document.createElement('div');
   panel.className='ui-layout-object-panel';
-  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-chrome"><button type="button" class="ui-layout-object-panel-toggle" data-action="collapse">−</button><div class="ui-layout-object-panel-handle"></div></div></div><div class="ui-layout-object-panel-control"><div class="ui-layout-object-panel-control-row"><span class="ui-layout-object-panel-control-label">Scene Glow</span><span class="ui-layout-object-panel-control-value" data-scene-glow-value>100%</span></div><input type="range" min="0" max="2.4" step="0.01" value="1" data-scene-glow-slider></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
-  panel.querySelector('.ui-layout-object-panel-control')?.addEventListener('pointerdown',e=>{
-    e.stopPropagation();
+  panel.innerHTML='<div class="ui-layout-object-panel-header"><div class="ui-layout-object-panel-copy"><h3>Layout Objects</h3><p>Shift+click to multi-select. Drag selected rows to reorder layers.</p><div class="ui-layout-object-panel-tools"><button type="button" data-action="top">To Top</button><button type="button" data-action="bottom">To Bottom</button></div></div><div class="ui-layout-object-panel-chrome"><button type="button" class="ui-layout-object-panel-toggle" data-action="collapse">−</button><div class="ui-layout-object-panel-handle"></div></div></div><div class="ui-layout-object-panel-control"><div class="ui-layout-object-panel-control-row"><span class="ui-layout-object-panel-control-label">Scene Glow</span><span class="ui-layout-object-panel-control-value" data-scene-glow-value>100%</span></div><input type="range" min="0" max="2.4" step="0.01" value="1" data-scene-glow-slider></div><div class="ui-layout-object-panel-control" data-scene-object-control hidden><div class="ui-layout-object-panel-control-row"><span class="ui-layout-object-panel-control-label">Scene Objects</span><span class="ui-layout-object-panel-control-value" data-scene-object-count>0 objs</span></div><div class="scene-object-editor-hint" data-scene-object-hint>Select a video wall in the scene to edit it.</div><div class="scene-object-editor-fields"><label>X</label><input type="number" step="0.1" data-scene-object-field="x"><label>Y</label><input type="number" step="0.1" data-scene-object-field="y"><label>Z</label><input type="number" step="0.1" data-scene-object-field="z"><label>Width</label><input type="number" step="0.1" min="1" data-scene-object-field="width"><label>Height</label><input type="number" step="0.1" min="1" data-scene-object-field="height"><label>RotY</label><input type="number" step="0.01" data-scene-object-field="rotY"></div><div class="scene-object-editor-hint">Drag selected wall on canvas to move X/Z. Wheel zooms. Ctrl+C / Ctrl+V duplicates the selected wall.</div></div><div class="ui-layout-object-list"></div><div class="ui-layout-object-panel-resize" data-corner="nw"></div><div class="ui-layout-object-panel-resize" data-corner="ne"></div><div class="ui-layout-object-panel-resize" data-corner="sw"></div><div class="ui-layout-object-panel-resize" data-corner="se"></div>';
+  panel.querySelectorAll('.ui-layout-object-panel-control')?.forEach(el=>{
+    el.addEventListener('pointerdown',e=>{ e.stopPropagation(); });
   });
   panel.querySelector('[data-scene-glow-slider]')?.addEventListener('input',e=>{
     setSceneGlowStrength(e.target.value,{persist:false,refresh:true});
   });
   panel.querySelector('[data-scene-glow-slider]')?.addEventListener('change',e=>{
     setSceneGlowStrength(e.target.value,{persist:true,refresh:true});
+  });
+  panel.querySelectorAll('[data-scene-object-field]')?.forEach(input=>{
+    input.addEventListener('input',e=>{
+      const current=sceneObjectEditorState.objects[sceneObjectEditorState.selectedIndex];
+      if(!current) return;
+      const field=e.target.dataset.sceneObjectField;
+      updateSceneObjectEditorObject(sceneObjectEditorState.selectedIndex,{[field]:Number(e.target.value)});
+    });
   });
   panel.querySelector('.ui-layout-object-list')?.addEventListener('scroll',()=>{
     captureUILayoutObjectPanelScroll();
@@ -8481,6 +8982,7 @@ function buildUILayoutEditor(){
   });
   editor.appendChild(panel);
   refreshSceneGlowAdminControl();
+  refreshSceneObjectAdminControl();
   for(const def of UI_LAYOUT_TARGET_DEFS){
     const box=document.createElement('div');
     box.className='ui-layout-box';
@@ -8739,7 +9241,12 @@ function disableUILayoutEditor(openExport=false){
     saveManualRiverRegions(riverEditorState.regions);
     riverEditorState.dirty=false;
   }
+  if(sceneObjectEditorState.active||sceneObjectEditorState.dirty){
+    saveManualSceneObjects(sceneObjectEditorState.objects);
+    sceneObjectEditorState.dirty=false;
+  }
   toggleRiverEditor(false);
+  toggleSceneObjectEditor(false);
   uiLayoutState.editor?.remove();
   uiLayoutState.editor=null;
   uiLayoutState.overlays.clear();
@@ -8878,6 +9385,22 @@ function handleUILayoutHotkeys(e){
   if(!uiLayoutState.active) return false;
   if(e.target?.closest?.('input,textarea')) return false;
   const key=(e.key||'').toLowerCase();
+  if(sceneObjectEditorState.active){
+    if((e.ctrlKey||e.metaKey)&&key==='c'){
+      if(copySelectedSceneObject()){
+        e.preventDefault();
+        return true;
+      }
+      return false;
+    }
+    if((e.ctrlKey||e.metaKey)&&key==='v'){
+      if(pasteSelectedSceneObject()){
+        e.preventDefault();
+        return true;
+      }
+      return false;
+    }
+  }
   if((e.ctrlKey||e.metaKey)&&key==='z'&&!e.shiftKey){
     if(undoUILayoutChange()){
       e.preventDefault();
@@ -9697,15 +10220,22 @@ let camYaw=Math.PI,camPitch=0.25,camDist=3.15;
 let dragging=false,dragPId=null,dx0=0,dy0=0,yaw0=0,pitch0=0;
 canvas.addEventListener('pointerdown',e=>{
   if(handleRiverEditorCanvasPointerDown(e)) return;
+  if(handleSceneObjectEditorCanvasPointerDown(e)) return;
   if(e.target!==canvas)return;
   dragging=true;dragPId=e.pointerId;
   dx0=e.clientX;dy0=e.clientY;
-  yaw0=gameState==='ended' ? endCameraOrbitAngle : camYaw;
-  pitch0=gameState==='ended' ? endCameraPitch : camPitch;
+  yaw0=sceneObjectEditorState.active ? sceneObjectEditorState.orbitAngle : (gameState==='ended' ? endCameraOrbitAngle : camYaw);
+  pitch0=sceneObjectEditorState.active ? sceneObjectEditorState.pitch : (gameState==='ended' ? endCameraPitch : camPitch);
 });
 canvas.addEventListener('pointermove',e=>{
   if(handleRiverEditorCanvasPointerMove(e)) return;
+  if(handleSceneObjectEditorCanvasPointerMove(e)) return;
   if(!dragging||e.pointerId!==dragPId)return;
+  if(sceneObjectEditorState.active){
+    sceneObjectEditorState.orbitAngle=yaw0-(e.clientX-dx0)/W()*4;
+    sceneObjectEditorState.pitch=clamp(pitch0+(e.clientY-dy0)/H()*2.2,0.45,1.35);
+    return;
+  }
   if(gameState==='ended'){
     endCameraAutoRotate=false;
     endCameraOrbitAngle=yaw0-(e.clientX-dx0)/W()*4;
@@ -9716,10 +10246,14 @@ canvas.addEventListener('pointermove',e=>{
   camPitch=clamp(pitch0+(e.clientY-dy0)/H()*3,-0.2,1.0);
 });
 const endDrag=e=>{if(e.pointerId===dragPId){dragging=false;dragPId=null}};
-canvas.addEventListener('pointerup',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; endDrag(e); });
-canvas.addEventListener('pointercancel',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; endDrag(e); });
+canvas.addEventListener('pointerup',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; if(handleSceneObjectEditorCanvasPointerUp(e)) return; endDrag(e); });
+canvas.addEventListener('pointercancel',e=>{ if(handleRiverEditorCanvasPointerUp(e)) return; if(handleSceneObjectEditorCanvasPointerUp(e)) return; endDrag(e); });
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
+  if(sceneObjectEditorState.active){
+    sceneObjectEditorState.zoom=clamp(sceneObjectEditorState.zoom+e.deltaY*0.0015,0.35,2.4);
+    return;
+  }
   if(gameState==='ended'){
     endCameraAutoRotate=false;
     endCameraZoom=clamp(endCameraZoom+e.deltaY*0.0015,0.45,1.85);
@@ -9729,6 +10263,20 @@ canvas.addEventListener('wheel',e=>{
 },{passive:false});
 
 function updateCam(){
+  if(sceneObjectEditorState.active){
+    const b=getPlayableBounds();
+    const radius=Math.max(24,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*1.7)*sceneObjectEditorState.zoom;
+    const tx=b.centerX;
+    const tz=b.centerZ;
+    const ty=(playableLayer?.y||0)+1.2;
+    const horiz=Math.cos(sceneObjectEditorState.pitch)*radius;
+    const cx=tx+Math.cos(sceneObjectEditorState.orbitAngle)*horiz;
+    const cz=tz+Math.sin(sceneObjectEditorState.orbitAngle)*horiz;
+    const cy=ty+Math.sin(sceneObjectEditorState.pitch)*radius;
+    camera.position.set(cx,cy,cz);
+    camera.lookAt(tx,ty,tz);
+    return;
+  }
   if(gameState==='ended'){
     if(endCameraAutoRotate){
       // dt isn't passed in but the render loop runs ~60fps; advance
@@ -10651,6 +11199,7 @@ timerBox?.addEventListener('click',e=>{
 
 function startGame(){
   unlockSFX();
+  resumeSceneObjectVideos();
   setEndOverlaySceneView(false);
   setGameOverUIHidden(false);
   gameState='playing';
@@ -11013,6 +11562,8 @@ async function init(){
   setIntroProgress(18,'PLAYER');
   await loadPlayground();
   setIntroProgress(30,'WORLD');
+  const manualSceneObjects=loadManualSceneObjects();
+  applySceneObjects(manualSceneObjects.length?manualSceneObjects:getSceneObjectDefaults());
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
