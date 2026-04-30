@@ -2509,6 +2509,7 @@ const sceneObjectPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 const sceneObjectPointerNDC=new THREE.Vector2();
 const sceneObjectHitPoint=new THREE.Vector3();
 const sceneObjectEntries=new Map();
+const sceneObjectVideoResources=new Map();
 const sceneObjectUnitPlaneGeometry=new THREE.PlaneGeometry(1,1);
 let sceneObjectRootGroup=null;
 
@@ -2648,13 +2649,20 @@ function ensureSceneObjectRoot(){
 function disposeSceneObjectEntry(entry){
   if(!entry) return;
   entry.group?.removeFromParent?.();
-  try{
-    entry.video?.pause?.();
-    entry.video?.removeAttribute?.('src');
-    entry.video?.load?.();
-  }catch{}
-  entry.texture?.dispose?.();
   entry.material?.dispose?.();
+  const resource=entry.videoResource;
+  if(resource){
+    resource.users=Math.max(0,(resource.users||1)-1);
+    if(resource.users===0){
+      try{
+        resource.video?.pause?.();
+        resource.video?.removeAttribute?.('src');
+        resource.video?.load?.();
+      }catch{}
+      resource.texture?.dispose?.();
+      sceneObjectVideoResources.delete(resource.src);
+    }
+  }
 }
 
 function createSceneObjectVideoElement(src){
@@ -2674,16 +2682,37 @@ function createSceneObjectVideoElement(src){
   return video;
 }
 
-function buildSceneObjectEntry(def){
-  const root=ensureSceneObjectRoot();
-  const video=createSceneObjectVideoElement(def.src);
+function getSceneObjectVideoResource(src){
+  let resource=sceneObjectVideoResources.get(src);
+  if(resource) return resource;
+  const video=createSceneObjectVideoElement(src);
   const texture=new THREE.VideoTexture(video);
   texture.colorSpace=THREE.SRGBColorSpace;
   texture.minFilter=THREE.LinearFilter;
   texture.magFilter=THREE.LinearFilter;
   texture.generateMipmaps=false;
+  resource={src,video,texture,users:0,playDirection:1};
+  video.addEventListener('ended',()=>{
+    if(resource.playDirection>0){
+      resource.playDirection=-1;
+      try{
+        video.pause();
+        if(Number.isFinite(video.duration) && video.duration>0){
+          video.currentTime=Math.max(0,video.duration-0.001);
+        }
+      }catch{}
+    }
+  });
+  sceneObjectVideoResources.set(src,resource);
+  return resource;
+}
+
+function buildSceneObjectEntry(def){
+  const root=ensureSceneObjectRoot();
+  const resource=getSceneObjectVideoResource(def.src);
+  resource.users++;
   const material=new THREE.MeshBasicMaterial({
-    map:texture,
+    map:resource.texture,
     side:THREE.DoubleSide,
     transparent:true,
     opacity:0.96,
@@ -2696,18 +2725,7 @@ function buildSceneObjectEntry(def){
   const group=new THREE.Group();
   group.add(mesh);
   root.add(group);
-  const entry={id:def.id,group,mesh,material,texture,video,playDirection:1};
-  video.addEventListener('ended',()=>{
-    if(entry.playDirection>0){
-      entry.playDirection=-1;
-      try{
-        video.pause();
-        if(Number.isFinite(video.duration) && video.duration>0){
-          video.currentTime=Math.max(0,video.duration-0.001);
-        }
-      }catch{}
-    }
-  });
+  const entry={id:def.id,group,mesh,material,texture:resource.texture,video:resource.video,videoResource:resource};
   sceneObjectEntries.set(def.id,entry);
   syncSceneObjectEntry(entry,def);
   return entry;
@@ -2722,26 +2740,26 @@ function syncSceneObjectEntry(entry,def){
 }
 
 function resumeSceneObjectVideos(){
-  for(const entry of sceneObjectEntries.values()){
-    if(entry.playDirection<0) continue;
-    const p=entry.video?.play?.();
+  for(const resource of sceneObjectVideoResources.values()){
+    if(resource.playDirection<0) continue;
+    const p=resource.video?.play?.();
     if(p?.catch) p.catch(()=>{});
   }
 }
 
 function updateSceneObjectVideos(dt){
   if(!sceneObjectRootGroup?.visible) return;
-  for(const entry of sceneObjectEntries.values()){
-    const video=entry.video;
+  for(const resource of sceneObjectVideoResources.values()){
+    const video=resource.video;
     if(!video) continue;
-    if(entry.playDirection<0){
+    if(resource.playDirection<0){
       try{
         video.pause();
         if(video.readyState>=2){
           const next=Math.max(0,video.currentTime-dt);
           if(Math.abs(next-video.currentTime)>0.0001) video.currentTime=next;
           if(next<=0.001){
-            entry.playDirection=1;
+            resource.playDirection=1;
             video.currentTime=0;
             const p=video.play?.();
             if(p?.catch) p.catch(()=>{});
@@ -2778,14 +2796,14 @@ function applySceneObjects(objects){
 function setSceneObjectsVisible(visible){
   const root=ensureSceneObjectRoot();
   root.visible=!!visible;
-  for(const entry of sceneObjectEntries.values()){
+  for(const resource of sceneObjectVideoResources.values()){
     if(visible){
-      if(entry.playDirection>0){
-        const p=entry.video?.play?.();
+      if(resource.playDirection>0){
+        const p=resource.video?.play?.();
         if(p?.catch) p.catch(()=>{});
       }
     }else{
-      try{ entry.video?.pause?.(); }catch{}
+      try{ resource.video?.pause?.(); }catch{}
     }
   }
 }
@@ -6202,17 +6220,17 @@ function spawnBombMushroomCloud(x,y,z){
       : {trunkCount:360,capCount:1260,ringCount:780,groundTrunkCount:150,groundCapCount:360,groundRingCount:220},
     layerTuning:{
       trunkRadius:0.34,trunkHeight:3.2,
-      trunkScaleMin:0.085,trunkScaleSpan:0.05,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
+      trunkScaleMin:1.7,trunkScaleSpan:1.0,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
       capRadiusMin:1.25,capRadiusSpan:2.45,capHeightMin:2.9,capHeightSpan:2.4,capDrop:0.11,capJitter:0.26,
-      capScaleMin:0.1,capScaleSpan:0.08,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
+      capScaleMin:2.0,capScaleSpan:1.6,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
       ringRadiusMin:2.45,ringRadiusSpan:3.1,ringHeightMin:2.05,ringHeightSpan:0.9,
-      ringScaleMin:0.09,ringScaleSpan:0.07,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
+      ringScaleMin:1.8,ringScaleSpan:1.4,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
       groundTrunkRadius:0.2,groundTrunkHeightMin:0.15,groundTrunkHeightSpan:0.78,
-      groundTrunkScaleMin:0.06,groundTrunkScaleSpan:0.035,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
+      groundTrunkScaleMin:1.2,groundTrunkScaleSpan:0.7,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
       groundCapRadiusMin:0.48,groundCapRadiusSpan:1.08,groundCapHeightMin:0.72,groundCapHeightSpan:0.94,groundCapDrop:0.09,groundCapJitter:0.11,
-      groundCapScaleMin:0.07,groundCapScaleSpan:0.04,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
+      groundCapScaleMin:1.4,groundCapScaleSpan:0.8,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
       groundRingRadiusMin:0.92,groundRingRadiusSpan:1.52,groundRingHeightMin:0.44,groundRingHeightSpan:0.42,
-      groundRingScaleMin:0.055,groundRingScaleSpan:0.032,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
+      groundRingScaleMin:1.1,groundRingScaleSpan:0.64,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
     },
   });
 }
