@@ -2233,7 +2233,7 @@ const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
 const SCENE_OBJECT_STORAGE_KEY='urbanLegendSceneObjectsV1';
-const SCENE_OBJECT_VIDEO_SRC='background/多眼睛2.mp4';
+const SCENE_OBJECT_VIDEO_SRC='background/movie4.mp4';
 const RIVER_REGION_DEFAULTS=[
   {
     "minX": -13.948147487323128,
@@ -2262,10 +2262,10 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-north",
     "type": "video-wall",
-    "src": "background/多眼睛2.mp4",
-    "x": -0.3,
+    "src": "background/movie4.mp4",
+    "x": -0.6,
     "y": -0.5,
-    "z": -13.2,
+    "z": -13.4,
     "width": 30.1,
     "height": 18,
     "rotY": 0,
@@ -2274,7 +2274,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-south",
     "type": "video-wall",
-    "src": "background/多眼睛2.mp4",
+    "src": "background/movie4.mp4",
     "x": -0.8,
     "y": -1,
     "z": 15.6,
@@ -2286,7 +2286,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-west",
     "type": "video-wall",
-    "src": "background/多眼睛2.mp4",
+    "src": "background/movie4.mp4",
     "x": -14.7,
     "y": -0.5,
     "z": 0.5,
@@ -2298,7 +2298,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-east",
     "type": "video-wall",
-    "src": "background/多眼睛2.mp4",
+    "src": "background/movie4.mp4",
     "x": 14.3,
     "y": -0.5,
     "z": 1.5,
@@ -2512,6 +2512,9 @@ const sceneObjectEntries=new Map();
 const sceneObjectVideoResources=new Map();
 const sceneObjectUnitPlaneGeometry=new THREE.PlaneGeometry(1,1);
 let sceneObjectRootGroup=null;
+const sceneObjectOcclusionRay=new THREE.Raycaster();
+const _sceneObjectOcclusionTargetV=new THREE.Vector3();
+const _sceneObjectOcclusionDirV=new THREE.Vector3();
 
 function normalizeRiverRegion(region){
   const minX=Math.min(region?.minX??0,region?.maxX??0);
@@ -2719,6 +2722,7 @@ function buildSceneObjectEntry(def){
     depthWrite:false,
     toneMapped:false,
   });
+  material.userData.baseOpacity=0.96;
   const mesh=new THREE.Mesh(sceneObjectUnitPlaneGeometry,material);
   mesh.renderOrder=6;
   mesh.userData={sceneObjectPick:true,sceneObjectId:def.id};
@@ -2770,6 +2774,34 @@ function updateSceneObjectVideos(dt){
       const p=video.play?.();
       if(p?.catch) p.catch(()=>{});
     }
+  }
+}
+
+function updateSceneObjectOcclusion(){
+  if(gameState!=='playing' || !sceneObjectRootGroup?.visible || !player?.root) return;
+  for(const entry of sceneObjectEntries.values()){
+    if(entry?.material){
+      entry.material.opacity=entry.material.userData?.baseOpacity ?? 0.96;
+      entry.material.needsUpdate=true;
+    }
+  }
+  const origin=camera.position;
+  const target=_sceneObjectOcclusionTargetV.set(player.root.position.x,player.root.position.y+1.35,player.root.position.z);
+  const dir=_sceneObjectOcclusionDirV.subVectors(target,origin);
+  const dist=dir.length();
+  if(dist<=0.1) return;
+  dir.normalize();
+  sceneObjectOcclusionRay.firstHitOnly=false;
+  sceneObjectOcclusionRay.far=dist-0.08;
+  sceneObjectOcclusionRay.set(origin,dir);
+  const hits=sceneObjectOcclusionRay.intersectObject(sceneObjectRootGroup,true);
+  for(const hit of hits){
+    const mesh=hit.object;
+    if(!mesh?.userData?.sceneObjectPick) continue;
+    const entry=sceneObjectEntries.get(mesh.userData.sceneObjectId);
+    if(!entry?.material) continue;
+    entry.material.opacity=0.08;
+    entry.material.needsUpdate=true;
   }
 }
 
@@ -5594,17 +5626,17 @@ function spawnArtistHeartBurst(x,y,z){
       : {trunkCount:110,capCount:420,ringCount:280,groundTrunkCount:54,groundCapCount:124,groundRingCount:80},
     layerTuning:{
       trunkRadius:0.22,trunkHeight:1.85,
-      trunkScaleMin:0.04,trunkScaleSpan:0.03,trunkVXMin:0.08,trunkVXSpan:0.16,trunkVYMin:1.7,trunkVYSpan:1.1,trunkDrag:0.955,trunkGravity:0.78,
+      trunkScaleMin:0.16,trunkScaleSpan:0.12,trunkVXMin:0.08,trunkVXSpan:0.16,trunkVYMin:1.7,trunkVYSpan:1.1,trunkDrag:0.955,trunkGravity:0.78,
       capRadiusMin:0.8,capRadiusSpan:1.35,capHeightMin:1.45,capHeightSpan:1.35,capDrop:0.08,capJitter:0.18,
-      capScaleMin:0.035,capScaleSpan:0.028,capVXMin:0.82,capVXSpan:1.08,capVYMin:0.72,capVYSpan:0.76,capDrag:0.963,capGravity:0.74,
+      capScaleMin:0.14,capScaleSpan:0.112,capVXMin:0.82,capVXSpan:1.08,capVYMin:0.72,capVYSpan:0.76,capDrag:0.963,capGravity:0.74,
       ringRadiusMin:1.45,ringRadiusSpan:1.75,ringHeightMin:1.22,ringHeightSpan:0.68,
-      ringScaleMin:0.03,ringScaleSpan:0.022,ringVXMin:1.9,ringVXSpan:1.35,ringVYMin:0.42,ringVYSpan:0.56,ringDrag:0.968,ringGravity:0.7,
+      ringScaleMin:0.12,ringScaleSpan:0.088,ringVXMin:1.9,ringVXSpan:1.35,ringVYMin:0.42,ringVYSpan:0.56,ringDrag:0.968,ringGravity:0.7,
       groundTrunkRadius:0.14,groundTrunkHeightMin:0.1,groundTrunkHeightSpan:0.42,
-      groundTrunkScaleMin:0.026,groundTrunkScaleSpan:0.016,groundTrunkVXMin:0.05,groundTrunkVXSpan:0.08,groundTrunkVYMin:0.7,groundTrunkVYSpan:0.45,groundTrunkDrag:0.956,groundTrunkGravity:0.7,
+      groundTrunkScaleMin:0.104,groundTrunkScaleSpan:0.064,groundTrunkVXMin:0.05,groundTrunkVXSpan:0.08,groundTrunkVYMin:0.7,groundTrunkVYSpan:0.45,groundTrunkDrag:0.956,groundTrunkGravity:0.7,
       groundCapRadiusMin:0.3,groundCapRadiusSpan:0.55,groundCapHeightMin:0.42,groundCapHeightSpan:0.48,groundCapDrop:0.07,groundCapJitter:0.08,
-      groundCapScaleMin:0.026,groundCapScaleSpan:0.016,groundCapVXMin:0.3,groundCapVXSpan:0.4,groundCapVYMin:0.34,groundCapVYSpan:0.24,groundCapDrag:0.965,groundCapGravity:0.66,
+      groundCapScaleMin:0.104,groundCapScaleSpan:0.064,groundCapVXMin:0.3,groundCapVXSpan:0.4,groundCapVYMin:0.34,groundCapVYSpan:0.24,groundCapDrag:0.965,groundCapGravity:0.66,
       groundRingRadiusMin:0.62,groundRingRadiusSpan:0.84,groundRingHeightMin:0.24,groundRingHeightSpan:0.26,
-      groundRingScaleMin:0.022,groundRingScaleSpan:0.014,groundRingVXMin:0.72,groundRingVXSpan:0.54,groundRingVYMin:0.18,groundRingVYSpan:0.2,groundRingDrag:0.969,groundRingGravity:0.62,
+      groundRingScaleMin:0.088,groundRingScaleSpan:0.056,groundRingVXMin:0.72,groundRingVXSpan:0.54,groundRingVYMin:0.18,groundRingVYSpan:0.2,groundRingDrag:0.969,groundRingGravity:0.62,
     },
     capSampler:heartCapSampler,
     ringSampler:heartRingSampler,
@@ -6220,17 +6252,17 @@ function spawnBombMushroomCloud(x,y,z){
       : {trunkCount:360,capCount:1260,ringCount:780,groundTrunkCount:150,groundCapCount:360,groundRingCount:220},
     layerTuning:{
       trunkRadius:0.34,trunkHeight:3.2,
-      trunkScaleMin:1.7,trunkScaleSpan:1.0,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
+      trunkScaleMin:0.51,trunkScaleSpan:0.3,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
       capRadiusMin:1.25,capRadiusSpan:2.45,capHeightMin:2.9,capHeightSpan:2.4,capDrop:0.11,capJitter:0.26,
-      capScaleMin:2.0,capScaleSpan:1.6,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
+      capScaleMin:0.6,capScaleSpan:0.48,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
       ringRadiusMin:2.45,ringRadiusSpan:3.1,ringHeightMin:2.05,ringHeightSpan:0.9,
-      ringScaleMin:1.8,ringScaleSpan:1.4,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
+      ringScaleMin:0.54,ringScaleSpan:0.42,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
       groundTrunkRadius:0.2,groundTrunkHeightMin:0.15,groundTrunkHeightSpan:0.78,
-      groundTrunkScaleMin:1.2,groundTrunkScaleSpan:0.7,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
+      groundTrunkScaleMin:0.36,groundTrunkScaleSpan:0.21,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
       groundCapRadiusMin:0.48,groundCapRadiusSpan:1.08,groundCapHeightMin:0.72,groundCapHeightSpan:0.94,groundCapDrop:0.09,groundCapJitter:0.11,
-      groundCapScaleMin:1.4,groundCapScaleSpan:0.8,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
+      groundCapScaleMin:0.42,groundCapScaleSpan:0.24,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
       groundRingRadiusMin:0.92,groundRingRadiusSpan:1.52,groundRingHeightMin:0.44,groundRingHeightSpan:0.42,
-      groundRingScaleMin:1.1,groundRingScaleSpan:0.64,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
+      groundRingScaleMin:0.33,groundRingScaleSpan:0.192,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
     },
   });
 }
@@ -11724,6 +11756,7 @@ function tick(){
     updateFlowers(nowS);
     if(!IS_MOBILE_LAYOUT || (tickCounter%2===0)) updateWater(nowS);
     updateSceneObjectVideos(dt);
+    updateSceneObjectOcclusion();
     updateSplash(dt);
     updateKOBursts(dt);
     updateArtistHeartBursts(dt);
