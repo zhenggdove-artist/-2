@@ -6242,32 +6242,32 @@ function spawnBombMushroomCloud(x,y,z){
   spawnVolumetricMushroomCloud({
     x,y,z,
     life:4,
-    scale:0.92,
-    palette:['#ff77cf','#ff9fe0','#ffd96e','#fff2b8','#d7f6ff','#ffffff'],
-    capPalette:['#ff77cf','#ff9fe0','#ffd96e','#fff2b8','#d7f6ff','#ffffff'],
-    ringPalette:['#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#ffffff'],
-    trunkPalette:['#ffd96e','#fff2b8','#ffb56e','#ffffff'],
-    groundPalette:['#ff8b54','#ffb347','#ffd96e','#fff0b8'],
-    groundCapPalette:['#ff8b54','#ffb347','#ffd96e','#fff0b8'],
-    groundRingPalette:['#ff6a3d','#ff9d3d','#ffd45c','#fff0b8'],
-    groundTrunkPalette:['#ff6a3d','#ff9d3d','#ffd45c'],
+    scale:0.64,
+    palette:['#ff86d8','#ffa9e8','#ffc7ef','#ffe0f7','#fff2fb','#ffffff'],
+    capPalette:['#ff86d8','#ffa9e8','#ffc7ef','#ffe0f7','#fff2fb','#ffffff'],
+    ringPalette:['#ff6fcf','#ff97df','#ffb8ea','#ffd9f4','#fff0fb','#ffffff'],
+    trunkPalette:['#ffb1e7','#ffd3f3','#fff0fb','#ffffff'],
+    groundPalette:['#ff7fcf','#ffa6e4','#ffc8f0','#ffe8fa'],
+    groundCapPalette:['#ff7fcf','#ffa6e4','#ffc8f0','#ffe8fa'],
+    groundRingPalette:['#ff68c7','#ff92dc','#ffb9ec','#ffe0f8'],
+    groundTrunkPalette:['#ff68c7','#ff92dc','#ffb9ec'],
     geometry:ensureVolumetricCloudGeometry(),
     counts:IS_MOBILE_LAYOUT
       ? {trunkCount:220,capCount:760,ringCount:460,groundTrunkCount:96,groundCapCount:230,groundRingCount:140}
       : {trunkCount:360,capCount:1260,ringCount:780,groundTrunkCount:150,groundCapCount:360,groundRingCount:220},
     layerTuning:{
-      trunkRadius:0.34,trunkHeight:3.2,
-      trunkScaleMin:0.66,trunkScaleSpan:0.4,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
-      capRadiusMin:1.25,capRadiusSpan:2.45,capHeightMin:2.9,capHeightSpan:2.4,capDrop:0.11,capJitter:0.26,
-      capScaleMin:0.82,capScaleSpan:0.66,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
-      ringRadiusMin:2.45,ringRadiusSpan:3.1,ringHeightMin:2.05,ringHeightSpan:0.9,
-      ringScaleMin:0.72,ringScaleSpan:0.54,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
-      groundTrunkRadius:0.2,groundTrunkHeightMin:0.15,groundTrunkHeightSpan:0.78,
+      trunkRadius:0.24,trunkHeight:2.15,
+      trunkScaleMin:0.54,trunkScaleSpan:0.34,trunkVXMin:0.14,trunkVXSpan:0.22,trunkVYMin:2.6,trunkVYSpan:1.45,trunkDrag:0.952,trunkGravity:1.18,
+      capRadiusMin:0.9,capRadiusSpan:1.72,capHeightMin:1.86,capHeightSpan:1.46,capDrop:0.08,capJitter:0.2,
+      capScaleMin:0.7,capScaleSpan:0.52,capVXMin:0.98,capVXSpan:1.28,capVYMin:1.1,capVYSpan:0.92,capDrag:0.962,capGravity:1.02,
+      ringRadiusMin:1.72,ringRadiusSpan:2.16,ringHeightMin:1.32,ringHeightSpan:0.62,
+      ringScaleMin:0.58,ringScaleSpan:0.42,ringVXMin:2.65,ringVXSpan:1.55,ringVYMin:0.62,ringVYSpan:0.7,ringDrag:0.968,ringGravity:0.88,
+      groundTrunkRadius:0.14,groundTrunkHeightMin:0.12,groundTrunkHeightSpan:0.52,
       groundTrunkScaleMin:0.12,groundTrunkScaleSpan:0.09,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
-      groundCapRadiusMin:0.48,groundCapRadiusSpan:1.08,groundCapHeightMin:0.72,groundCapHeightSpan:0.94,groundCapDrop:0.09,groundCapJitter:0.11,
-      groundCapScaleMin:0.16,groundCapScaleSpan:0.12,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
-      groundRingRadiusMin:0.92,groundRingRadiusSpan:1.52,groundRingHeightMin:0.44,groundRingHeightSpan:0.42,
-      groundRingScaleMin:0.11,groundRingScaleSpan:0.08,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
+      groundCapRadiusMin:0.34,groundCapRadiusSpan:0.76,groundCapHeightMin:0.52,groundCapHeightSpan:0.64,groundCapDrop:0.08,groundCapJitter:0.08,
+      groundCapScaleMin:0.14,groundCapScaleSpan:0.1,groundCapVXMin:0.42,groundCapVXSpan:0.58,groundCapVYMin:0.5,groundCapVYSpan:0.42,groundCapDrag:0.965,groundCapGravity:0.94,
+      groundRingRadiusMin:0.62,groundRingRadiusSpan:1.04,groundRingHeightMin:0.28,groundRingHeightSpan:0.26,
+      groundRingScaleMin:0.1,groundRingScaleSpan:0.07,groundRingVXMin:0.82,groundRingVXSpan:0.62,groundRingVYMin:0.24,groundRingVYSpan:0.24,groundRingDrag:0.969,groundRingGravity:0.86,
     },
     opacityCurve:(t)=>{
       const rise=t<0.1 ? (0.72 + (t/0.1)*0.28) : 1;
@@ -6283,7 +6283,7 @@ function triggerBombExplosion(bomb){
   bomb.triggered=true;
   bomb.burning=0.65;
   playSFX('bombExplode');
-  spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.15,bomb.group.position.z);
+  spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.02,bomb.group.position.z);
 }
 
 function triggerLatestBombExplosion(){
