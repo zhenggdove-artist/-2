@@ -3263,62 +3263,8 @@ function restoreCeilingOcclusion(){
 }
 
 function updateCeilingOcclusion(){
-  ceilingOcclusionCooldown=Math.max(0,ceilingOcclusionCooldown-1);
-  if(ceilingOcclusionCooldown>0) return;
-  ceilingOcclusionCooldown=IS_MOBILE_LAYOUT?4:2;
-  if(!playgroundRoot||!player?.root) return;
-  const target=_ceilingTargetV.set(player.root.position.x,player.root.position.y+1.35,player.root.position.z);
-  const origin=camera.position;
-  const topDown=!!(playableLayer && origin.y>playableLayer.ceilingY+0.35 && origin.y>target.y+1.8);
-  if(origin.distanceToSquared(_lastCeilingOriginV)<0.02*0.02 &&
-     target.distanceToSquared(_lastCeilingTargetV)<0.02*0.02 &&
-     topDown===_lastCeilingTopDown){
-    return;
-  }
-  _lastCeilingOriginV.copy(origin);
-  _lastCeilingTargetV.copy(target);
-  _lastCeilingTopDown=topDown;
   restoreCeilingOcclusion();
-  if(topDown){
-    for(const mesh of ceilingFadableMeshes){
-      const entries=ensureCeilingFadeMaterials(mesh);
-      for(const entry of entries){
-        if('transparent' in entry.material) entry.material.transparent=true;
-        if('opacity' in entry.material) entry.material.opacity=0.08;
-        if('depthWrite' in entry.material) entry.material.depthWrite=false;
-        entry.material.needsUpdate=true;
-      }
-      ceilingOccludedMeshes.add(mesh);
-    }
-    return;
-  }
-  const dir=_ceilingDirV.subVectors(target,origin);
-  const dist=dir.length();
-  if(dist<0.1) return;
-  dir.normalize();
-  ceilingOcclusionRay.firstHitOnly=false;
-  ceilingOcclusionRay.far=dist-0.1;
-  ceilingOcclusionRay.set(origin,dir);
-  const hits=ceilingOcclusionRay.intersectObject(playgroundRoot,true);
-  let faded=0;
-  for(const hit of hits){
-    if(faded>=8) break;
-    const mesh=hit.object;
-    if(!mesh?.isMesh||!mesh.material) continue;
-    if(hit.point.y<target.y+0.25) continue;
-    const normal=worldFaceNormal(hit);
-    if(!normal||Math.abs(normal.y)<0.55) continue;
-    const entries=ensureCeilingFadeMaterials(mesh);
-    if(!entries.length) continue;
-    for(const entry of entries){
-      if('transparent' in entry.material) entry.material.transparent=true;
-      if('opacity' in entry.material) entry.material.opacity=0.22;
-      if('depthWrite' in entry.material) entry.material.depthWrite=false;
-      entry.material.needsUpdate=true;
-    }
-    ceilingOccludedMeshes.add(mesh);
-    faded++;
-  }
+  return;
 }
 
 function detectPillars(root){
@@ -5222,6 +5168,7 @@ const BURST_EFFECT_PRESETS={
 };
 const artistHeartBursts=[];
 let artistHeartGeometry=null;
+let volumetricCloudGeo=null;
 
 function sampleBurstPattern(shape,i,count){
   const t=(i+0.5)/Math.max(1,count);
@@ -5379,73 +5326,208 @@ function ensureArtistHeartGeometry(){
   return artistHeartGeometry;
 }
 
-function spawnArtistHeartBurst(x,y,z){
-  const count=IS_MOBILE_LAYOUT?20:32;
+function ensureVolumetricCloudGeometry(){
+  if(volumetricCloudGeo) return volumetricCloudGeo;
+  volumetricCloudGeo=new THREE.IcosahedronGeometry(0.12,0);
+  return volumetricCloudGeo;
+}
+
+function createVolumetricCloudMaterial(hex,emissiveIntensity=0.95){
+  return new THREE.MeshStandardMaterial({
+    color:hex,
+    emissive:hex,
+    emissiveIntensity,
+    transparent:true,
+    opacity:0.98,
+    depthWrite:false,
+    depthTest:true,
+    roughness:0.34,
+    metalness:0.03,
+  });
+}
+
+function pushVolumetricParticle(store,mesh,px,py,pz,vx,vy,vz,baseScale,seed,opts={}){
+  mesh.position.set(px,py,pz);
+  mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+  mesh.scale.setScalar(baseScale);
+  store.push({
+    mesh,
+    px,py,pz,
+    vx,vy,vz,
+    rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
+    rvx:opts.rvx ?? ((Math.random()-0.5)*2.2),
+    rvy:opts.rvy ?? ((Math.random()-0.5)*2.0),
+    rvz:opts.rvz ?? ((Math.random()-0.5)*2.2),
+    drag:opts.drag ?? 0.965,
+    gravity:opts.gravity ?? 1.0,
+    baseScale,
+    seed,
+    wobbleAmp:opts.wobbleAmp ?? 0.1,
+    grow:opts.grow ?? 0.9,
+  });
+}
+
+function spawnVolumetricMushroomCloud({
+  x,y,z,
+  life,
+  scale,
+  palette,
+  geometry,
+  counts,
+  layerTuning,
+}){
   const group=new THREE.Group();
-  const geometry=ensureArtistHeartGeometry();
-  const droplets=[];
-  const palette=['#ff8ed1','#ffd2ee','#fff6fb','#ffa3c8','#ff6fb7'];
-  for(let i=0;i<count;i++){
-    const color=palette[(Math.random()*palette.length)|0];
-    const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({
-      color,
-      emissive:color,
-      emissiveIntensity:0.48,
-      roughness:0.34,
-      metalness:0.02,
-      transparent:true,
-      opacity:0.98,
-      depthWrite:false,
-    }));
-    mesh.position.set(
-      x+(Math.random()-0.5)*0.46,
-      y+0.5+Math.random()*0.42,
-      z+(Math.random()-0.5)*0.46
-    );
-    const scale=0.12+Math.random()*0.15;
-    mesh.scale.setScalar(scale);
-    mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+  group.frustumCulled=false;
+  const particles=[];
+  const materialPool=palette.map((hex,idx)=>createVolumetricCloudMaterial(hex,idx===palette.length-1?1.05:0.92));
+  const phaseStart=Math.random()*1000;
+  const addMesh=(colorIdx)=>{
+    const mesh=new THREE.Mesh(geometry,materialPool[colorIdx%materialPool.length]);
+    mesh.frustumCulled=false;
     group.add(mesh);
-    droplets.push({
-      mesh,
-      vx:(Math.random()-0.5)*(1.2+Math.random()*0.8),
-      vy:1.8+Math.random()*1.9,
-      vz:(Math.random()-0.5)*(1.2+Math.random()*0.8),
-      rx:(Math.random()-0.5)*4.8,
-      ry:(Math.random()-0.5)*5.2,
-      rz:(Math.random()-0.5)*4.4,
-      baseScale:scale,
+    return mesh;
+  };
+  const {trunkCount,capCount,ringCount,groundTrunkCount,groundCapCount,groundRingCount}=counts;
+  for(let i=0;i<trunkCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radius=(Math.random()*layerTuning.trunkRadius)*scale;
+    const py=y+(Math.random()*layerTuning.trunkHeight)*scale;
+    const px=x+Math.cos(ang)*radius;
+    const pz=z+Math.sin(ang)*radius;
+    const speed=layerTuning.trunkVXMin+Math.random()*layerTuning.trunkVXSpan;
+    const baseScale=(layerTuning.trunkScaleMin+Math.random()*layerTuning.trunkScaleSpan)*scale;
+    pushVolumetricParticle(particles,addMesh(i+1),px,py,pz,Math.cos(ang)*speed,(layerTuning.trunkVYMin+Math.random()*layerTuning.trunkVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+i*0.37,{
+      drag:layerTuning.trunkDrag,gravity:layerTuning.trunkGravity,wobbleAmp:0.08,grow:1.12,
+    });
+  }
+  for(let i=0;i<capCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(layerTuning.capRadiusMin+Math.random()*layerTuning.capRadiusSpan)*scale;
+    const dome=(layerTuning.capHeightMin+Math.pow(Math.random(),0.55)*layerTuning.capHeightSpan)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const py=y+dome-(radial*layerTuning.capDrop)+(Math.random()-0.5)*layerTuning.capJitter;
+    const speed=layerTuning.capVXMin+Math.random()*layerTuning.capVXSpan;
+    const baseScale=(layerTuning.capScaleMin+Math.random()*layerTuning.capScaleSpan)*scale;
+    pushVolumetricParticle(particles,addMesh(i*3+2),px,py,pz,Math.cos(ang)*speed,(layerTuning.capVYMin+Math.random()*layerTuning.capVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+100+i*0.29,{
+      drag:layerTuning.capDrag,gravity:layerTuning.capGravity,wobbleAmp:0.12,grow:1.26,
+    });
+  }
+  for(let i=0;i<ringCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(layerTuning.ringRadiusMin+Math.random()*layerTuning.ringRadiusSpan)*scale;
+    const py=y+(layerTuning.ringHeightMin+Math.random()*layerTuning.ringHeightSpan)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const speed=layerTuning.ringVXMin+Math.random()*layerTuning.ringVXSpan;
+    const baseScale=(layerTuning.ringScaleMin+Math.random()*layerTuning.ringScaleSpan)*scale;
+    pushVolumetricParticle(particles,addMesh(i*5+4),px,py,pz,Math.cos(ang)*speed,(layerTuning.ringVYMin+Math.random()*layerTuning.ringVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+200+i*0.23,{
+      drag:layerTuning.ringDrag,gravity:layerTuning.ringGravity,wobbleAmp:0.13,grow:1.34,
+    });
+  }
+  for(let i=0;i<groundTrunkCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radius=(Math.random()*layerTuning.groundTrunkRadius)*scale;
+    const py=y+(layerTuning.groundTrunkHeightMin+Math.random()*layerTuning.groundTrunkHeightSpan)*scale;
+    const px=x+Math.cos(ang)*radius;
+    const pz=z+Math.sin(ang)*radius;
+    const speed=layerTuning.groundTrunkVXMin+Math.random()*layerTuning.groundTrunkVXSpan;
+    const baseScale=(layerTuning.groundTrunkScaleMin+Math.random()*layerTuning.groundTrunkScaleSpan)*scale;
+    pushVolumetricParticle(particles,addMesh(i+3),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundTrunkVYMin+Math.random()*layerTuning.groundTrunkVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+300+i*0.31,{
+      drag:layerTuning.groundTrunkDrag,gravity:layerTuning.groundTrunkGravity,wobbleAmp:0.07,grow:1.08,
+    });
+  }
+  for(let i=0;i<groundCapCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(layerTuning.groundCapRadiusMin+Math.random()*layerTuning.groundCapRadiusSpan)*scale;
+    const dome=(layerTuning.groundCapHeightMin+Math.pow(Math.random(),0.55)*layerTuning.groundCapHeightSpan)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const py=y+dome-(radial*layerTuning.groundCapDrop)+(Math.random()-0.5)*layerTuning.groundCapJitter;
+    const speed=layerTuning.groundCapVXMin+Math.random()*layerTuning.groundCapVXSpan;
+    const baseScale=(layerTuning.groundCapScaleMin+Math.random()*layerTuning.groundCapScaleSpan)*scale;
+    pushVolumetricParticle(particles,addMesh(i*2+1),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundCapVYMin+Math.random()*layerTuning.groundCapVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+400+i*0.27,{
+      drag:layerTuning.groundCapDrag,gravity:layerTuning.groundCapGravity,wobbleAmp:0.09,grow:1.18,
+    });
+  }
+  for(let i=0;i<groundRingCount;i++){
+    const ang=Math.random()*Math.PI*2;
+    const radial=(layerTuning.groundRingRadiusMin+Math.random()*layerTuning.groundRingRadiusSpan)*scale;
+    const py=y+(layerTuning.groundRingHeightMin+Math.random()*layerTuning.groundRingHeightSpan)*scale;
+    const px=x+Math.cos(ang)*radial;
+    const pz=z+Math.sin(ang)*radial;
+    const speed=layerTuning.groundRingVXMin+Math.random()*layerTuning.groundRingVXSpan;
+    const baseScale=(layerTuning.groundRingScaleMin+Math.random()*layerTuning.groundRingScaleSpan)*scale;
+    pushVolumetricParticle(particles,addMesh(i*4+5),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundRingVYMin+Math.random()*layerTuning.groundRingVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+500+i*0.21,{
+      drag:layerTuning.groundRingDrag,gravity:layerTuning.groundRingGravity,wobbleAmp:0.08,grow:1.14,
     });
   }
   scene.add(group);
-  artistHeartBursts.push({group,droplets,life:0,maxLife:2});
+  activeVolumetricClouds.push({group,particles,life:0,maxLife:life,materials:materialPool});
+  return group;
+}
+
+function spawnArtistHeartBurst(x,y,z){
+  spawnVolumetricMushroomCloud({
+    x,y:y+0.18,z,
+    life:2,
+    scale:0.78,
+    palette:['#ff6fb7','#ff91cb','#ffd3eb','#fff4fb','#ffb0d8'],
+    geometry:ensureArtistHeartGeometry(),
+    counts:IS_MOBILE_LAYOUT
+      ? {trunkCount:26,capCount:74,ringCount:44,groundTrunkCount:14,groundCapCount:28,groundRingCount:18}
+      : {trunkCount:38,capCount:112,ringCount:68,groundTrunkCount:22,groundCapCount:40,groundRingCount:26},
+    layerTuning:{
+      trunkRadius:0.22,trunkHeight:1.85,
+      trunkScaleMin:0.11,trunkScaleSpan:0.09,trunkVXMin:0.08,trunkVXSpan:0.16,trunkVYMin:1.7,trunkVYSpan:1.1,trunkDrag:0.955,trunkGravity:0.78,
+      capRadiusMin:0.8,capRadiusSpan:1.35,capHeightMin:1.45,capHeightSpan:1.35,capDrop:0.08,capJitter:0.18,
+      capScaleMin:0.14,capScaleSpan:0.11,capVXMin:0.82,capVXSpan:1.08,capVYMin:0.72,capVYSpan:0.76,capDrag:0.963,capGravity:0.74,
+      ringRadiusMin:1.45,ringRadiusSpan:1.75,ringHeightMin:1.22,ringHeightSpan:0.68,
+      ringScaleMin:0.12,ringScaleSpan:0.1,ringVXMin:1.9,ringVXSpan:1.35,ringVYMin:0.42,ringVYSpan:0.56,ringDrag:0.968,ringGravity:0.7,
+      groundTrunkRadius:0.14,groundTrunkHeightMin:0.1,groundTrunkHeightSpan:0.42,
+      groundTrunkScaleMin:0.08,groundTrunkScaleSpan:0.04,groundTrunkVXMin:0.05,groundTrunkVXSpan:0.08,groundTrunkVYMin:0.7,groundTrunkVYSpan:0.45,groundTrunkDrag:0.956,groundTrunkGravity:0.7,
+      groundCapRadiusMin:0.3,groundCapRadiusSpan:0.55,groundCapHeightMin:0.42,groundCapHeightSpan:0.48,groundCapDrop:0.07,groundCapJitter:0.08,
+      groundCapScaleMin:0.08,groundCapScaleSpan:0.05,groundCapVXMin:0.3,groundCapVXSpan:0.4,groundCapVYMin:0.34,groundCapVYSpan:0.24,groundCapDrag:0.965,groundCapGravity:0.66,
+      groundRingRadiusMin:0.62,groundRingRadiusSpan:0.84,groundRingHeightMin:0.24,groundRingHeightSpan:0.26,
+      groundRingScaleMin:0.07,groundRingScaleSpan:0.04,groundRingVXMin:0.72,groundRingVXSpan:0.54,groundRingVYMin:0.18,groundRingVYSpan:0.2,groundRingDrag:0.969,groundRingGravity:0.62,
+    },
+  });
 }
 
 function updateArtistHeartBursts(dt){
-  for(let i=artistHeartBursts.length-1;i>=0;i--){
-    const burst=artistHeartBursts[i];
-    burst.life+=dt;
-    const t=clamp(burst.life/burst.maxLife,0,1);
-    for(const d of burst.droplets){
-      d.vy-=3.2*dt;
-      d.mesh.position.x+=d.vx*dt;
-      d.mesh.position.y+=d.vy*dt;
-      d.mesh.position.z+=d.vz*dt;
-      d.mesh.rotation.x+=d.rx*dt;
-      d.mesh.rotation.y+=d.ry*dt;
-      d.mesh.rotation.z+=d.rz*dt;
-      d.mesh.scale.setScalar(d.baseScale*(1+t*0.34));
-      if(d.mesh.material){
-        d.mesh.material.opacity=Math.max(0,0.98*(1-t));
-        if(d.mesh.material.emissiveIntensity!==undefined) d.mesh.material.emissiveIntensity=0.26+0.34*(1-t);
-      }
+  return;
+}
+
+function updateVolumetricClouds(dt,nowS){
+  for(let i=activeVolumetricClouds.length-1;i>=0;i--){
+    const cloud=activeVolumetricClouds[i];
+    cloud.life+=dt;
+    const t=clamp(cloud.life/cloud.maxLife,0,1);
+    const opacity=t<0.14 ? (t/0.14)*0.98 : Math.max(0,0.98*(1-((t-0.14)/0.86)));
+    for(const mat of cloud.materials){
+      mat.opacity=opacity;
+      if(mat.emissiveIntensity!==undefined) mat.emissiveIntensity=0.32+(1-t)*0.84;
+    }
+    for(const p of cloud.particles){
+      p.vx*=p.drag;
+      p.vz*=p.drag;
+      p.vy=(p.vy*0.985)-(p.gravity*dt);
+      p.px+=p.vx*dt;
+      p.py+=p.vy*dt + Math.sin(nowS*7.2+p.seed)*0.01;
+      p.pz+=p.vz*dt;
+      p.rx+=dt*(2.4+p.rvx);
+      p.ry+=dt*(2.1+p.rvy);
+      p.rz+=dt*(2.2+p.rvz);
+      const wobble=1+Math.sin(nowS*5.4+p.seed)*p.wobbleAmp;
+      const size=p.baseScale*((0.92)+(t*p.grow))*wobble;
+      p.mesh.position.set(p.px,p.py,p.pz);
+      p.mesh.rotation.set(p.rx,p.ry,p.rz);
+      p.mesh.scale.setScalar(size);
     }
     if(t>=1){
-      burst.group.traverse(o=>{
-        if(o.isMesh) o.material?.dispose?.();
-      });
-      burst.group.removeFromParent();
-      artistHeartBursts.splice(i,1);
+      for(const mat of cloud.materials) mat.dispose?.();
+      cloud.group.removeFromParent();
+      activeVolumetricClouds.splice(i,1);
     }
   }
 }
@@ -6005,213 +6087,29 @@ function spawnIceField(target){
 }
 
 function spawnBombMushroomCloud(x,y,z){
-  const scale=0.9;
-  const count=IS_MOBILE_LAYOUT?2200:3600;
-  const groundCount=IS_MOBILE_LAYOUT?520:880;
-  const group=new THREE.Group();
-  const droplets=[];
-  const geometry=new THREE.IcosahedronGeometry(0.12,0);
-  const makeMat=(hex)=>new THREE.MeshStandardMaterial({
-    color:hex,
-    emissive:hex,
-    emissiveIntensity:0.95,
-    transparent:true,
-    opacity:0.98,
-    depthWrite:false,
-    depthTest:true,
-    roughness:0.36,
-    metalness:0.02,
-    vertexColors:true,
-  });
-  const trunkCount=Math.floor(count*0.24);
-  const capCount=Math.floor(count*0.56);
-  const ringCount=count-trunkCount-capCount;
-  const groundTrunkCount=Math.floor(groundCount*0.28);
-  const groundCapCount=Math.floor(groundCount*0.47);
-  const groundRingCount=groundCount-groundTrunkCount-groundCapCount;
-  const trunkMesh=new THREE.InstancedMesh(geometry,makeMat('#ffd5ff'),trunkCount);
-  const capMesh=new THREE.InstancedMesh(geometry,makeMat('#ff96df'),capCount);
-  const ringMesh=new THREE.InstancedMesh(geometry,makeMat('#8fd8ff'),ringCount);
-  const groundTrunkMesh=new THREE.InstancedMesh(geometry,makeMat('#ffbd7a'),groundTrunkCount);
-  const groundCapMesh=new THREE.InstancedMesh(geometry,makeMat('#ff75cf'),groundCapCount);
-  const groundRingMesh=new THREE.InstancedMesh(geometry,makeMat('#fff27c'),groundRingCount);
-  trunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  capMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  ringMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  groundTrunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  groundCapMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  groundRingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  trunkMesh.frustumCulled=false;
-  capMesh.frustumCulled=false;
-  ringMesh.frustumCulled=false;
-  groundTrunkMesh.frustumCulled=false;
-  groundCapMesh.frustumCulled=false;
-  groundRingMesh.frustumCulled=false;
-  const palette=[
-    '#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#c6ff7d','#ffa15e','#ffffff'
-  ];
-  const phaseStart=Math.random()*1000;
-  const configureInstance=(instancedMesh,index,px,py,pz,baseScale,colorHex)=>{
-    tempInstanceObject.position.set(px,py,pz);
-    tempInstanceObject.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
-    tempInstanceObject.scale.setScalar(baseScale);
-    tempInstanceObject.updateMatrix();
-    instancedMesh.setMatrixAt(index,tempInstanceObject.matrix);
-    instancedMesh.setColorAt(index,new THREE.Color(colorHex));
-  };
-  for(let i=0;i<trunkCount;i++){
-    const ang=Math.random()*Math.PI*2;
-    const radius=(Math.random()*0.34)*scale;
-    const py=y+(Math.random()*3.2)*scale;
-    const px=x+Math.cos(ang)*radius;
-    const pz=z+Math.sin(ang)*radius;
-    const baseScale=(0.52+Math.random()*0.38);
-    configureInstance(trunkMesh,i,px,py,pz,baseScale,palette[(i+1)%palette.length]);
-    droplets.push({
-      instanceMesh:trunkMesh,
-      instanceIndex:i,
-      px,py,pz,
-      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
-      rvx:(Math.random()-0.5)*2.6,rvy:(Math.random()-0.5)*2.2,rvz:(Math.random()-0.5)*2.5,
-      vx:Math.cos(ang)*(0.18+Math.random()*0.28),
-      vy:(3.7+Math.random()*2.2)*scale,
-      vz:Math.sin(ang)*(0.18+Math.random()*0.28),
-      drag:0.952+Math.random()*0.012,
-      gravity:1.28+Math.random()*0.35,
-      baseScale,
-      seed:phaseStart+i*0.37,
-    });
-  }
-  for(let i=0;i<capCount;i++){
-    const ang=Math.random()*Math.PI*2;
-    const radial=(1.25+Math.random()*2.45)*scale;
-    const dome=(2.9+Math.pow(Math.random(),0.55)*2.4)*scale;
-    const px=x+Math.cos(ang)*radial;
-    const pz=z+Math.sin(ang)*radial;
-    const py=y+dome-(radial*0.11)+(Math.random()-0.5)*0.26;
-    const baseScale=(0.72+Math.random()*0.72);
-    configureInstance(capMesh,i,px,py,pz,baseScale,palette[(i*3+2)%palette.length]);
-    droplets.push({
-      instanceMesh:capMesh,
-      instanceIndex:i,
-      px,py,pz,
-      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
-      rvx:(Math.random()-0.5)*2.1,rvy:(Math.random()-0.5)*1.9,rvz:(Math.random()-0.5)*2.1,
-      vx:Math.cos(ang)*(1.35+Math.random()*1.85),
-      vy:(1.55+Math.random()*1.45)*scale,
-      vz:Math.sin(ang)*(1.35+Math.random()*1.85),
-      drag:0.962+Math.random()*0.012,
-      gravity:1.1+Math.random()*0.28,
-      baseScale,
-      seed:phaseStart+100+i*0.29,
-    });
-  }
-  for(let i=0;i<ringCount;i++){
-    const ang=Math.random()*Math.PI*2;
-    const radial=(2.45+Math.random()*3.1)*scale;
-    const py=y+(2.05+Math.random()*0.9)*scale;
-    const px=x+Math.cos(ang)*radial;
-    const pz=z+Math.sin(ang)*radial;
-    const baseScale=(0.66+Math.random()*0.64);
-    configureInstance(ringMesh,i,px,py,pz,baseScale,palette[(i*5+4)%palette.length]);
-    droplets.push({
-      instanceMesh:ringMesh,
-      instanceIndex:i,
-      px,py,pz,
-      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
-      rvx:(Math.random()-0.5)*2.5,rvy:(Math.random()-0.5)*2.3,rvz:(Math.random()-0.5)*2.5,
-      vx:Math.cos(ang)*(3.8+Math.random()*2.4),
-      vy:(0.95+Math.random()*1.1)*scale,
-      vz:Math.sin(ang)*(3.8+Math.random()*2.4),
-      drag:0.968+Math.random()*0.009,
-      gravity:0.92+Math.random()*0.22,
-      baseScale,
-      seed:phaseStart+200+i*0.23,
-    });
-  }
-  for(let i=0;i<groundTrunkCount;i++){
-    const ang=Math.random()*Math.PI*2;
-    const radius=(Math.random()*0.2)*scale;
-    const py=y+(0.15+Math.random()*0.78)*scale;
-    const px=x+Math.cos(ang)*radius;
-    const pz=z+Math.sin(ang)*radius;
-    const baseScale=(0.42+Math.random()*0.22);
-    configureInstance(groundTrunkMesh,i,px,py,pz,baseScale,palette[(i+3)%palette.length]);
-    droplets.push({
-      instanceMesh:groundTrunkMesh,
-      instanceIndex:i,
-      px,py,pz,
-      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
-      rvx:(Math.random()-0.5)*2.2,rvy:(Math.random()-0.5)*1.9,rvz:(Math.random()-0.5)*2.1,
-      vx:Math.cos(ang)*(0.12+Math.random()*0.18),
-      vy:(1.45+Math.random()*1.15)*scale,
-      vz:Math.sin(ang)*(0.12+Math.random()*0.18),
-      drag:0.956+Math.random()*0.011,
-      gravity:1.12+Math.random()*0.22,
-      baseScale,
-      seed:phaseStart+300+i*0.31,
-    });
-  }
-  for(let i=0;i<groundCapCount;i++){
-    const ang=Math.random()*Math.PI*2;
-    const radial=(0.48+Math.random()*1.08)*scale;
-    const dome=(0.72+Math.pow(Math.random(),0.55)*0.94)*scale;
-    const px=x+Math.cos(ang)*radial;
-    const pz=z+Math.sin(ang)*radial;
-    const py=y+dome-(radial*0.09)+(Math.random()-0.5)*0.11;
-    const baseScale=(0.46+Math.random()*0.34);
-    configureInstance(groundCapMesh,i,px,py,pz,baseScale,palette[(i*2+1)%palette.length]);
-    droplets.push({
-      instanceMesh:groundCapMesh,
-      instanceIndex:i,
-      px,py,pz,
-      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
-      rvx:(Math.random()-0.5)*1.8,rvy:(Math.random()-0.5)*1.5,rvz:(Math.random()-0.5)*1.8,
-      vx:Math.cos(ang)*(0.58+Math.random()*0.84),
-      vy:(0.72+Math.random()*0.65)*scale,
-      vz:Math.sin(ang)*(0.58+Math.random()*0.84),
-      drag:0.965+Math.random()*0.009,
-      gravity:0.98+Math.random()*0.18,
-      baseScale,
-      seed:phaseStart+400+i*0.27,
-    });
-  }
-  for(let i=0;i<groundRingCount;i++){
-    const ang=Math.random()*Math.PI*2;
-    const radial=(0.92+Math.random()*1.52)*scale;
-    const py=y+(0.44+Math.random()*0.42)*scale;
-    const px=x+Math.cos(ang)*radial;
-    const pz=z+Math.sin(ang)*radial;
-    const baseScale=(0.38+Math.random()*0.26);
-    configureInstance(groundRingMesh,i,px,py,pz,baseScale,palette[(i*4+5)%palette.length]);
-    droplets.push({
-      instanceMesh:groundRingMesh,
-      instanceIndex:i,
-      px,py,pz,
-      rx:Math.random()*Math.PI,ry:Math.random()*Math.PI,rz:Math.random()*Math.PI,
-      rvx:(Math.random()-0.5)*1.9,rvy:(Math.random()-0.5)*1.7,rvz:(Math.random()-0.5)*1.9,
-      vx:Math.cos(ang)*(1.2+Math.random()*0.95),
-      vy:(0.4+Math.random()*0.42)*scale,
-      vz:Math.sin(ang)*(1.2+Math.random()*0.95),
-      drag:0.969+Math.random()*0.007,
-      gravity:0.9+Math.random()*0.15,
-      baseScale,
-      seed:phaseStart+500+i*0.21,
-    });
-  }
-  group.add(trunkMesh,capMesh,ringMesh,groundTrunkMesh,groundCapMesh,groundRingMesh);
-  group.frustumCulled=false;
-  scene.add(group);
-  activeFlameJets.push({
-    mesh:group,
+  spawnVolumetricMushroomCloud({
+    x,y,z,
     life:2.1,
-    maxLife:2.1,
-    dirX:0,dirZ:0,hitTick:-99,
-    droplets,
-    gravity:1.14,
-    drag:0.972,
-    isExplosion:true,
-    instancedMeshes:[trunkMesh,capMesh,ringMesh,groundTrunkMesh,groundCapMesh,groundRingMesh],
+    scale:0.92,
+    palette:['#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#c6ff7d','#ffa15e','#ffffff'],
+    geometry:ensureVolumetricCloudGeometry(),
+    counts:IS_MOBILE_LAYOUT
+      ? {trunkCount:120,capCount:360,ringCount:220,groundTrunkCount:48,groundCapCount:110,groundRingCount:70}
+      : {trunkCount:180,capCount:560,ringCount:360,groundTrunkCount:74,groundCapCount:170,groundRingCount:110},
+    layerTuning:{
+      trunkRadius:0.34,trunkHeight:3.2,
+      trunkScaleMin:0.48,trunkScaleSpan:0.34,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
+      capRadiusMin:1.25,capRadiusSpan:2.45,capHeightMin:2.9,capHeightSpan:2.4,capDrop:0.11,capJitter:0.26,
+      capScaleMin:0.68,capScaleSpan:0.68,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
+      ringRadiusMin:2.45,ringRadiusSpan:3.1,ringHeightMin:2.05,ringHeightSpan:0.9,
+      ringScaleMin:0.62,ringScaleSpan:0.6,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
+      groundTrunkRadius:0.2,groundTrunkHeightMin:0.15,groundTrunkHeightSpan:0.78,
+      groundTrunkScaleMin:0.4,groundTrunkScaleSpan:0.2,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
+      groundCapRadiusMin:0.48,groundCapRadiusSpan:1.08,groundCapHeightMin:0.72,groundCapHeightSpan:0.94,groundCapDrop:0.09,groundCapJitter:0.11,
+      groundCapScaleMin:0.44,groundCapScaleSpan:0.3,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
+      groundRingRadiusMin:0.92,groundRingRadiusSpan:1.52,groundRingHeightMin:0.44,groundRingHeightSpan:0.42,
+      groundRingScaleMin:0.36,groundRingScaleSpan:0.24,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
+    },
   });
 }
 
@@ -6419,6 +6317,7 @@ function updateSpecialWeapons(dt,nowS){
       activeFlameJets.splice(i,1);
     }
   }
+  updateVolumetricClouds(dt,nowS);
   for(let i=activeCleanMagicBursts.length-1;i>=0;i--){
     const burst=activeCleanMagicBursts[i];
     burst.life+=dt;
@@ -7481,6 +7380,7 @@ let currentCleanTarget=null;
 let cleanPromptCooldown=0;
 const activeBombs=[];
 const activeFlameJets=[];
+const activeVolumetricClouds=[];
 const activeCleanMagicBursts=[];
 const activeIceFields=[];
 const activeWaterStreams=[];
@@ -9949,6 +9849,11 @@ function resetShopState(){
   debugCheatMode=false;
   for(const jet of activeFlameJets) scene.remove(jet.mesh);
   activeFlameJets.length=0;
+  for(const cloud of activeVolumetricClouds){
+    for(const mat of cloud.materials||[]) mat.dispose?.();
+    cloud.group?.removeFromParent?.();
+  }
+  activeVolumetricClouds.length=0;
   for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
   activeCleanMagicBursts.length=0;
   for(const bomb of activeBombs) scene.remove(bomb.group);
@@ -11241,6 +11146,11 @@ function clearLeaderboardSceneVisuals(){
   activeThrownProjectiles.length=0;
   for(const jet of activeFlameJets) disposeSpecialVisual(jet.mesh);
   activeFlameJets.length=0;
+  for(const cloud of activeVolumetricClouds){
+    for(const mat of cloud.materials||[]) mat.dispose?.();
+    cloud.group?.removeFromParent?.();
+  }
+  activeVolumetricClouds.length=0;
   for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
   activeCleanMagicBursts.length=0;
   for(const bomb of activeBombs) disposeSpecialVisual(bomb.group);
@@ -11537,6 +11447,11 @@ function resetWorld(){
   for(let i=COINS_FLOATING.length-1;i>=0;i--){disposeCoin(COINS_FLOATING[i]);COINS_FLOATING.splice(i,1)}
   for(const proj of activeThrownProjectiles) disposeSpecialVisual(proj.group);
   activeThrownProjectiles.length=0;
+  for(const cloud of activeVolumetricClouds){
+    for(const mat of cloud.materials||[]) mat.dispose?.();
+    cloud.group?.removeFromParent?.();
+  }
+  activeVolumetricClouds.length=0;
   for(const burst of activeCleanMagicBursts) disposeSpecialVisual(burst.mesh);
   activeCleanMagicBursts.length=0;
   // Reset pillars graffiti
