@@ -9874,7 +9874,6 @@ function renderLoadoutBar(){
       <div class="slot-icon">${getSkillIconSafe('soap','utility')}</div>
       <div class="slot-name">SOAP</div>
       <div class="slot-meta">${debugCheatMode?'∞':cleanerUses} clean uses</div>
-      <button type="button" disabled>${cleanerUses>0||debugCheatMode?'READY':'EMPTY'}</button>
     </div>`
   );
   const ownedWeapons=getOwnedWeaponIds();
@@ -9887,7 +9886,6 @@ function renderLoadoutBar(){
       <div class="slot-icon">${current?.icon||getSkillIconSafe('water','weapon')}</div>
       <div class="slot-name">${current?.name||'EMPTY'}</div>
       <div class="slot-meta">${ownedWeapons.length?`${ownedWeapons.length} owned`:'buy from shop'}</div>
-      <button type="button">${ownedWeapons.length?(ownedWeapons.length>1?'NEXT':'EQUIPPED'):'SHOP'}</button>
     </div>`
   );
   loadoutBar.innerHTML=parts.join('');
