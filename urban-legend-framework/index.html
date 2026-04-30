@@ -1189,6 +1189,10 @@
   @media (max-width:640px){
     #end-overlay{padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));align-items:flex-start}
     #end-box{width:min(94vw,460px);max-height:none;min-height:calc(100dvh - 24px - env(safe-area-inset-bottom,0px));padding:24px 16px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    #name-row{flex-wrap:wrap;align-items:stretch}
+    #name-label{width:100%;justify-content:center}
+    #name-input{flex:1 1 100%;min-width:0}
+    #submit-btn{flex:1 1 100%;width:100%}
     #end-overlay.scene-view{padding:0;align-items:flex-start;justify-content:flex-end}
     #end-box.minimized{
       position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:12px;left:auto;bottom:auto;
@@ -2233,7 +2237,7 @@ const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
 const SCENE_OBJECT_STORAGE_KEY='urbanLegendSceneObjectsV1';
-const SCENE_OBJECT_VIDEO_SRC='background/movie4.mp4';
+const SCENE_OBJECT_VIDEO_SRC='background/movie5.mp4';
 const RIVER_REGION_DEFAULTS=[
   {
     "minX": -13.948147487323128,
@@ -2262,7 +2266,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-north",
     "type": "video-wall",
-    "src": "background/movie4.mp4",
+    "src": "background/movie5.mp4",
     "x": -0.6,
     "y": -0.5,
     "z": -13.4,
@@ -2274,7 +2278,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-south",
     "type": "video-wall",
-    "src": "background/movie4.mp4",
+    "src": "background/movie5.mp4",
     "x": -0.8,
     "y": -1,
     "z": 15.6,
@@ -2286,7 +2290,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-west",
     "type": "video-wall",
-    "src": "background/movie4.mp4",
+    "src": "background/movie5.mp4",
     "x": -14.7,
     "y": -0.5,
     "z": 0.5,
@@ -2298,7 +2302,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-east",
     "type": "video-wall",
-    "src": "background/movie4.mp4",
+    "src": "background/movie5.mp4",
     "x": 14.3,
     "y": -0.5,
     "z": 1.5,
@@ -3375,7 +3379,7 @@ function setPlaygroundEndTransparency(enabled){
       const base=mat.userData.endFadeBase;
       if(enabled){
         if('transparent' in mat) mat.transparent=true;
-        if('opacity' in mat) mat.opacity=Math.min(base.opacity,0.32);
+        if('opacity' in mat) mat.opacity=Math.min(base.opacity,0.25);
         if('depthWrite' in mat) mat.depthWrite=false;
       }else{
         if('transparent' in mat) mat.transparent=base.transparent;
@@ -6241,7 +6245,7 @@ function spawnIceField(target){
 function spawnBombMushroomCloud(x,y,z){
   spawnVolumetricMushroomCloud({
     x,y,z,
-    life:2.1,
+    life:4,
     scale:0.92,
     palette:['#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#c6ff7d','#ffa15e','#ffffff'],
     geometry:ensureVolumetricCloudGeometry(),
@@ -6271,6 +6275,17 @@ function triggerBombExplosion(bomb){
   bomb.burning=0.65;
   playSFX('bombExplode');
   spawnBombMushroomCloud(bomb.group.position.x,bomb.group.position.y+0.15,bomb.group.position.z);
+}
+
+function triggerLatestBombExplosion(){
+  for(let i=activeBombs.length-1;i>=0;i--){
+    const bomb=activeBombs[i];
+    if(!bomb?.triggered){
+      triggerBombExplosion(bomb);
+      return true;
+    }
+  }
+  return false;
 }
 
 function spawnBombTrap(target){
@@ -6606,6 +6621,12 @@ function useSpecialWeapon(charge=0){
     player.pendingSpecialCharge=charge;
     player.pendingSpecialThrow={weapon:'ice',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else if(equippedWeapon==='bomb'){
+    if(triggerLatestBombExplosion()){
+      if(!debugCheatMode) player.specialCooldowns.bomb=SPECIAL_COOLDOWNS.bomb||0;
+      refreshSpecialButton();
+      renderLoadoutBar();
+      return true;
+    }
     if(activeBombs.length+(activeThrownProjectiles.filter(p=>p.kind==='bomb').length)>=5 && !debugCheatMode) return false;
     const throwData=(currentSpecialAimTarget?.weapon==='bomb'
       ? cloneSpecialThrowTarget(currentSpecialAimTarget)
@@ -10496,7 +10517,7 @@ function updateCam(){
       endCameraOrbitAngle+=END_CAMERA_AUTO_RATE/60;
     }
     const b=getPlayableBounds();
-    const radius=Math.max(48,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*2.48)*endCameraZoom;
+    const radius=Math.max(41,Math.max(b.maxX-b.minX,b.maxZ-b.minZ)*2.108)*endCameraZoom;
     const tx=b.centerX;
     const tz=b.centerZ;
     const ty=(playableLayer?.y||0)+1.2;
@@ -11570,6 +11591,7 @@ continueBtn?.addEventListener('click',()=>{
   setGameOverUIHidden(false);
   setEndOverlaySceneView(false);
   setSceneObjectsVisible(true);
+  setPlaygroundEndTransparency(false);
   gameState='playing';
   updateKillUI();
   updateCoinUI();
