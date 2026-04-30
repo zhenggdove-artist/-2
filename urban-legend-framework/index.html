@@ -2233,7 +2233,7 @@ const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
 const SCENE_OBJECT_STORAGE_KEY='urbanLegendSceneObjectsV1';
-const SCENE_OBJECT_VIDEO_SRC='background/movie3SSS.mp4';
+const SCENE_OBJECT_VIDEO_SRC='background/多眼睛2.mp4';
 const RIVER_REGION_DEFAULTS=[
   {
     "minX": -13.948147487323128,
@@ -2262,7 +2262,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-north",
     "type": "video-wall",
-    "src": "background/movie3SSS.mp4",
+    "src": "background/多眼睛2.mp4",
     "x": -0.3,
     "y": -0.5,
     "z": -13.2,
@@ -2274,7 +2274,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-south",
     "type": "video-wall",
-    "src": "background/movie3SSS.mp4",
+    "src": "background/多眼睛2.mp4",
     "x": -0.8,
     "y": -1,
     "z": 15.6,
@@ -2286,7 +2286,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-west",
     "type": "video-wall",
-    "src": "background/movie3SSS.mp4",
+    "src": "background/多眼睛2.mp4",
     "x": -14.7,
     "y": -0.5,
     "z": 0.5,
@@ -2298,7 +2298,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-east",
     "type": "video-wall",
-    "src": "background/movie3SSS.mp4",
+    "src": "background/多眼睛2.mp4",
     "x": 14.3,
     "y": -0.5,
     "z": 1.5,
@@ -2660,7 +2660,7 @@ function disposeSceneObjectEntry(entry){
 function createSceneObjectVideoElement(src){
   const video=document.createElement('video');
   video.src=encodeURI(src);
-  video.loop=true;
+  video.loop=false;
   video.muted=true;
   video.autoplay=true;
   video.playsInline=true;
@@ -2687,6 +2687,7 @@ function buildSceneObjectEntry(def){
     side:THREE.DoubleSide,
     transparent:true,
     opacity:0.96,
+    depthWrite:false,
     toneMapped:false,
   });
   const mesh=new THREE.Mesh(sceneObjectUnitPlaneGeometry,material);
@@ -2695,7 +2696,18 @@ function buildSceneObjectEntry(def){
   const group=new THREE.Group();
   group.add(mesh);
   root.add(group);
-  const entry={id:def.id,group,mesh,material,texture,video};
+  const entry={id:def.id,group,mesh,material,texture,video,playDirection:1};
+  video.addEventListener('ended',()=>{
+    if(entry.playDirection>0){
+      entry.playDirection=-1;
+      try{
+        video.pause();
+        if(Number.isFinite(video.duration) && video.duration>0){
+          video.currentTime=Math.max(0,video.duration-0.001);
+        }
+      }catch{}
+    }
+  });
   sceneObjectEntries.set(def.id,entry);
   syncSceneObjectEntry(entry,def);
   return entry;
@@ -2711,8 +2723,35 @@ function syncSceneObjectEntry(entry,def){
 
 function resumeSceneObjectVideos(){
   for(const entry of sceneObjectEntries.values()){
+    if(entry.playDirection<0) continue;
     const p=entry.video?.play?.();
     if(p?.catch) p.catch(()=>{});
+  }
+}
+
+function updateSceneObjectVideos(dt){
+  if(!sceneObjectRootGroup?.visible) return;
+  for(const entry of sceneObjectEntries.values()){
+    const video=entry.video;
+    if(!video) continue;
+    if(entry.playDirection<0){
+      try{
+        video.pause();
+        if(video.readyState>=2){
+          const next=Math.max(0,video.currentTime-dt);
+          if(Math.abs(next-video.currentTime)>0.0001) video.currentTime=next;
+          if(next<=0.001){
+            entry.playDirection=1;
+            video.currentTime=0;
+            const p=video.play?.();
+            if(p?.catch) p.catch(()=>{});
+          }
+        }
+      }catch{}
+    }else if(video.paused){
+      const p=video.play?.();
+      if(p?.catch) p.catch(()=>{});
+    }
   }
 }
 
@@ -2741,8 +2780,10 @@ function setSceneObjectsVisible(visible){
   root.visible=!!visible;
   for(const entry of sceneObjectEntries.values()){
     if(visible){
-      const p=entry.video?.play?.();
-      if(p?.catch) p.catch(()=>{});
+      if(entry.playDirection>0){
+        const p=entry.video?.play?.();
+        if(p?.catch) p.catch(()=>{});
+      }
     }else{
       try{ entry.video?.pause?.(); }catch{}
     }
@@ -5419,6 +5460,7 @@ function spawnVolumetricMushroomCloud({
   const addMesh=(colorIdx)=>{
     const mesh=new THREE.Mesh(geometry,materialPool[colorIdx%materialPool.length]);
     mesh.frustumCulled=false;
+    mesh.renderOrder=18;
     group.add(mesh);
     return mesh;
   };
@@ -11663,6 +11705,7 @@ function tick(){
 
     updateFlowers(nowS);
     if(!IS_MOBILE_LAYOUT || (tickCounter%2===0)) updateWater(nowS);
+    updateSceneObjectVideos(dt);
     updateSplash(dt);
     updateKOBursts(dt);
     updateArtistHeartBursts(dt);
