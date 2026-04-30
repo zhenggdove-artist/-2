@@ -599,7 +599,7 @@
   #checkout-btn:active{transform:scale(0.985)}
   #kill-icon{left:8.6%;top:13.86%;height:34px;width:auto}
   #kill-count{left:13.4%;top:13.86%;width:48px;height:30px}
-  #coin-glyph{left:75.4%;top:15%;width:24px;height:24px}
+  #coin-glyph{display:none!important;left:75.4%;top:15%;width:24px;height:24px}
   #coin-glyph .hud-coin-svg{width:100%;height:100%;display:block}
   #coin-icon{left:79%;top:15%;height:30px;width:auto}
   #coin-count{left:84%;top:15%;width:48px;height:30px}
@@ -607,7 +607,7 @@
   @media (max-width:640px){
     #kill-icon{left:18%;top:17.7%;height:24px}
     #kill-count{left:23.5%;top:17.7%;width:36px;height:24px;font-size:calc(16px * var(--ui-scale,1))}
-    #coin-glyph{left:78%;top:17.7%;width:20px;height:20px}
+    #coin-glyph{display:none!important;left:78%;top:17.7%;width:20px;height:20px}
     #coin-icon{left:81%;top:17.7%;height:22px}
     #coin-count{left:85%;top:17.7%;width:36px;height:24px;font-size:calc(16px * var(--ui-scale,1))}
     #shop-icon{left:81%;top:24.5%;height:24px}
@@ -2232,6 +2232,7 @@ const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
 const SCENE_OBJECT_STORAGE_KEY='urbanLegendSceneObjectsV1';
+const SCENE_OBJECT_VIDEO_SRC='background/movieSS.mp4';
 const RIVER_REGION_DEFAULTS=[
   {
     "minX": -13.948147487323128,
@@ -2260,7 +2261,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-north",
     "type": "video-wall",
-    "src": "background/movie.mp4",
+    "src": "background/movieSS.mp4",
     "x": 1,
     "y": -0.5,
     "z": -13.2,
@@ -2272,7 +2273,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-south",
     "type": "video-wall",
-    "src": "background/movie.mp4",
+    "src": "background/movieSS.mp4",
     "x": 1.2,
     "y": -1,
     "z": 16.2,
@@ -2284,7 +2285,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-west",
     "type": "video-wall",
-    "src": "background/movie.mp4",
+    "src": "background/movieSS.mp4",
     "x": -14.7,
     "y": -0.5,
     "z": 1.4,
@@ -2296,7 +2297,7 @@ const SCENE_OBJECT_DEFAULTS=[
   {
     "id": "scene-video-east",
     "type": "video-wall",
-    "src": "background/movie.mp4",
+    "src": "background/movieSS.mp4",
     "x": 17.4,
     "y": -0.5,
     "z": 1.2,
@@ -2568,7 +2569,7 @@ function normalizeSceneObject(obj,index=0){
   const y=Number.isFinite(Number(obj?.y)) ? Number(obj.y) : ((playableLayer?.y??0)+5);
   const z=Number.isFinite(Number(obj?.z)) ? Number(obj.z) : 0;
   const rotY=Number.isFinite(Number(obj?.rotY)) ? Number(obj.rotY) : 0;
-  const src=String(obj?.src||'background/movie.mp4');
+  const src=SCENE_OBJECT_VIDEO_SRC;
   return {
     id:String(obj?.id||makeSceneObjectId()),
     type:'video-wall',
@@ -2603,10 +2604,10 @@ function seedDefaultSceneObjects(){
   const wallOffset=4.4;
   const tall=Math.max(12,Math.min(18,Math.max(spanX,spanZ)*0.42));
   return sanitizeSceneObjects([
-    {id:'scene-video-north',src:'background/movie.mp4',x:centerX,y:baseY,z:bounds.minZ-wallOffset,width:spanX,height:tall,rotY:0},
-    {id:'scene-video-south',src:'background/movie.mp4',x:centerX,y:baseY,z:bounds.maxZ+wallOffset,width:spanX,height:tall,rotY:Math.PI},
-    {id:'scene-video-west',src:'background/movie.mp4',x:bounds.minX-wallOffset,y:baseY,z:centerZ,width:spanZ,height:tall,rotY:Math.PI*0.5},
-    {id:'scene-video-east',src:'background/movie.mp4',x:bounds.maxX+wallOffset,y:baseY,z:centerZ,width:spanZ,height:tall,rotY:-Math.PI*0.5},
+    {id:'scene-video-north',src:SCENE_OBJECT_VIDEO_SRC,x:centerX,y:baseY,z:bounds.minZ-wallOffset,width:spanX,height:tall,rotY:0},
+    {id:'scene-video-south',src:SCENE_OBJECT_VIDEO_SRC,x:centerX,y:baseY,z:bounds.maxZ+wallOffset,width:spanX,height:tall,rotY:Math.PI},
+    {id:'scene-video-west',src:SCENE_OBJECT_VIDEO_SRC,x:bounds.minX-wallOffset,y:baseY,z:centerZ,width:spanZ,height:tall,rotY:Math.PI*0.5},
+    {id:'scene-video-east',src:SCENE_OBJECT_VIDEO_SRC,x:bounds.maxX+wallOffset,y:baseY,z:centerZ,width:spanZ,height:tall,rotY:-Math.PI*0.5},
   ]);
 }
 
@@ -2732,6 +2733,19 @@ function applySceneObjects(objects){
   root.visible=true;
   resumeSceneObjectVideos();
   return clean;
+}
+
+function setSceneObjectsVisible(visible){
+  const root=ensureSceneObjectRoot();
+  root.visible=!!visible;
+  for(const entry of sceneObjectEntries.values()){
+    if(visible){
+      const p=entry.video?.play?.();
+      if(p?.catch) p.catch(()=>{});
+    }else{
+      try{ entry.video?.pause?.(); }catch{}
+    }
+  }
 }
 
 function disposeRiverVisual(obj){
@@ -5206,6 +5220,8 @@ const koActiveSlot=new Int32Array(KO_MAX).fill(-1);
 const BURST_EFFECT_PRESETS={
   amber:{colors:['#ffb9da','#ffd7eb','#ff7cb7','#fff2f8'],count:520,speed:[1.25,3.4],up:[1.8,3.8],spread:1.0,size:0.045,swirl:0.34,shape:'heart',radiusScale:3.0,depthScale:2.6},
 };
+const artistHeartBursts=[];
+let artistHeartGeometry=null;
 
 function sampleBurstPattern(shape,i,count){
   const t=(i+0.5)/Math.max(1,count);
@@ -5339,6 +5355,98 @@ function updateKOBursts(dt){
   if(anyActive){
     koGeo.attributes.position.needsUpdate=true;
     koGeo.attributes.color.needsUpdate=true;
+  }
+}
+
+function ensureArtistHeartGeometry(){
+  if(artistHeartGeometry) return artistHeartGeometry;
+  const shape=new THREE.Shape();
+  shape.moveTo(0,0.28);
+  shape.bezierCurveTo(0,0.52,-0.34,0.62,-0.52,0.36);
+  shape.bezierCurveTo(-0.76,0.02,-0.38,-0.28,0,-0.58);
+  shape.bezierCurveTo(0.38,-0.28,0.76,0.02,0.52,0.36);
+  shape.bezierCurveTo(0.34,0.62,0,0.52,0,0.28);
+  artistHeartGeometry=new THREE.ExtrudeGeometry(shape,{
+    depth:0.18,
+    bevelEnabled:true,
+    bevelSegments:2,
+    steps:1,
+    bevelSize:0.03,
+    bevelThickness:0.03,
+    curveSegments:18,
+  });
+  artistHeartGeometry.center();
+  return artistHeartGeometry;
+}
+
+function spawnArtistHeartBurst(x,y,z){
+  const count=IS_MOBILE_LAYOUT?20:32;
+  const group=new THREE.Group();
+  const geometry=ensureArtistHeartGeometry();
+  const droplets=[];
+  const palette=['#ff8ed1','#ffd2ee','#fff6fb','#ffa3c8','#ff6fb7'];
+  for(let i=0;i<count;i++){
+    const color=palette[(Math.random()*palette.length)|0];
+    const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({
+      color,
+      emissive:color,
+      emissiveIntensity:0.48,
+      roughness:0.34,
+      metalness:0.02,
+      transparent:true,
+      opacity:0.98,
+      depthWrite:false,
+    }));
+    mesh.position.set(
+      x+(Math.random()-0.5)*0.46,
+      y+0.5+Math.random()*0.42,
+      z+(Math.random()-0.5)*0.46
+    );
+    const scale=0.12+Math.random()*0.15;
+    mesh.scale.setScalar(scale);
+    mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    group.add(mesh);
+    droplets.push({
+      mesh,
+      vx:(Math.random()-0.5)*(1.2+Math.random()*0.8),
+      vy:1.8+Math.random()*1.9,
+      vz:(Math.random()-0.5)*(1.2+Math.random()*0.8),
+      rx:(Math.random()-0.5)*4.8,
+      ry:(Math.random()-0.5)*5.2,
+      rz:(Math.random()-0.5)*4.4,
+      baseScale:scale,
+    });
+  }
+  scene.add(group);
+  artistHeartBursts.push({group,droplets,life:0,maxLife:2});
+}
+
+function updateArtistHeartBursts(dt){
+  for(let i=artistHeartBursts.length-1;i>=0;i--){
+    const burst=artistHeartBursts[i];
+    burst.life+=dt;
+    const t=clamp(burst.life/burst.maxLife,0,1);
+    for(const d of burst.droplets){
+      d.vy-=3.2*dt;
+      d.mesh.position.x+=d.vx*dt;
+      d.mesh.position.y+=d.vy*dt;
+      d.mesh.position.z+=d.vz*dt;
+      d.mesh.rotation.x+=d.rx*dt;
+      d.mesh.rotation.y+=d.ry*dt;
+      d.mesh.rotation.z+=d.rz*dt;
+      d.mesh.scale.setScalar(d.baseScale*(1+t*0.34));
+      if(d.mesh.material){
+        d.mesh.material.opacity=Math.max(0,0.98*(1-t));
+        if(d.mesh.material.emissiveIntensity!==undefined) d.mesh.material.emissiveIntensity=0.26+0.34*(1-t);
+      }
+    }
+    if(t>=1){
+      burst.group.traverse(o=>{
+        if(o.isMesh) o.material?.dispose?.();
+      });
+      burst.group.removeFromParent();
+      artistHeartBursts.splice(i,1);
+    }
   }
 }
 
@@ -10556,7 +10664,7 @@ function killArtist(a,cause='generic'){
   I.actRun&&I.actRun.fadeOut(0.2);
   I.actPanicRun&&I.actPanicRun.fadeOut(0.2);
   I.actPaint&&I.actPaint.fadeOut(0.2);
-  spawnKOBurst(a.inst.outer.position.x,a.inst.outer.position.y+0.25,a.inst.outer.position.z,equippedBurstEffect);
+  spawnArtistHeartBurst(a.inst.outer.position.x,a.inst.outer.position.y+0.25,a.inst.outer.position.z);
   killCount++;updateKillUI();unlockBurstEffectsByKills();
 }
 
@@ -11249,6 +11357,7 @@ timerBox?.addEventListener('click',e=>{
 function startGame(){
   unlockSFX();
   resumeSceneObjectVideos();
+  setSceneObjectsVisible(true);
   setEndOverlaySceneView(false);
   setGameOverUIHidden(false);
   gameState='playing';
@@ -11282,6 +11391,7 @@ function startGame(){
 async function endGame(){
   if(gameState==='ended') return;
   gameState='ended';
+  setSceneObjectsVisible(false);
   endGameSceneState=captureSceneState();
   replaySceneEntryId=null;
   endCameraOrbitAngle=0;
@@ -11397,6 +11507,7 @@ continueBtn?.addEventListener('click',()=>{
   document.body.classList.remove('game-ended');
   setGameOverUIHidden(false);
   setEndOverlaySceneView(false);
+  setSceneObjectsVisible(true);
   gameState='playing';
   updateKillUI();
   updateCoinUI();
@@ -11576,6 +11687,7 @@ function tick(){
     if(!IS_MOBILE_LAYOUT || (tickCounter%2===0)) updateWater(nowS);
     updateSplash(dt);
     updateKOBursts(dt);
+    updateArtistHeartBursts(dt);
     updateSpecialAimMarker(nowS);
     updateCam();
     updateCeilingOcclusion();
