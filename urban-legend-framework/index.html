@@ -2673,15 +2673,13 @@ function createSceneObjectVideoElement(src){
   video.src=encodeURI(src);
   video.loop=false;
   video.muted=true;
-  video.autoplay=true;
+  video.autoplay=false;
   video.playsInline=true;
-  video.preload='auto';
+  video.preload='metadata';
   video.crossOrigin='anonymous';
   video.setAttribute('playsinline','');
   video.setAttribute('webkit-playsinline','');
   video.load();
-  const playPromise=video.play();
-  if(playPromise?.catch) playPromise.catch(()=>{});
   return video;
 }
 
@@ -2821,7 +2819,7 @@ function applySceneObjects(objects){
     sceneObjectEntries.delete(id);
   }
   root.visible=true;
-  resumeSceneObjectVideos();
+  if(gameState==='playing' || sceneObjectEditorState.active) resumeSceneObjectVideos();
   return clean;
 }
 
