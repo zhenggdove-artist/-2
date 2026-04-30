@@ -5470,6 +5470,13 @@ function spawnVolumetricMushroomCloud({
   life,
   scale,
   palette,
+  groundPalette=null,
+  trunkPalette=null,
+  capPalette=null,
+  ringPalette=null,
+  groundTrunkPalette=null,
+  groundCapPalette=null,
+  groundRingPalette=null,
   geometry,
   counts,
   layerTuning,
@@ -5477,14 +5484,25 @@ function spawnVolumetricMushroomCloud({
   ringSampler=null,
   groundCapSampler=null,
   groundRingSampler=null,
+  opacityCurve=null,
 }){
   const group=new THREE.Group();
   group.frustumCulled=false;
   const particles=[];
-  const materialPool=palette.map((hex,idx)=>createVolumetricCloudMaterial(hex,idx===palette.length-1?1.05:0.92));
+  const createPool=(arr)=>arr.map((hex,idx)=>createVolumetricCloudMaterial(hex,idx===arr.length-1?1.05:0.92));
+  const mainPalette=(Array.isArray(palette)&&palette.length)?palette:['#ffffff'];
+  const groundPaletteResolved=(Array.isArray(groundPalette)&&groundPalette.length)?groundPalette:mainPalette;
+  const trunkPool=createPool((Array.isArray(trunkPalette)&&trunkPalette.length)?trunkPalette:mainPalette);
+  const capPool=createPool((Array.isArray(capPalette)&&capPalette.length)?capPalette:mainPalette);
+  const ringPool=createPool((Array.isArray(ringPalette)&&ringPalette.length)?ringPalette:mainPalette);
+  const groundTrunkPool=createPool((Array.isArray(groundTrunkPalette)&&groundTrunkPalette.length)?groundTrunkPalette:groundPaletteResolved);
+  const groundCapPool=createPool((Array.isArray(groundCapPalette)&&groundCapPalette.length)?groundCapPalette:groundPaletteResolved);
+  const groundRingPool=createPool((Array.isArray(groundRingPalette)&&groundRingPalette.length)?groundRingPalette:groundPaletteResolved);
+  const materialPool=[...trunkPool,...capPool,...ringPool,...groundTrunkPool,...groundCapPool,...groundRingPool];
   const phaseStart=Math.random()*1000;
-  const addMesh=(colorIdx)=>{
-    const mesh=new THREE.Mesh(geometry,materialPool[colorIdx%materialPool.length]);
+  const pickPool=(pool,colorIdx)=>pool[colorIdx%pool.length];
+  const addMesh=(pool,colorIdx)=>{
+    const mesh=new THREE.Mesh(geometry,pickPool(pool,colorIdx));
     mesh.frustumCulled=false;
     mesh.renderOrder=18;
     group.add(mesh);
@@ -5499,7 +5517,7 @@ function spawnVolumetricMushroomCloud({
     const pz=z+Math.sin(ang)*radius;
     const speed=layerTuning.trunkVXMin+Math.random()*layerTuning.trunkVXSpan;
     const baseScale=(layerTuning.trunkScaleMin+Math.random()*layerTuning.trunkScaleSpan)*scale;
-    pushVolumetricParticle(particles,addMesh(i+1),px,py,pz,Math.cos(ang)*speed,(layerTuning.trunkVYMin+Math.random()*layerTuning.trunkVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+i*0.37,{
+    pushVolumetricParticle(particles,addMesh(trunkPool,i+1),px,py,pz,Math.cos(ang)*speed,(layerTuning.trunkVYMin+Math.random()*layerTuning.trunkVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+i*0.37,{
       drag:layerTuning.trunkDrag,gravity:layerTuning.trunkGravity,wobbleAmp:0.08,grow:1.12,
     });
   }
@@ -5513,7 +5531,7 @@ function spawnVolumetricMushroomCloud({
     const py=shape ? y+shape.y*scale+(Math.random()-0.5)*layerTuning.capJitter : y+dome-(radial*layerTuning.capDrop)+(Math.random()-0.5)*layerTuning.capJitter;
     const speed=layerTuning.capVXMin+Math.random()*layerTuning.capVXSpan;
     const baseScale=(layerTuning.capScaleMin+Math.random()*layerTuning.capScaleSpan)*scale;
-    pushVolumetricParticle(particles,addMesh(i*3+2),px,py,pz,Math.cos(ang)*speed,(layerTuning.capVYMin+Math.random()*layerTuning.capVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+100+i*0.29,{
+    pushVolumetricParticle(particles,addMesh(capPool,i*3+2),px,py,pz,Math.cos(ang)*speed,(layerTuning.capVYMin+Math.random()*layerTuning.capVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+100+i*0.29,{
       drag:layerTuning.capDrag,gravity:layerTuning.capGravity,wobbleAmp:0.12,grow:1.26,
     });
   }
@@ -5526,7 +5544,7 @@ function spawnVolumetricMushroomCloud({
     const pz=shape ? z+shape.z*scale : z+Math.sin(ang)*radial;
     const speed=layerTuning.ringVXMin+Math.random()*layerTuning.ringVXSpan;
     const baseScale=(layerTuning.ringScaleMin+Math.random()*layerTuning.ringScaleSpan)*scale;
-    pushVolumetricParticle(particles,addMesh(i*5+4),px,py,pz,Math.cos(ang)*speed,(layerTuning.ringVYMin+Math.random()*layerTuning.ringVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+200+i*0.23,{
+    pushVolumetricParticle(particles,addMesh(ringPool,i*5+4),px,py,pz,Math.cos(ang)*speed,(layerTuning.ringVYMin+Math.random()*layerTuning.ringVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+200+i*0.23,{
       drag:layerTuning.ringDrag,gravity:layerTuning.ringGravity,wobbleAmp:0.13,grow:1.34,
     });
   }
@@ -5538,7 +5556,7 @@ function spawnVolumetricMushroomCloud({
     const pz=z+Math.sin(ang)*radius;
     const speed=layerTuning.groundTrunkVXMin+Math.random()*layerTuning.groundTrunkVXSpan;
     const baseScale=(layerTuning.groundTrunkScaleMin+Math.random()*layerTuning.groundTrunkScaleSpan)*scale;
-    pushVolumetricParticle(particles,addMesh(i+3),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundTrunkVYMin+Math.random()*layerTuning.groundTrunkVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+300+i*0.31,{
+    pushVolumetricParticle(particles,addMesh(groundTrunkPool,i+3),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundTrunkVYMin+Math.random()*layerTuning.groundTrunkVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+300+i*0.31,{
       drag:layerTuning.groundTrunkDrag,gravity:layerTuning.groundTrunkGravity,wobbleAmp:0.07,grow:1.08,
     });
   }
@@ -5552,7 +5570,7 @@ function spawnVolumetricMushroomCloud({
     const py=shape ? y+shape.y*scale+(Math.random()-0.5)*layerTuning.groundCapJitter : y+dome-(radial*layerTuning.groundCapDrop)+(Math.random()-0.5)*layerTuning.groundCapJitter;
     const speed=layerTuning.groundCapVXMin+Math.random()*layerTuning.groundCapVXSpan;
     const baseScale=(layerTuning.groundCapScaleMin+Math.random()*layerTuning.groundCapScaleSpan)*scale;
-    pushVolumetricParticle(particles,addMesh(i*2+1),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundCapVYMin+Math.random()*layerTuning.groundCapVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+400+i*0.27,{
+    pushVolumetricParticle(particles,addMesh(groundCapPool,i*2+1),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundCapVYMin+Math.random()*layerTuning.groundCapVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+400+i*0.27,{
       drag:layerTuning.groundCapDrag,gravity:layerTuning.groundCapGravity,wobbleAmp:0.09,grow:1.18,
     });
   }
@@ -5565,12 +5583,12 @@ function spawnVolumetricMushroomCloud({
     const pz=shape ? z+shape.z*scale : z+Math.sin(ang)*radial;
     const speed=layerTuning.groundRingVXMin+Math.random()*layerTuning.groundRingVXSpan;
     const baseScale=(layerTuning.groundRingScaleMin+Math.random()*layerTuning.groundRingScaleSpan)*scale;
-    pushVolumetricParticle(particles,addMesh(i*4+5),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundRingVYMin+Math.random()*layerTuning.groundRingVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+500+i*0.21,{
+    pushVolumetricParticle(particles,addMesh(groundRingPool,i*4+5),px,py,pz,Math.cos(ang)*speed,(layerTuning.groundRingVYMin+Math.random()*layerTuning.groundRingVYSpan)*scale,Math.sin(ang)*speed,baseScale,phaseStart+500+i*0.21,{
       drag:layerTuning.groundRingDrag,gravity:layerTuning.groundRingGravity,wobbleAmp:0.08,grow:1.14,
     });
   }
   scene.add(group);
-  activeVolumetricClouds.push({group,particles,life:0,maxLife:life,materials:materialPool});
+  activeVolumetricClouds.push({group,particles,life:0,maxLife:life,materials:materialPool,opacityCurve});
   return group;
 }
 
@@ -5630,7 +5648,7 @@ function updateVolumetricClouds(dt,nowS){
     const cloud=activeVolumetricClouds[i];
     cloud.life+=dt;
     const t=clamp(cloud.life/cloud.maxLife,0,1);
-    const opacity=t<0.5 ? 1 : Math.max(0,1-((t-0.5)/0.5));
+    const opacity=cloud.opacityCurve ? clamp(cloud.opacityCurve(t),0,1) : (t<0.5 ? 1 : Math.max(0,1-((t-0.5)/0.5)));
     for(const mat of cloud.materials){
       mat.transparent=opacity<0.999;
       mat.opacity=opacity;
@@ -6225,24 +6243,37 @@ function spawnBombMushroomCloud(x,y,z){
     x,y,z,
     life:4,
     scale:0.92,
-    palette:['#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#c6ff7d','#ffa15e','#ffffff'],
+    palette:['#ff77cf','#ff9fe0','#ffd96e','#fff2b8','#d7f6ff','#ffffff'],
+    capPalette:['#ff77cf','#ff9fe0','#ffd96e','#fff2b8','#d7f6ff','#ffffff'],
+    ringPalette:['#ff5bbd','#ff8ad8','#ffd45c','#8ff6ff','#96b7ff','#ffffff'],
+    trunkPalette:['#ffd96e','#fff2b8','#ffb56e','#ffffff'],
+    groundPalette:['#ff8b54','#ffb347','#ffd96e','#fff0b8'],
+    groundCapPalette:['#ff8b54','#ffb347','#ffd96e','#fff0b8'],
+    groundRingPalette:['#ff6a3d','#ff9d3d','#ffd45c','#fff0b8'],
+    groundTrunkPalette:['#ff6a3d','#ff9d3d','#ffd45c'],
     geometry:ensureVolumetricCloudGeometry(),
     counts:IS_MOBILE_LAYOUT
       ? {trunkCount:220,capCount:760,ringCount:460,groundTrunkCount:96,groundCapCount:230,groundRingCount:140}
       : {trunkCount:360,capCount:1260,ringCount:780,groundTrunkCount:150,groundCapCount:360,groundRingCount:220},
     layerTuning:{
       trunkRadius:0.34,trunkHeight:3.2,
-      trunkScaleMin:0.51,trunkScaleSpan:0.3,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
+      trunkScaleMin:0.66,trunkScaleSpan:0.4,trunkVXMin:0.18,trunkVXSpan:0.28,trunkVYMin:3.7,trunkVYSpan:2.2,trunkDrag:0.952,trunkGravity:1.28,
       capRadiusMin:1.25,capRadiusSpan:2.45,capHeightMin:2.9,capHeightSpan:2.4,capDrop:0.11,capJitter:0.26,
-      capScaleMin:0.6,capScaleSpan:0.48,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
+      capScaleMin:0.82,capScaleSpan:0.66,capVXMin:1.35,capVXSpan:1.85,capVYMin:1.55,capVYSpan:1.45,capDrag:0.962,capGravity:1.1,
       ringRadiusMin:2.45,ringRadiusSpan:3.1,ringHeightMin:2.05,ringHeightSpan:0.9,
-      ringScaleMin:0.54,ringScaleSpan:0.42,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
+      ringScaleMin:0.72,ringScaleSpan:0.54,ringVXMin:3.8,ringVXSpan:2.4,ringVYMin:0.95,ringVYSpan:1.1,ringDrag:0.968,ringGravity:0.92,
       groundTrunkRadius:0.2,groundTrunkHeightMin:0.15,groundTrunkHeightSpan:0.78,
-      groundTrunkScaleMin:0.36,groundTrunkScaleSpan:0.21,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
+      groundTrunkScaleMin:0.12,groundTrunkScaleSpan:0.09,groundTrunkVXMin:0.12,groundTrunkVXSpan:0.18,groundTrunkVYMin:1.45,groundTrunkVYSpan:1.15,groundTrunkDrag:0.956,groundTrunkGravity:1.12,
       groundCapRadiusMin:0.48,groundCapRadiusSpan:1.08,groundCapHeightMin:0.72,groundCapHeightSpan:0.94,groundCapDrop:0.09,groundCapJitter:0.11,
-      groundCapScaleMin:0.42,groundCapScaleSpan:0.24,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
+      groundCapScaleMin:0.16,groundCapScaleSpan:0.12,groundCapVXMin:0.58,groundCapVXSpan:0.84,groundCapVYMin:0.72,groundCapVYSpan:0.65,groundCapDrag:0.965,groundCapGravity:0.98,
       groundRingRadiusMin:0.92,groundRingRadiusSpan:1.52,groundRingHeightMin:0.44,groundRingHeightSpan:0.42,
-      groundRingScaleMin:0.33,groundRingScaleSpan:0.192,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
+      groundRingScaleMin:0.11,groundRingScaleSpan:0.08,groundRingVXMin:1.2,groundRingVXSpan:0.95,groundRingVYMin:0.4,groundRingVYSpan:0.42,groundRingDrag:0.969,groundRingGravity:0.9,
+    },
+    opacityCurve:(t)=>{
+      const rise=t<0.1 ? (0.72 + (t/0.1)*0.28) : 1;
+      const fadeStart=0.34;
+      const fade=t<=fadeStart ? 1 : Math.pow(Math.max(0,1-((t-fadeStart)/(1-fadeStart))),1.65);
+      return clamp(rise*fade,0,1);
     },
   });
 }
