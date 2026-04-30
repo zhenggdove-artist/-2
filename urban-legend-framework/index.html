@@ -1057,7 +1057,7 @@
      saturation; the leaderboard card sits in front like a
      concert poster taped over neon. */
   #end-overlay{position:fixed;inset:0;
-    background:radial-gradient(circle at 50% 35%,rgba(255,158,210,0.45) 0%,rgba(217,38,128,0.55) 45%,rgba(120,15,68,0.72) 100%);
+    background:radial-gradient(circle at 50% 35%,rgba(255,158,210,0.225) 0%,rgba(217,38,128,0.275) 45%,rgba(120,15,68,0.36) 100%);
     backdrop-filter:blur(5px) saturate(1.18);
     -webkit-backdrop-filter:blur(5px) saturate(1.18);
     z-index:500;display:none;align-items:center;justify-content:center;padding:6vw;touch-action:none;
@@ -6617,11 +6617,13 @@ function useSpecialWeapon(charge=0){
     const releaseOriginZ=player.root.position.z+throwData.dirZ*0.55;
     const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:THROW_SPECIAL_TIME_SCALE});
     player.pendingSpecialAction='ice';
-    player.pendingSpecialTimer=getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE);
+    player.pendingSpecialTimer=Math.max(0,getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE)-0.3);
     player.pendingSpecialCharge=charge;
     player.pendingSpecialThrow={weapon:'ice',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else if(equippedWeapon==='bomb'){
     if(triggerLatestBombExplosion()){
+      setSpecialAimMarkerVisible(false);
+      currentSpecialAimTarget=null;
       if(!debugCheatMode) player.specialCooldowns.bomb=SPECIAL_COOLDOWNS.bomb||0;
       refreshSpecialButton();
       renderLoadoutBar();
@@ -6637,7 +6639,7 @@ function useSpecialWeapon(charge=0){
     const releaseOriginZ=player.root.position.z+throwData.dirZ*0.55;
     const act=playPlayerOneShot('actThrowBomb',0.62,{specialAnim:'throwbomb',timeScale:THROW_SPECIAL_TIME_SCALE});
     player.pendingSpecialAction='bomb';
-    player.pendingSpecialTimer=getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE);
+    player.pendingSpecialTimer=Math.max(0,getActionClipDuration(act,0.62,THROW_SPECIAL_TIME_SCALE)-0.3);
     player.pendingSpecialCharge=charge;
     player.pendingSpecialThrow={weapon:'bomb',charge,yaw:player.yaw,dirX:throwData.dirX,dirZ:throwData.dirZ,startX:releaseOriginX,startY:releaseOriginY,startZ:releaseOriginZ,target:throwData};
   }else{
@@ -10298,7 +10300,11 @@ function handleSpecialPress(pointerId=null){
   specialInputState.isDown=true;
   specialInputState.pointerId=pointerId;
   specialInputState.downAt=performance.now();
-  updateSpecialAimMarker();
+  if(equippedWeapon==='bomb' && activeBombs.some(b=>b && !b.triggered)){
+    setSpecialAimMarkerVisible(false);
+  }else{
+    updateSpecialAimMarker();
+  }
 }
 
 function getSpecialCharge(){
