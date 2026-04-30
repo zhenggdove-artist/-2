@@ -2256,7 +2256,56 @@ const RIVER_REGION_DEFAULTS=[
     "axis": "x"
   }
 ];
-const SCENE_OBJECT_DEFAULTS=[];
+const SCENE_OBJECT_DEFAULTS=[
+  {
+    "id": "scene-video-north",
+    "type": "video-wall",
+    "src": "background/movie.mp4",
+    "x": 1,
+    "y": -0.5,
+    "z": -13.2,
+    "width": 33.1,
+    "height": 18,
+    "rotY": 0,
+    "order": 0
+  },
+  {
+    "id": "scene-video-south",
+    "type": "video-wall",
+    "src": "background/movie.mp4",
+    "x": 1.2,
+    "y": -1,
+    "z": 16.2,
+    "width": 32.9,
+    "height": 18,
+    "rotY": 3.1416,
+    "order": 1
+  },
+  {
+    "id": "scene-video-west",
+    "type": "video-wall",
+    "src": "background/movie.mp4",
+    "x": -14.7,
+    "y": -0.5,
+    "z": 1.4,
+    "width": 29.5,
+    "height": 18,
+    "rotY": 1.5708,
+    "order": 2
+  },
+  {
+    "id": "scene-video-east",
+    "type": "video-wall",
+    "src": "background/movie.mp4",
+    "x": 17.4,
+    "y": -0.5,
+    "z": 1.2,
+    "width": 29.5,
+    "height": 18,
+    "rotY": -1.5708,
+    "order": 3
+  }
+];
 
 function serializePlayableLayer(layer){
   if(!layer?.samples?.length) return null;
