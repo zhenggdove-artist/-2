@@ -6043,6 +6043,10 @@ function updateSpecialAimMarker(nowS=performance.now()/1000){
     setSpecialAimMarkerVisible(false);
     return;
   }
+  if(equippedWeapon==='bomb' && activeBombs.some(b=>b && !b.triggered)){
+    setSpecialAimMarkerVisible(false);
+    return;
+  }
   const charge=getSpecialCharge();
   const target=getSpecialThrowTarget(charge,equippedWeapon,player.yaw);
   if(!target){
