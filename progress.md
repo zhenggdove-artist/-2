@@ -103,3 +103,5 @@ TODO:
 - 2026-05-01: Changed mobile checkout HUD label to SWEET HOME with centered dark text, removed end-overlay pink tint, and made end-scene playground 85% transparent while hiding lifted ceiling meshes only during end scene.
 
 - 2026-05-01: Reverted end-scene ceiling hiding so only playground transparency remains during end screen; updated mobile SWEET HOME checkout label color to #6C6C6C.
+
+- 2026-05-01: Fixed end-screen CONTINUE plant regression by serializing and restoring full watered plant hierarchies (including branches/baseScale/targetScale) in scene_state instead of only top-level flower scale.

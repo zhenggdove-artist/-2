@@ -11302,20 +11302,65 @@ function setEndOverlaySceneView(minimized){
   if(endToggle) endToggle.textContent=minimized?'+':'-';
 }
 
+function getPlantChildGroups(grp){
+  return (grp?.children||[]).filter(child=>child?.isGroup && child.userData?.seedText);
+}
+
+function serializePlantSnapshot(grp,includeWorldTransform=true){
+  if(!grp) return null;
+  const out={
+    seedText:String(grp.userData?.seedText||'flower'),
+    scale:+(grp.scale?.x||1).toFixed(4),
+    baseScale:+(grp.userData?.baseScale||grp.scale?.x||1).toFixed(4),
+    targetScale:+(grp.userData?.targetScale||grp.scale?.x||1).toFixed(4),
+    children:getPlantChildGroups(grp).map(child=>serializePlantSnapshot(child,false)).filter(Boolean),
+  };
+  if(includeWorldTransform){
+    out.x=+grp.position.x.toFixed(3);
+    out.y=+grp.position.y.toFixed(3);
+    out.z=+grp.position.z.toFixed(3);
+  }else{
+    out.x=+grp.position.x.toFixed(3);
+    out.y=+grp.position.y.toFixed(3);
+    out.z=+grp.position.z.toFixed(3);
+  }
+  out.rx=+grp.rotation.x.toFixed(4);
+  out.ry=+grp.rotation.y.toFixed(4);
+  out.rz=+grp.rotation.z.toFixed(4);
+  return out;
+}
+
+function restorePlantSnapshot(entry){
+  if(!entry) return null;
+  const grp=makePlant(String(entry.seedText||'flower'));
+  grp.position.set(entry.x||0,entry.y||0,entry.z||0);
+  grp.rotation.set(entry.rx||0,entry.ry||0,entry.rz||0);
+  grp.scale.setScalar(entry.scale||1);
+  grp.userData.seedText=String(entry.seedText||'flower');
+  grp.userData.baseScale=entry.baseScale||grp.userData.baseScale||grp.scale.x||1;
+  grp.userData.targetScale=entry.targetScale||entry.scale||grp.scale.x||1;
+  grp.userData.waterBranches=[];
+  grp.traverse(o=>{
+    if(o.isMesh && o.geometry?.setDrawRange && o.userData?.totalIdx){
+      o.geometry.setDrawRange(0,o.userData.totalIdx);
+    }
+  });
+  grp.userData.growStart=-999;
+  grp.userData.growDur=0;
+  for(const childEntry of (entry.children||[])){
+    const child=restorePlantSnapshot(childEntry);
+    if(!child) continue;
+    grp.add(child);
+    grp.userData.waterBranches.push(child);
+  }
+  return grp;
+}
+
 function captureSceneState(){
   return {
     version:SCENE_STATE_VERSION,
     kills:killCount,
-    flowers:flowerGroup.children.map(grp=>({
-      seedText:String(grp.userData?.seedText||'flower'),
-      x:+grp.position.x.toFixed(3),
-      y:+grp.position.y.toFixed(3),
-      z:+grp.position.z.toFixed(3),
-      rx:+grp.rotation.x.toFixed(4),
-      ry:+grp.rotation.y.toFixed(4),
-      rz:+grp.rotation.z.toFixed(4),
-      scale:+grp.scale.x.toFixed(4),
-    })),
+    flowers:flowerGroup.children.map(grp=>serializePlantSnapshot(grp,true)).filter(Boolean),
     graffiti:pillars.map((p,index)=>p.graffiti ? {
       index,
       progress:+(p.paintProgress||0).toFixed(4),
@@ -11386,18 +11431,8 @@ function clearLeaderboardSceneVisuals(){
 
 function spawnSnapshotFlower(entry){
   if(!entry) return;
-  const grp=makePlant(String(entry.seedText||'flower'));
-  grp.position.set(entry.x||0,entry.y||0,entry.z||0);
-  grp.rotation.set(entry.rx||0,entry.ry||0,entry.rz||0);
-  grp.scale.setScalar(entry.scale||1);
-  grp.userData.seedText=String(entry.seedText||'flower');
-  grp.traverse(o=>{
-    if(o.isMesh){
-      if(o.geometry?.setDrawRange && o.userData?.totalIdx) o.geometry.setDrawRange(0,o.userData.totalIdx);
-    }
-  });
-  grp.userData.growStart=-999;
-  grp.userData.growDur=0;
+  const grp=restorePlantSnapshot(entry);
+  if(!grp) return;
   flowerGroup.add(grp);
 }
 
