@@ -99,3 +99,5 @@ TODO:
 - End-of-run submit flow now posts `scene_state` with the score, and leaderboard rows with a stored snapshot are clickable to preview that player’s final world state.
 - Added `supabase/leaderboard_schema.sql` with the expected `defender_leaderboard` schema (`scene_state jsonb`) and anon `select`/`insert` RLS policies.
 - Added a real repo-root GitHub Actions workflow `.github/workflows/supabase-keepalive.yml` that pings `defender_leaderboard` every 3 days using the publishable key. This is needed because the old keepalive workflow lived under `urban-legend-framework/.github/...`, which GitHub Actions ignores.
+
+- 2026-05-01: Changed mobile checkout HUD label to SWEET HOME with centered dark text, removed end-overlay pink tint, and made end-scene playground 85% transparent while hiding lifted ceiling meshes only during end scene.
