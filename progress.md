@@ -105,3 +105,5 @@ TODO:
 - 2026-05-01: Reverted end-scene ceiling hiding so only playground transparency remains during end screen; updated mobile SWEET HOME checkout label color to #6C6C6C.
 
 - 2026-05-01: Fixed end-screen CONTINUE plant regression by serializing and restoring full watered plant hierarchies (including branches/baseScale/targetScale) in scene_state instead of only top-level flower scale.
+
+- 2026-05-01: Startup optimization pass: loadPlayground now overlaps player asset loading, and deferred player/artist/item assets begin before floor scanning so their network/parse work overlaps terrain analysis. Scene-object video walls are now applied only after all required gameplay assets and river detection finish, so they no longer contend with the critical startup path.

@@ -11870,17 +11870,25 @@ async function init(){
   const playerAssetsPromise=loadPlayerAssets();
   await bvhPromise;
   setIntroProgress(8,'BOOT');
+  const playgroundPromise=loadPlayground();
   await playerAssetsPromise;
   setIntroProgress(18,'PLAYER');
-  await loadPlayground();
+  await playgroundPromise;
   setIntroProgress(30,'WORLD');
-  const manualSceneObjects=loadManualSceneObjects();
-  applySceneObjects(manualSceneObjects.length?manualSceneObjects:getSceneObjectDefaults());
   // groundRaycaster was created earlier; set firstHitOnly now that we know.
   // Runtime getGroundY needs only the top hit; rayGroundHits toggles off
   // temporarily when it wants all intersections.
   if(bvhReady) groundRaycaster.firstHitOnly=true;
   setIntroProgress(36,'WORLD');
+  const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
+  const characterTemplatePromise=loadCharacterTemplate();
+  const bombModelPromise=loadBombModel();
+  const iceModelPromise=loadIceModel();
+  const coinPromise=loadCoin();
+  const extraCharacterClipsReadyPromise=characterTemplatePromise.then(async()=>{
+    setIntroProgress(62,'ARTISTS');
+    return loadExtraCharacterClips();
+  });
   if(bvhReady){
     startBtn.textContent='SCANNING FLOORSâ€¦';
     playableLayer=await detectPlayableLayer(p=>{
@@ -11906,15 +11914,6 @@ async function init(){
   placePlayerOnPlayableLayer();
   setIntroProgress(40,'WORLD');
   const playgroundBVHPromise=schedulePlaygroundBVHBuild(playgroundRoot);
-  const deferredPlayerClipsPromise=loadDeferredPlayerSkillClips();
-  const characterTemplatePromise=loadCharacterTemplate();
-  const bombModelPromise=loadBombModel();
-  const iceModelPromise=loadIceModel();
-  const extraCharacterClipsReadyPromise=characterTemplatePromise.then(async()=>{
-    setIntroProgress(62,'ARTISTS');
-    return loadExtraCharacterClips();
-  });
-  const coinPromise=loadCoin();
   await deferredPlayerClipsPromise;
   setIntroProgress(52,'PLAYER');
   await Promise.all([playgroundBVHPromise,characterTemplatePromise,coinPromise,bombModelPromise,iceModelPromise]);
@@ -11996,6 +11995,12 @@ async function init(){
   }else{
     console.warn('[river] skipped â€” no BVH support');
   }
+
+  // Scene-object video walls compete heavily with the GLB and terrain
+  // startup work. Apply them only after all required gameplay assets
+  // are ready so they don't drag out the critical path.
+  const manualSceneObjects=loadManualSceneObjects();
+  applySceneObjects(manualSceneObjects.length?manualSceneObjects:getSceneObjectDefaults());
 
   startBtn.textContent=origLabel;
   setIntroProgress(100,'READY');
