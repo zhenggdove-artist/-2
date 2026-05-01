@@ -1204,7 +1204,7 @@
     #end-box.minimized::before{display:none}
     #end-box.minimized h2{font-size:12px;line-height:1;letter-spacing:0.06em;white-space:nowrap}
     #end-box.minimized #end-toggle{width:22px;height:22px;font-size:15px}
-    #checkout-btn{color:#272727;font-size:clamp(14px,3.2vw,18px);letter-spacing:0.12em}
+    #checkout-btn{color:#6C6C6C;font-size:clamp(14px,3.2vw,18px);letter-spacing:0.12em}
   }
 
   /* Stone tablet cutscene */
@@ -2036,7 +2036,6 @@ const groundMeshes=[];
 const ceilingFadableMeshes=new Set();
 const ceilingOcclusionRay=new THREE.Raycaster();
 const ceilingOccludedMeshes=new Set();
-const endHiddenCeilingMeshes=new Set();
 let ceilingOcclusionCooldown=0;
 const _ceilingTargetV=new THREE.Vector3();
 const _ceilingDirV=new THREE.Vector3();
@@ -3365,18 +3364,6 @@ function setPlaygroundEndTransparency(enabled){
       mat.needsUpdate=true;
     }
   });
-  for(const mesh of endHiddenCeilingMeshes){
-    if(mesh?.userData?.endCeilingBaseVisible!==undefined) mesh.visible=mesh.userData.endCeilingBaseVisible;
-  }
-  endHiddenCeilingMeshes.clear();
-  if(enabled){
-    for(const mesh of ceilingFadableMeshes){
-      if(!mesh) continue;
-      mesh.userData.endCeilingBaseVisible=mesh.visible;
-      mesh.visible=false;
-      endHiddenCeilingMeshes.add(mesh);
-    }
-  }
 }
 
 function detectPillars(root){

@@ -101,3 +101,5 @@ TODO:
 - Added a real repo-root GitHub Actions workflow `.github/workflows/supabase-keepalive.yml` that pings `defender_leaderboard` every 3 days using the publishable key. This is needed because the old keepalive workflow lived under `urban-legend-framework/.github/...`, which GitHub Actions ignores.
 
 - 2026-05-01: Changed mobile checkout HUD label to SWEET HOME with centered dark text, removed end-overlay pink tint, and made end-scene playground 85% transparent while hiding lifted ceiling meshes only during end scene.
+
+- 2026-05-01: Reverted end-scene ceiling hiding so only playground transparency remains during end screen; updated mobile SWEET HOME checkout label color to #6C6C6C.
