@@ -2235,6 +2235,7 @@ function buildPlayableFootprint(samples,step){
 }
 
 const PLAYABLE_LAYER_CACHE_KEY='ul-playable-layer-v1';
+const PLAYABLE_LAYER_BAKED_PATH='field/playable_layer_baked_v1.json';
 const RIVER_CACHE_KEY='ul-river-bounds-v3';
 const RIVER_MANUAL_STORAGE_KEY='urbanLegendManualRiverRegionsV1';
 const SCENE_OBJECT_STORAGE_KEY='urbanLegendSceneObjectsV1';
@@ -2345,6 +2346,26 @@ function loadCachedJSON(key){
   }
 }
 
+function loadPlayableLayerBaked(){
+  if(playableLayerBakedPromise) return playableLayerBakedPromise;
+  playableLayerBakedPromise=(async()=>{
+    try{
+      const r=await fetch(`${PLAYABLE_LAYER_BAKED_PATH}?v=2026-05-01a`,{cache:'force-cache'});
+      if(!r.ok) return null;
+      const raw=await r.json();
+      const layer=hydratePlayableLayer(raw);
+      if(layer){
+        saveCachedJSON(PLAYABLE_LAYER_CACHE_KEY,serializePlayableLayer(layer));
+        console.log('[floor] loaded baked playable layer:',layer.samples.length,'samples');
+      }
+      return layer;
+    }catch{
+      return null;
+    }
+  })();
+  return playableLayerBakedPromise;
+}
+
 function schedulePlaygroundBVHBuild(root){
   if(!bvhReady||!root||playgroundBVHBuildActive) return Promise.resolve();
   playgroundBVHQueuedMeshes.length=0;
@@ -2408,6 +2429,11 @@ async function detectPlayableLayer(progressFn){
   if(cached){
     if(progressFn) progressFn(1);
     return cached;
+  }
+  const baked=await loadPlayableLayerBaked();
+  if(baked){
+    if(progressFn) progressFn(1);
+    return baked;
   }
   if(!playgroundRoot) return null;
   const step=Math.max(1.2,worldBoundR/16);
@@ -2517,6 +2543,7 @@ const sceneObjectEntries=new Map();
 const sceneObjectVideoResources=new Map();
 const sceneObjectUnitPlaneGeometry=new THREE.PlaneGeometry(1,1);
 let sceneObjectRootGroup=null;
+let playableLayerBakedPromise=null;
 const sceneObjectOcclusionRay=new THREE.Raycaster();
 const _sceneObjectOcclusionTargetV=new THREE.Vector3();
 const _sceneObjectOcclusionDirV=new THREE.Vector3();
@@ -3179,7 +3206,12 @@ function liftCeilingGeometry(root,anchorY,factor=5){
 
 async function loadPlayground(){
   try{
-    const gltf=await loader.loadAsync('field/playground.glb');
+    let gltf=null;
+    try{
+      gltf=await loader.loadAsync('field/playground_optimized.glb?v=2026-04-24a');
+    }catch{
+      gltf=await loader.loadAsync('field/playground.glb');
+    }
     const root=gltf.scene;
     // Auto-scale+center: compute bbox, target a reasonable size
     const bbox=new THREE.Box3().setFromObject(root);
@@ -3190,68 +3222,52 @@ async function loadPlayground(){
     let sc=1;
     if(maxH<5) sc=12;
     else if(maxH>120) sc=60/maxH;
-    root.scale.setScalar(sc);
-    root.updateMatrixWorld(true);
-    const bbox2=new THREE.Box3().setFromObject(root);
+    const bbox2=new THREE.Box3(
+      bbox.min.clone().multiplyScalar(sc),
+      bbox.max.clone().multiplyScalar(sc)
+    );
     // Center horizontally, place bottom at y=0
     const cx=(bbox2.min.x+bbox2.max.x)*0.5;
     const cz=(bbox2.min.z+bbox2.max.z)*0.5;
+    root.scale.setScalar(sc);
     root.position.x-=cx;
     root.position.z-=cz;
     root.position.y-=bbox2.min.y;
     root.updateMatrixWorld(true);
-    root.traverse(o=>{
-      if(o.isMesh){
-        o.frustumCulled=false;
-        if(o.material){
-          const mats=Array.isArray(o.material)?o.material:[o.material];
-          for(const m of mats){
-            m.side=THREE.DoubleSide;
-            if('envMapIntensity' in m) m.envMapIntensity=0.5;
-            applySoftSceneGlowMaterial(m,0.18);
-          }
-        }
-      }
-    });
     scene.add(root);
     playgroundRoot=root;
+    playgroundBounds=new THREE.Box3(
+      new THREE.Vector3(bbox2.min.x-cx,0,bbox2.min.z-cz),
+      new THREE.Vector3(bbox2.max.x-cx,bbox2.max.y-bbox2.min.y,bbox2.max.z-cz)
+    );
 
-    // Detect pillars
-    detectPillars(root);
+    // Material prep, pillar detection, and ground-mesh collection all share
+    // one full-scene traversal to reduce startup cost.
+    analyzePlaygroundMeshes(root);
 
-    // Update world bound
-    const bbox3=new THREE.Box3().setFromObject(root);
-    const finalSize=new THREE.Vector3();bbox3.getSize(finalSize);
-    worldBoundR=Math.max(18,Math.max(finalSize.x,finalSize.z)*0.55);
-
-    groundLoaded=true;
-    console.log('[playground] loaded. scale=',sc,' pillars=',pillars.length,' worldR=',worldBoundR);
-
-    // Collect "ground-ish" meshes to raycast against (flat, wide).
-    // Falls back to all meshes if heuristic finds too few.
-    collectGroundMeshes(root);
-
-    // Compute BVH so raycasts are O(log n) instead of O(n).
-    // Skip meshes that are too small to matter (< 30 triangles) â€” the
-    // overhead of building a tree for them outweighs the raycast savings,
-    // and the playground has many small decorative pieces.
+    // Compute BVH only for the ground-ish meshes on the critical path.
+    // Remaining scene meshes are built later by schedulePlaygroundBVHBuild().
     if(bvhReady){
       const t0=performance.now();
       let total=0, skipped=0;
-      root.traverse(o=>{
-        if(!o.isMesh||!o.geometry||!o.geometry.attributes?.position) return;
+      for(const o of groundMeshes){
+        if(!o.isMesh||!o.geometry||!o.geometry.attributes?.position) continue;
         const tri=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;
-        if(tri<30){ skipped++; return; }
+        if(tri<30){ skipped++; continue; }
         try{
           if(!o.geometry.boundsTree){
             o.geometry.computeBoundsTree(BVH_OPTS);
             total++;
           }
         }catch(e){/* skip bad geo */}
-      });
-      console.log('[bvh] built for',total,'meshes (skipped',skipped,'tiny) in',
+      }
+      console.log('[bvh] built critical ground trees for',total,'meshes (skipped',skipped,'tiny) in',
         ((performance.now()-t0)/1000).toFixed(2),'s');
     }
+    // Update world bound from the already-computed final bbox.
+    worldBoundR=Math.max(18,Math.max(playgroundBounds.max.x-playgroundBounds.min.x,playgroundBounds.max.z-playgroundBounds.min.z)*0.55);
+    groundLoaded=true;
+    console.log('[playground] loaded. scale=',sc,' pillars=',pillars.length,' worldR=',worldBoundR);
 
     // NOTE: river detection moved to init() so it can yield and not block UI
   }catch(e){
@@ -3296,6 +3312,76 @@ function collectGroundMeshes(root){
     root.traverse(o=>{if(o.isMesh&&o.geometry) groundMeshes.push(o)});
   }
   console.log('[ground] meshes for raycast:',groundMeshes.length);
+}
+
+function analyzePlaygroundMeshes(root){
+  groundMeshes.length=0;
+  pillars.length=0;
+  const candidates=[];
+  const allMeshes=[];
+  const nameRx=/pillar|column|post|support|æŸ±/i;
+  const bb=new THREE.Box3();
+  const size=new THREE.Vector3();
+  const center=new THREE.Vector3();
+  root.traverse(o=>{
+    if(!o.isMesh||!o.geometry) return;
+    allMeshes.push(o);
+    o.frustumCulled=false;
+    if(o.material){
+      const mats=Array.isArray(o.material)?o.material:[o.material];
+      for(const m of mats){
+        m.side=THREE.DoubleSide;
+        if('envMapIntensity' in m) m.envMapIntensity=0.5;
+        applySoftSceneGlowMaterial(m,0.18);
+      }
+    }
+    bb.setFromObject(o);
+    bb.getSize(size);
+    bb.getCenter(center);
+    if(size.y<2.5 && Math.max(size.x,size.z)>2.0){
+      groundMeshes.push(o);
+    }
+    if(size.y<0.5) return;
+    const isNamed=nameRx.test(o.name||'');
+    const ratio=size.y/Math.max(0.05,Math.max(size.x,size.z));
+    const isTallNarrow=(ratio>2.0 && Math.max(size.x,size.z)<3.5 && size.y>1.8);
+    if(isNamed||isTallNarrow){
+      candidates.push({
+        mesh:o,
+        center:center.clone(),
+        size:size.clone(),
+        named:isNamed,
+      });
+    }
+  });
+  if(groundMeshes.length<2){
+    groundMeshes.length=0;
+    groundMeshes.push(...allMeshes);
+  }
+  console.log('[ground] meshes for raycast:',groundMeshes.length);
+  const used=[];
+  for(const c of candidates){
+    if(used.some(u=>u.center.distanceTo(c.center)<1.5)) continue;
+    used.push(c);
+  }
+  let picked=used.filter(u=>u.named);
+  if(picked.length<3) picked=used;
+  picked=picked.slice(0,24);
+  for(const p of picked){
+    pillars.push({
+      pos:new THREE.Vector3(p.center.x,0,p.center.z),
+      topY:p.size.y,
+      halfW:Math.max(p.size.x,p.size.z)*0.5,
+      mesh:p.mesh,graffiti:null,paintProgress:0,claimedBy:null,synthetic:false
+    });
+  }
+  if(!pillars.length){
+    for(let i=0;i<8;i++){
+      const a=(i/8)*Math.PI*2;
+      const x=Math.cos(a)*12,z=Math.sin(a)*12;
+      pillars.push({pos:new THREE.Vector3(x,0,z),topY:4,halfW:0.7,mesh:null,graffiti:null,paintProgress:0,claimedBy:null,synthetic:true});
+    }
+  }
 }
 
 function ensureCeilingFadeMaterials(mesh){
@@ -11900,7 +11986,6 @@ async function init(){
       worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
       liftCeilingGeometry(playgroundRoot,playableLayer.ceilingY,5);
       groundYCache.clear();
-      collectGroundMeshes(playgroundRoot);
       // Index the playable samples for O(1) nearest-neighbour lookups.
       // getStandY's fallback and clampToPlayableArea hammer this in
       // every frame, so an unindexed O(N) scan becomes a real crash
@@ -11931,7 +12016,6 @@ async function init(){
           worldBoundR=Math.max(10,Math.max(playableLayer.maxX-playableLayer.minX,playableLayer.maxZ-playableLayer.minZ)*0.55);
           liftCeilingGeometry(playgroundRoot,playableLayer.ceilingY,5);
           groundYCache.clear();
-          collectGroundMeshes(playgroundRoot);
           playableLayer.sampleIndex=buildPlayableSampleIndex(playableLayer);
           refreshPlayablePillars();
           if(gameState==='intro') placePlayerOnPlayableLayer();
