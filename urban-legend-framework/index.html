@@ -3440,7 +3440,7 @@ function setPlaygroundEndTransparency(enabled){
       const base=mat.userData.endFadeBase;
       if(enabled){
         if('transparent' in mat) mat.transparent=true;
-        if('opacity' in mat) mat.opacity=Math.min(base.opacity,0.15);
+        if('opacity' in mat) mat.opacity=Math.min(base.opacity,0.03);
         if('depthWrite' in mat) mat.depthWrite=false;
       }else{
         if('transparent' in mat) mat.transparent=base.transparent;
