@@ -1,18 +1,20 @@
-name: Supabase Keepalive
+name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 0 */3 * *'
+    # Twice daily to survive GitHub Actions schedule delays (7-day pause threshold)
+    - cron: '17 4 * * *'
+    - cron: '47 16 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping leaderboard table
+      - name: Ping Supabase to prevent hibernation
         run: |
-          curl -fsS "https://ztpftxwfcppsqosilssq.supabase.co/rest/v1/defender_leaderboard?select=id&limit=1" \
+          curl -sf "https://ztpftxwfcppsqosilssq.supabase.co/rest/v1/defender_leaderboard?select=id&limit=1" \
             -H "apikey: sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
             -H "Authorization: Bearer sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
-            -o /dev/null
-          echo "Supabase keepalive ping sent at $(date -u)"
+            -o /dev/null -w "HTTP %{http_code}\n"
+          echo "Supabase keep-alive ping sent at $(date -u)"
