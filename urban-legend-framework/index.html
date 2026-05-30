@@ -7906,11 +7906,12 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "joystick-zone": {
-      "x": 0,
-      "y": 0,
+      "x": 12.5,
+      "y": 75.726,
       "w": 80,
       "h": 80,
-      "z": 161212
+      "z": 161212,
+      "locked": true
     },
     "kill-icon": {
       "x": 10.636,
@@ -8880,8 +8881,8 @@ function showUILayoutExportModal(){
   const code=formatUILayoutExport();
   modal.innerHTML=`<div class="ui-layout-modal-card">
     <h3>Export UI + Rivers + Scene Objects</h3>
-    <p>Copy this whole block and replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code>, <code>const RIVER_REGION_DEFAULTS=...</code>, and <code>const SCENE_OBJECT_DEFAULTS=...</code> blocks in <code>urban-legend-framework/index.html</code>.</p>
-    <p>After replacing them, save the file and refresh the game. Desktop/mobile UI, river regions, and 3D scene objects are all included in this export.</p>
+    <p>Recommended: click <code>Copy Code</code>, then run <code>PUBLISH_UI_EXPORT.cmd</code> from the repo folder. It replaces the correct blocks, checks the file, commits, and pushes.</p>
+    <p>If editing by hand, replace the existing <code>const UI_LAYOUT_DEFAULTS=...</code>, <code>const RIVER_REGION_DEFAULTS=...</code>, and <code>const SCENE_OBJECT_DEFAULTS=...</code> blocks. Do not paste this below the old code; duplicate <code>const</code> blocks break the game.</p>
     <textarea spellcheck="false"></textarea>
     <div class="ui-layout-modal-actions">
       <button type="button" data-action="copy">Copy Code</button>
