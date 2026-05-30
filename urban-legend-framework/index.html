@@ -7858,17 +7858,17 @@ const UI_LAYOUT_DEFAULTS={
       "locked": true
     },
     "viewport-frame-top": {
-      "x": 50.052,
+      "x": 49.948,
       "y": 16.154,
-      "w": 1395.2727272510529,
-      "h": 219.2436627197266,
+      "w": 1500.87,
+      "h": 219.24,
       "z": 100,
       "locked": true
     },
     "viewport-frame-bottom": {
       "x": 49.948,
       "y": 82.57,
-      "w": 1396,
+      "w": 1503.2,
       "h": 252.8,
       "z": 900,
       "locked": true
@@ -8279,6 +8279,7 @@ const UI_LAYOUT_DEFAULTS={
     }
   }
 };
+
 const UI_LAYOUT_TARGET_DEFS=[
   {id:'kill-box-frame',label:'artist frame',anchor:'center',minW:80,minH:40,baseW:156.36,baseH:84.36},
   {id:'kill-box',label:'artist bg',anchor:'center',minW:40,minH:18,baseW:95.45,baseH:32.55},
@@ -11606,7 +11607,7 @@ function startGame(){
   // Try autoplay BGM
   const bgm=document.getElementById('bgm');
   try{
-    if(bgm && !bgm.src) bgm.src=encodeURI('music/4æœˆ2æ—¥.MP3');
+    if(bgm && !bgm.src) bgm.src=encodeURI('music/4月2日.MP3');
     bgm.volume=0.4;bgm.muted=false;
     const p=bgm.play();if(p&&p.catch)p.catch(()=>{});
   }catch{}

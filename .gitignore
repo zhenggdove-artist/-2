@@ -2,3 +2,17 @@ urban-legend-framework/CAT/
 output/web-game/intro-fixed*.png
 output/web-game/manual-debug*.png
 output/web-game/ui-fix-check*.png
+
+# Local/exported source assets outside the deployed game folder.
+/artistcount icon.png
+/coin icon.png
+/shop icon.png
+/COIN數.png
+/COIN數藝術家數.png
+/SHOP裝飾框.png
+/右下按鈕.png
+/左側彩虹br.png
+/左側彩虹值bar.png
+/技能表.png
+/背景裝飾外框.png
+/影片剪輯/
