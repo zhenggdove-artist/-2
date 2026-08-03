@@ -2,19 +2,34 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Twice daily to survive GitHub Actions schedule delays (7-day pause threshold)
-    - cron: '17 4 * * *'
-    - cron: '47 16 * * *'
+    # Backup only. GitHub disables scheduled workflows in public repos after
+    # 60 days without repository activity, so the primary keepalive should be
+    # the Cloudflare Worker cron in ops/supabase-keepalive-worker/.
+    #
+    # These are intentionally off the top of the hour to reduce dropped runs.
+    - cron: '23 4 * * *'
+    - cron: '53 16 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Ping Supabase to prevent hibernation
         run: |
-          curl -sf "https://ztpftxwfcppsqosilssq.supabase.co/rest/v1/defender_leaderboard?select=id&limit=1" \
-            -H "apikey: sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
-            -H "Authorization: Bearer sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
-            -o /dev/null -w "HTTP %{http_code}\n"
-          echo "Supabase keep-alive ping sent at $(date -u)"
+          set -euo pipefail
+
+          endpoint="https://ztpftxwfcppsqosilssq.supabase.co/rest/v1/defender_leaderboard?select=id&limit=1"
+
+          for attempt in 1 2 3; do
+            echo "Supabase keep-alive ping ${attempt}/3 at $(date -u)"
+            curl --fail --show-error --retry 3 --retry-all-errors --connect-timeout 10 --max-time 30 "$endpoint" \
+              -H "apikey: sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
+              -H "Authorization: Bearer sb_publishable_VpBNIGGpvSXkuMYiLv_rDA_fUiptxNC" \
+              -H "Cache-Control: no-store" \
+              -o /dev/null -w "HTTP %{http_code}\n"
+            sleep 2
+          done
+
+          echo "Supabase keep-alive pings completed at $(date -u)"
