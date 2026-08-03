@@ -62,11 +62,10 @@ pushing to `main`.
 - Supabase (`defender_leaderboard` table, project
   `ztpftxwfcppsqosilssq`) stores 3-min-score leaderboard. If the
   table doesn't exist, game silently falls back to localStorage cache.
-- Supabase keepalive: GitHub Actions schedule is only a backup because
-  public-repo scheduled workflows are disabled after 60 days without
-  repository activity. The durable primary keepalive lives in
-  `ops/supabase-keepalive-worker/` and should be deployed to Cloudflare
-  Workers Cron.
+- Supabase keepalive: public-repo scheduled workflows are disabled
+  after 60 days without repository activity, so the repo-root
+  `.github/workflows/supabase-keepalive.yml` also writes a weekly
+  heartbeat commit with GitHub's built-in `GITHUB_TOKEN`.
 
 ## Game state machine
 
